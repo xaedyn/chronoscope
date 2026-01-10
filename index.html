@@ -13,7 +13,7 @@
         body {
             background-color: #000;
             color: #888;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: arial, helvetica, verdana, tahoma, sans-serif;
             padding: 16px;
             margin: 0;
             min-height: 100vh;
@@ -71,9 +71,11 @@
         }
         .controls {
             margin-bottom: 16px;
+            text-align: center;
         }
         button {
             width: 100%;
+            max-width: 300px;
             padding: 16px;
             font-size: 18px;
             font-weight: 600;
@@ -133,9 +135,46 @@
             font-weight: 500;
             font-variant-numeric: tabular-nums;
         }
+
+        .visualizations {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .canvas-group {
+            background: #111;
+            border-radius: 8px;
+            padding: 8px;
+            overflow: hidden;
+        }
+        .canvas-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #333;
+        }
+        .canvas-title {
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .canvas-rt {
+            margin-left: auto;
+            font-size: 14px;
+            font-weight: bold;
+            font-variant-numeric: tabular-nums;
+        }
+        .latency-canvas {
+            width: 100%;
+            height: auto;
+            display: block;
+            border: 1px solid #333;
+        }
         .chart-container {
             position: relative;
-            height: 300px;
+            height: 250px;
             background: #111;
             border-radius: 8px;
             padding: 8px;
@@ -148,10 +187,10 @@
         }
 
         /* Tablet and up */
-        @media (min-width: 600px) {
+        @media (min-width: 700px) {
             body {
                 padding: 24px;
-                max-width: 800px;
+                max-width: 1200px;
                 margin: 0 auto;
             }
             h1 {
@@ -183,15 +222,16 @@
                 justify-content: space-between;
                 text-align: left;
             }
+            .visualizations {
+                grid-template-columns: repeat(2, 1fr);
+            }
             .chart-container {
-                height: 400px;
+                grid-column: span 2;
+                height: 300px;
             }
             button {
                 width: auto;
                 padding: 14px 48px;
-            }
-            .controls {
-                text-align: center;
             }
         }
     </style>
@@ -202,22 +242,22 @@
     <div class="url-inputs">
         <div class="url-row">
             <div class="url-header">
-                <div class="color-dot" style="background: #3B82F6;"></div>
-                <span class="url-label" style="color: #3B82F6;">Google</span>
+                <div class="color-dot" id="dot1" style="background: #3B82F6;"></div>
+                <span class="url-label" id="label1" style="color: #3B82F6;">Google</span>
             </div>
             <input type="text" class="url-input" id="url1" value="https://www.google.com/favicon.ico">
         </div>
         <div class="url-row">
             <div class="url-header">
-                <div class="color-dot" style="background: #F59E0B;"></div>
-                <span class="url-label" style="color: #F59E0B;">AWS</span>
+                <div class="color-dot" id="dot2" style="background: #F59E0B;"></div>
+                <span class="url-label" id="label2" style="color: #F59E0B;">AWS</span>
             </div>
             <input type="text" class="url-input" id="url2" value="https://aws.amazon.com/favicon.ico">
         </div>
         <div class="url-row">
             <div class="url-header">
-                <div class="color-dot" style="background: #10B981;"></div>
-                <span class="url-label" style="color: #10B981;">Cloudflare</span>
+                <div class="color-dot" id="dot3" style="background: #10B981;"></div>
+                <span class="url-label" id="label3" style="color: #10B981;">Cloudflare</span>
             </div>
             <input type="text" class="url-input" id="url3" value="https://www.cloudflare.com/favicon.ico">
         </div>
@@ -231,7 +271,7 @@
         <div class="stat-group">
             <div class="stat-group-header">
                 <div class="color-dot" style="background: #3B82F6;"></div>
-                <span class="stat-group-title" style="color: #3B82F6;">Google</span>
+                <span class="stat-group-title" id="statLabel1" style="color: #3B82F6;">Google</span>
             </div>
             <div class="stat-values">
                 <div class="stat-item">
@@ -255,7 +295,7 @@
         <div class="stat-group">
             <div class="stat-group-header">
                 <div class="color-dot" style="background: #F59E0B;"></div>
-                <span class="stat-group-title" style="color: #F59E0B;">AWS</span>
+                <span class="stat-group-title" id="statLabel2" style="color: #F59E0B;">AWS</span>
             </div>
             <div class="stat-values">
                 <div class="stat-item">
@@ -279,7 +319,7 @@
         <div class="stat-group">
             <div class="stat-group-header">
                 <div class="color-dot" style="background: #10B981;"></div>
-                <span class="stat-group-title" style="color: #10B981;">Cloudflare</span>
+                <span class="stat-group-title" id="statLabel3" style="color: #10B981;">Cloudflare</span>
             </div>
             <div class="stat-values">
                 <div class="stat-item">
@@ -302,8 +342,34 @@
         </div>
     </div>
 
-    <div class="chart-container">
-        <canvas id="latencyChart"></canvas>
+    <div class="visualizations">
+        <div class="canvas-group">
+            <div class="canvas-header">
+                <div class="color-dot" style="background: #3B82F6;"></div>
+                <span class="canvas-title" id="canvasLabel1" style="color: #3B82F6;">Google</span>
+                <span class="canvas-rt" id="rt1">--</span>
+            </div>
+            <canvas id="canvas1" class="latency-canvas" width="600" height="197"></canvas>
+        </div>
+        <div class="canvas-group">
+            <div class="canvas-header">
+                <div class="color-dot" style="background: #F59E0B;"></div>
+                <span class="canvas-title" id="canvasLabel2" style="color: #F59E0B;">AWS</span>
+                <span class="canvas-rt" id="rt2">--</span>
+            </div>
+            <canvas id="canvas2" class="latency-canvas" width="600" height="197"></canvas>
+        </div>
+        <div class="canvas-group">
+            <div class="canvas-header">
+                <div class="color-dot" style="background: #10B981;"></div>
+                <span class="canvas-title" id="canvasLabel3" style="color: #10B981;">Cloudflare</span>
+                <span class="canvas-rt" id="rt3">--</span>
+            </div>
+            <canvas id="canvas3" class="latency-canvas" width="600" height="197"></canvas>
+        </div>
+        <div class="chart-container">
+            <canvas id="latencyChart"></canvas>
+        </div>
     </div>
 
     <div class="info">
@@ -311,14 +377,97 @@
     </div>
 
     <script>
+        // Extract label from URL (domain name without TLD)
+        function extractLabel(url) {
+            try {
+                const hostname = new URL(url).hostname;
+                const parts = hostname.split('.');
+                // Get the part before the TLD (second to last)
+                if (parts.length >= 2) {
+                    return parts[parts.length - 2];
+                }
+                return parts[0];
+            } catch (e) {
+                return 'Unknown';
+            }
+        }
+
+        // Capitalize first letter
+        function capitalize(str) {
+            return str.charAt(0).toUpperCase() + str.slice(1);
+        }
+
+        // HSL to RGB conversion (from original)
+        function hslToRgb(h, s, l) {
+            let r, g, b;
+            if (s === 0) {
+                r = g = b = l;
+            } else {
+                const hue2rgb = (p, q, t) => {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                };
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+                r = hue2rgb(p, q, h + 1/3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1/3);
+            }
+            return [Math.floor(r * 255), Math.floor(g * 255), Math.floor(b * 255)];
+        }
+
+        // Number to HSL color (from original)
+        function numberToColorHsl(i) {
+            const hue = i * (1.2 / 360);
+            const rgb = hslToRgb(hue, 1, 0.5);
+            return 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
+        }
+
+        // Build colormap (from original)
+        const colormap = new Array(1501);
+        for (let x = 1; x < 1500; x++) {
+            colormap[x] = numberToColorHsl(Math.round((100 - ((Math.log(x) / 6) * 100)) + 30));
+        }
+
+        function colorof(num) {
+            if (num > 1499) return colormap[1499];
+            if (num < 1) return colormap[1];
+            return colormap[Math.round(num)];
+        }
+
+        // Get responsive point radius
+        function getPointRadius() {
+            return window.innerWidth < 600 ? 1.5 : 3;
+        }
+
         const ctx = document.getElementById('latencyChart').getContext('2d');
         const startBtn = document.getElementById('startBtn');
 
+        const colors = ['#3B82F6', '#F59E0B', '#10B981'];
+
         const endpoints = [
-            { id: 1, color: '#3B82F6', name: 'Google', inputId: 'url1' },
-            { id: 2, color: '#F59E0B', name: 'AWS', inputId: 'url2' },
-            { id: 3, color: '#10B981', name: 'Cloudflare', inputId: 'url3' }
+            { id: 1, color: colors[0], inputId: 'url1', labelId: 'label1', statLabelId: 'statLabel1', canvasLabelId: 'canvasLabel1', canvasId: 'canvas1', rtId: 'rt1' },
+            { id: 2, color: colors[1], inputId: 'url2', labelId: 'label2', statLabelId: 'statLabel2', canvasLabelId: 'canvasLabel2', canvasId: 'canvas2', rtId: 'rt2' },
+            { id: 3, color: colors[2], inputId: 'url3', labelId: 'label3', statLabelId: 'statLabel3', canvasLabelId: 'canvasLabel3', canvasId: 'canvas3', rtId: 'rt3' }
         ];
+
+        // Canvas contexts and positions
+        const canvasState = {
+            1: { ctx: null, textX: 0, textY: 10 },
+            2: { ctx: null, textX: 0, textY: 10 },
+            3: { ctx: null, textX: 0, textY: 10 }
+        };
+
+        // Initialize canvas contexts
+        endpoints.forEach(ep => {
+            const canvas = document.getElementById(ep.canvasId);
+            canvasState[ep.id].ctx = canvas.getContext('2d');
+            canvasState[ep.id].ctx.font = '10px Arial';
+        });
 
         let workers = [];
         let running = false;
@@ -335,12 +484,12 @@
             type: 'scatter',
             data: {
                 datasets: endpoints.map(ep => ({
-                    label: ep.name,
+                    label: capitalize(extractLabel(document.getElementById(ep.inputId).value)),
                     data: [],
                     pointBackgroundColor: ep.color,
                     pointBorderColor: ep.color,
-                    pointRadius: 3,
-                    pointHoverRadius: 5
+                    pointRadius: getPointRadius(),
+                    pointHoverRadius: getPointRadius() + 2
                 }))
             },
             options: {
@@ -388,6 +537,34 @@
             }
         });
 
+        // Update point radius on resize
+        window.addEventListener('resize', () => {
+            const radius = getPointRadius();
+            chart.data.datasets.forEach(ds => {
+                ds.pointRadius = radius;
+                ds.pointHoverRadius = radius + 2;
+            });
+            chart.update('none');
+        });
+
+        // Update labels from URLs
+        function updateLabels() {
+            endpoints.forEach(ep => {
+                const url = document.getElementById(ep.inputId).value;
+                const label = capitalize(extractLabel(url));
+                document.getElementById(ep.labelId).textContent = label;
+                document.getElementById(ep.statLabelId).textContent = label;
+                document.getElementById(ep.canvasLabelId).textContent = label;
+                chart.data.datasets[ep.id - 1].label = label;
+            });
+            chart.update('none');
+        }
+
+        // Listen for URL changes
+        endpoints.forEach(ep => {
+            document.getElementById(ep.inputId).addEventListener('change', updateLabels);
+        });
+
         function updateStats() {
             endpoints.forEach(ep => {
                 const s = stats[ep.id];
@@ -400,6 +577,24 @@
             });
         }
 
+        function drawToCanvas(endpointId, time) {
+            const cs = canvasState[endpointId];
+            const color = colorof(time);
+
+            cs.ctx.fillStyle = color;
+            cs.ctx.fillText('!', cs.textX, cs.textY);
+            cs.textX += 2;
+            if (cs.textX > 596) {
+                cs.textY += 8;
+                cs.textX = 0;
+            }
+
+            // Update real-time display
+            const rtEl = document.getElementById('rt' + endpointId);
+            rtEl.textContent = time + 'ms';
+            rtEl.style.color = color;
+        }
+
         function addDataPoint(endpointId, time) {
             const elapsed = (performance.now() - startTime) / 1000;
             const s = stats[endpointId];
@@ -410,6 +605,9 @@
             s.total += time;
 
             chart.data.datasets[endpointId - 1].data.push({ x: elapsed, y: time });
+
+            // Draw to canvas
+            drawToCanvas(endpointId, time);
 
             const totalRequests = stats[1].data.length + stats[2].data.length + stats[3].data.length;
             if (totalRequests >= 3000) {
@@ -428,7 +626,7 @@
                             worker.postMessage({ url: url });
                         } catch (e) {
                             console.error('Failed to post message to worker:', e);
-                            sendRequest(); // retry
+                            sendRequest();
                         }
                     }, 100);
                 }
@@ -443,11 +641,10 @@
             };
 
             worker.onerror = function(e) {
-                console.error('Worker error for ' + endpoint.name + ':', e);
-                sendRequest(); // keep trying
+                console.error('Worker error for ' + endpoint.inputId + ':', e);
+                sendRequest();
             };
 
-            // Initial request
             try {
                 worker.postMessage({ url: url });
             } catch (e) {
@@ -458,7 +655,20 @@
             return worker;
         }
 
+        function clearCanvases() {
+            endpoints.forEach(ep => {
+                const canvas = document.getElementById(ep.canvasId);
+                const cs = canvasState[ep.id];
+                cs.ctx.clearRect(0, 0, canvas.width, canvas.height);
+                cs.textX = 0;
+                cs.textY = 10;
+                document.getElementById(ep.rtId).textContent = '--';
+                document.getElementById(ep.rtId).style.color = '';
+            });
+        }
+
         function start() {
+            updateLabels();
             running = true;
             startTime = performance.now();
             startBtn.textContent = 'Stop';
@@ -471,7 +681,7 @@
             workers = endpoints.map(ep => createWorker(ep));
 
             updateInterval = setInterval(() => {
-                chart.update();
+                chart.update('none');
                 updateStats();
             }, 100);
         }
@@ -504,6 +714,7 @@
             chart.data.datasets.forEach(ds => {
                 ds.data = [];
             });
+            clearCanvases();
             chart.update();
             updateStats();
         }
@@ -516,6 +727,9 @@
                 start();
             }
         });
+
+        // Initialize labels on load
+        updateLabels();
     </script>
 </body>
 </html>
