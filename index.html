@@ -608,12 +608,12 @@
 
         function createWorker(endpoint) {
             const worker = new Worker('s80worker.js');
-            const url = document.getElementById(endpoint.inputId).value.trim();
 
             const sendRequest = () => {
                 if (running && !paused) {
                     setTimeout(() => {
                         try {
+                            const url = document.getElementById(endpoint.inputId).value.trim();
                             worker.postMessage({ url: url });
                         } catch (e) {
                             console.error('Failed to post message to worker:', e);
@@ -637,6 +637,7 @@
             };
 
             try {
+                const url = document.getElementById(endpoint.inputId).value.trim();
                 worker.postMessage({ url: url });
             } catch (e) {
                 console.error('Failed initial post to worker:', e);
