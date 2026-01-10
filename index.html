@@ -607,6 +607,14 @@
 
             chart.data.datasets[endpointId - 1].data.push({ x: elapsed, y: time });
             drawToCanvas(endpointId, time);
+
+            // Stop after ~1000 per endpoint
+            if (s.data.length >= 1000) {
+                const allDone = endpoints.every(ep => stats[ep.id].data.length >= 1000);
+                if (allDone) {
+                    pause();
+                }
+            }
         }
 
         function createWorker(endpoint) {
