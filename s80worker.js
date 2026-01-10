@@ -18,29 +18,31 @@ function measureResponse(myRes) {
 }
 
 self.onmessage = function (event) {
-    const url = event.data.url || 'reqspeed.jpg';
-    let startTime = performance.now();
-    fetchWithTimeout(url)
-        .then(measureResponse)
-        .then(() => {
-            let completeTime = performance.now();
-            if (completeTime - startTime <= 0) {
-                console.log("error: Impossibly short request (likely caused by Spectre mitigation in your browser reducing timer accuracy)");
-                console.log("completeTime: " + completeTime);
-                console.log("startTime: " + startTime);
-                postMessage({ time: 1, error: false });
-            }
-            else {
-                postMessage({ time: Math.ceil(completeTime - startTime), error: false });
-            }
-        })
-        .catch(err => {
-            let completeTime = performance.now();
-            if (err.message === 'timeout') {
-                postMessage({ time: 7000, error: true, message: 'timeout' });
-            } else {
-                // Network errors still give us timing info
-                postMessage({ time: Math.ceil(completeTime - startTime), error: true, message: err.message });
-            }
-        });
+    let startTime;
+    try {
+        const url = event.data.url || 'reqspeed.jpg';
+        startTime = performance.now();
+        fetchWithTimeout(url)
+            .then(measureResponse)
+            .then(() => {
+                let completeTime = performance.now();
+                if (completeTime - startTime <= 0) {
+                    postMessage({ time: 1, error: false });
+                }
+                else {
+                    postMessage({ time: Math.ceil(completeTime - startTime), error: false });
+                }
+            })
+            .catch(err => {
+                let completeTime = performance.now();
+                if (err && err.message === 'timeout') {
+                    postMessage({ time: 7000, error: true, message: 'timeout' });
+                } else {
+                    postMessage({ time: Math.ceil(completeTime - startTime), error: true, message: err ? err.message : 'unknown' });
+                }
+            });
+    } catch (e) {
+        // Catch any synchronous errors
+        postMessage({ time: 0, error: true, message: e ? e.message : 'sync error' });
+    }
 };

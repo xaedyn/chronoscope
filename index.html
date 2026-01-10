@@ -421,20 +421,40 @@
             const worker = new Worker('s80worker.js');
             const url = document.getElementById(endpoint.inputId).value.trim();
 
-            worker.onmessage = function(e) {
-                const { time, error } = e.data;
-                if (!error) {
-                    addDataPoint(endpoint.id, time);
-                }
-
+            const sendRequest = () => {
                 if (running) {
                     setTimeout(() => {
-                        worker.postMessage({ url: url });
+                        try {
+                            worker.postMessage({ url: url });
+                        } catch (e) {
+                            console.error('Failed to post message to worker:', e);
+                            sendRequest(); // retry
+                        }
                     }, 100);
                 }
             };
 
-            worker.postMessage({ url: url });
+            worker.onmessage = function(e) {
+                const { time, error } = e.data;
+                if (!error && time > 0) {
+                    addDataPoint(endpoint.id, time);
+                }
+                sendRequest();
+            };
+
+            worker.onerror = function(e) {
+                console.error('Worker error for ' + endpoint.name + ':', e);
+                sendRequest(); // keep trying
+            };
+
+            // Initial request
+            try {
+                worker.postMessage({ url: url });
+            } catch (e) {
+                console.error('Failed initial post to worker:', e);
+                sendRequest();
+            }
+
             return worker;
         }
 
