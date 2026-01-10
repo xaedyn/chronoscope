@@ -24,60 +24,15 @@
             margin: 0 0 16px 0;
             text-align: center;
         }
-        .url-inputs {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-        .url-row {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            background: #111;
-            padding: 12px;
-            border-radius: 8px;
-        }
-        .url-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .color-dot {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            flex-shrink: 0;
-        }
-        .url-label {
-            font-size: 14px;
-            font-weight: 600;
-        }
-        .url-input {
-            width: 100%;
-            padding: 12px;
-            font-size: 14px;
-            background: #222;
-            border: 1px solid #444;
-            color: #fff;
-            border-radius: 6px;
-        }
-        .url-input:focus {
-            outline: none;
-            border-color: #666;
-        }
-        .url-input:disabled {
-            opacity: 0.6;
-        }
         .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
             margin-bottom: 16px;
-            text-align: center;
         }
         button {
-            width: 100%;
-            max-width: 300px;
-            padding: 16px;
-            font-size: 18px;
+            padding: 12px 24px;
+            font-size: 16px;
             font-weight: 600;
             background: #222;
             color: #fff;
@@ -85,6 +40,7 @@
             border-radius: 8px;
             cursor: pointer;
             transition: background 0.2s;
+            min-width: 100px;
         }
         button:active {
             background: #333;
@@ -92,6 +48,14 @@
         button.running {
             background: #442222;
             border-color: #663333;
+        }
+        .chart-container {
+            position: relative;
+            height: 250px;
+            background: #111;
+            border-radius: 8px;
+            padding: 8px;
+            margin-bottom: 16px;
         }
         .stats {
             display: flex;
@@ -135,10 +99,15 @@
             font-weight: 500;
             font-variant-numeric: tabular-nums;
         }
-
-        .visualizations {
-            display: grid;
-            grid-template-columns: 1fr;
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .canvases {
+            display: flex;
+            flex-direction: column;
             gap: 12px;
             margin-bottom: 16px;
         }
@@ -172,12 +141,44 @@
             display: block;
             border: 1px solid #333;
         }
-        .chart-container {
-            position: relative;
-            height: 250px;
+        .url-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .url-row {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
             background: #111;
+            padding: 12px;
             border-radius: 8px;
-            padding: 8px;
+        }
+        .url-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .url-label {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .url-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 6px;
+        }
+        .url-input:focus {
+            outline: none;
+            border-color: #666;
+        }
+        .url-input:disabled {
+            opacity: 0.6;
         }
         .info {
             margin-top: 16px;
@@ -196,16 +197,8 @@
             h1 {
                 font-size: 3.5em;
             }
-            .url-row {
-                flex-direction: row;
-                align-items: center;
-                gap: 12px;
-            }
-            .url-header {
-                min-width: 120px;
-            }
-            .url-input {
-                flex: 1;
+            .chart-container {
+                height: 300px;
             }
             .stats {
                 flex-direction: row;
@@ -222,16 +215,20 @@
                 justify-content: space-between;
                 text-align: left;
             }
-            .visualizations {
-                grid-template-columns: repeat(2, 1fr);
+            .canvases {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
             }
-            .chart-container {
-                grid-column: span 2;
-                height: 300px;
+            .url-row {
+                flex-direction: row;
+                align-items: center;
+                gap: 12px;
             }
-            button {
-                width: auto;
-                padding: 14px 48px;
+            .url-header {
+                min-width: 120px;
+            }
+            .url-input {
+                flex: 1;
             }
         }
     </style>
@@ -239,32 +236,13 @@
 <body>
     <h1>S80</h1>
 
-    <div class="url-inputs">
-        <div class="url-row">
-            <div class="url-header">
-                <div class="color-dot" id="dot1" style="background: #3B82F6;"></div>
-                <span class="url-label" id="label1" style="color: #3B82F6;">Google</span>
-            </div>
-            <input type="text" class="url-input" id="url1" value="https://www.google.com/favicon.ico">
-        </div>
-        <div class="url-row">
-            <div class="url-header">
-                <div class="color-dot" id="dot2" style="background: #F59E0B;"></div>
-                <span class="url-label" id="label2" style="color: #F59E0B;">AWS</span>
-            </div>
-            <input type="text" class="url-input" id="url2" value="https://aws.amazon.com/favicon.ico">
-        </div>
-        <div class="url-row">
-            <div class="url-header">
-                <div class="color-dot" id="dot3" style="background: #10B981;"></div>
-                <span class="url-label" id="label3" style="color: #10B981;">Cloudflare</span>
-            </div>
-            <input type="text" class="url-input" id="url3" value="https://www.cloudflare.com/favicon.ico">
-        </div>
+    <div class="controls">
+        <button id="pauseBtn">Pause</button>
+        <button id="resetBtn">Reset</button>
     </div>
 
-    <div class="controls">
-        <button id="startBtn">Start Test</button>
+    <div class="chart-container">
+        <canvas id="latencyChart"></canvas>
     </div>
 
     <div class="stats">
@@ -295,7 +273,7 @@
         <div class="stat-group">
             <div class="stat-group-header">
                 <div class="color-dot" style="background: #F59E0B;"></div>
-                <span class="stat-group-title" id="statLabel2" style="color: #F59E0B;">AWS</span>
+                <span class="stat-group-title" id="statLabel2" style="color: #F59E0B;">Amazon</span>
             </div>
             <div class="stat-values">
                 <div class="stat-item">
@@ -342,7 +320,7 @@
         </div>
     </div>
 
-    <div class="visualizations">
+    <div class="canvases">
         <div class="canvas-group">
             <div class="canvas-header">
                 <div class="color-dot" style="background: #3B82F6;"></div>
@@ -354,7 +332,7 @@
         <div class="canvas-group">
             <div class="canvas-header">
                 <div class="color-dot" style="background: #F59E0B;"></div>
-                <span class="canvas-title" id="canvasLabel2" style="color: #F59E0B;">AWS</span>
+                <span class="canvas-title" id="canvasLabel2" style="color: #F59E0B;">Amazon</span>
                 <span class="canvas-rt" id="rt2">--</span>
             </div>
             <canvas id="canvas2" class="latency-canvas" width="600" height="197"></canvas>
@@ -367,9 +345,35 @@
             </div>
             <canvas id="canvas3" class="latency-canvas" width="600" height="197"></canvas>
         </div>
-        <div class="chart-container">
-            <canvas id="latencyChart"></canvas>
+    </div>
+
+    <div class="url-inputs">
+        <div class="url-row">
+            <div class="url-header">
+                <div class="color-dot" style="background: #3B82F6;"></div>
+                <span class="url-label" id="label1" style="color: #3B82F6;">Google</span>
+            </div>
+            <input type="text" class="url-input" id="url1" value="https://www.google.com/favicon.ico" disabled>
         </div>
+        <div class="url-row">
+            <div class="url-header">
+                <div class="color-dot" style="background: #F59E0B;"></div>
+                <span class="url-label" id="label2" style="color: #F59E0B;">Amazon</span>
+            </div>
+            <input type="text" class="url-input" id="url2" value="https://aws.amazon.com/favicon.ico" disabled>
+        </div>
+        <div class="url-row">
+            <div class="url-header">
+                <div class="color-dot" style="background: #10B981;"></div>
+                <span class="url-label" id="label3" style="color: #10B981;">Cloudflare</span>
+            </div>
+            <input type="text" class="url-input" id="url3" value="https://www.cloudflare.com/favicon.ico" disabled>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="pauseBtn2">Pause</button>
+        <button id="resetBtn2">Reset</button>
     </div>
 
     <div class="info">
@@ -382,7 +386,6 @@
             try {
                 const hostname = new URL(url).hostname;
                 const parts = hostname.split('.');
-                // Get the part before the TLD (second to last)
                 if (parts.length >= 2) {
                     return parts[parts.length - 2];
                 }
@@ -392,12 +395,11 @@
             }
         }
 
-        // Capitalize first letter
         function capitalize(str) {
             return str.charAt(0).toUpperCase() + str.slice(1);
         }
 
-        // HSL to RGB conversion (from original)
+        // HSL to RGB conversion
         function hslToRgb(h, s, l) {
             let r, g, b;
             if (s === 0) {
@@ -420,14 +422,13 @@
             return [Math.floor(r * 255), Math.floor(g * 255), Math.floor(b * 255)];
         }
 
-        // Number to HSL color (from original)
         function numberToColorHsl(i) {
             const hue = i * (1.2 / 360);
             const rgb = hslToRgb(hue, 1, 0.5);
             return 'rgb(' + rgb[0] + ',' + rgb[1] + ',' + rgb[2] + ')';
         }
 
-        // Build colormap (from original)
+        // Pre-compute color map
         const colormap = new Array(1501);
         for (let x = 1; x < 1500; x++) {
             colormap[x] = numberToColorHsl(Math.round((100 - ((Math.log(x) / 6) * 100)) + 30));
@@ -439,13 +440,15 @@
             return colormap[Math.round(num)];
         }
 
-        // Get responsive point radius
         function getPointRadius() {
             return window.innerWidth < 600 ? 1 : 2;
         }
 
         const ctx = document.getElementById('latencyChart').getContext('2d');
-        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const pauseBtn2 = document.getElementById('pauseBtn2');
+        const resetBtn = document.getElementById('resetBtn');
+        const resetBtn2 = document.getElementById('resetBtn2');
 
         const colors = ['#3B82F6', '#F59E0B', '#10B981'];
 
@@ -455,14 +458,12 @@
             { id: 3, color: colors[2], inputId: 'url3', labelId: 'label3', statLabelId: 'statLabel3', canvasLabelId: 'canvasLabel3', canvasId: 'canvas3', rtId: 'rt3' }
         ];
 
-        // Canvas contexts and positions
         const canvasState = {
             1: { ctx: null, textX: 0, textY: 10 },
             2: { ctx: null, textX: 0, textY: 10 },
             3: { ctx: null, textX: 0, textY: 10 }
         };
 
-        // Initialize canvas contexts
         endpoints.forEach(ep => {
             const canvas = document.getElementById(ep.canvasId);
             canvasState[ep.id].ctx = canvas.getContext('2d');
@@ -471,6 +472,7 @@
 
         let workers = [];
         let running = false;
+        let paused = false;
         let updateInterval = null;
         let startTime = null;
 
@@ -537,7 +539,6 @@
             }
         });
 
-        // Update point radius on resize
         window.addEventListener('resize', () => {
             const radius = getPointRadius();
             chart.data.datasets.forEach(ds => {
@@ -547,7 +548,6 @@
             chart.update('none');
         });
 
-        // Update labels from URLs
         function updateLabels() {
             endpoints.forEach(ep => {
                 const url = document.getElementById(ep.inputId).value;
@@ -560,7 +560,6 @@
             chart.update('none');
         }
 
-        // Listen for URL changes
         endpoints.forEach(ep => {
             document.getElementById(ep.inputId).addEventListener('change', updateLabels);
         });
@@ -589,7 +588,6 @@
                 cs.textX = 0;
             }
 
-            // Update real-time display
             const rtEl = document.getElementById('rt' + endpointId);
             rtEl.textContent = time + 'ms';
             rtEl.style.color = color;
@@ -605,14 +603,7 @@
             s.total += time;
 
             chart.data.datasets[endpointId - 1].data.push({ x: elapsed, y: time });
-
-            // Draw to canvas
             drawToCanvas(endpointId, time);
-
-            const totalRequests = stats[1].data.length + stats[2].data.length + stats[3].data.length;
-            if (totalRequests >= 3000) {
-                stop();
-            }
         }
 
         function createWorker(endpoint) {
@@ -620,7 +611,7 @@
             const url = document.getElementById(endpoint.inputId).value.trim();
 
             const sendRequest = () => {
-                if (running) {
+                if (running && !paused) {
                     setTimeout(() => {
                         try {
                             worker.postMessage({ url: url });
@@ -667,16 +658,27 @@
             });
         }
 
+        function setUrlInputsDisabled(disabled) {
+            endpoints.forEach(ep => {
+                document.getElementById(ep.inputId).disabled = disabled;
+            });
+        }
+
+        function updatePauseButtons() {
+            const text = paused ? 'Resume' : 'Pause';
+            pauseBtn.textContent = text;
+            pauseBtn2.textContent = text;
+            pauseBtn.classList.toggle('running', !paused);
+            pauseBtn2.classList.toggle('running', !paused);
+        }
+
         function start() {
             updateLabels();
             running = true;
+            paused = false;
             startTime = performance.now();
-            startBtn.textContent = 'Stop';
-            startBtn.classList.add('running');
-
-            endpoints.forEach(ep => {
-                document.getElementById(ep.inputId).disabled = true;
-            });
+            updatePauseButtons();
+            setUrlInputsDisabled(true);
 
             workers = endpoints.map(ep => createWorker(ep));
 
@@ -686,14 +688,40 @@
             }, 100);
         }
 
-        function stop() {
-            running = false;
-            startBtn.textContent = 'Start Test';
-            startBtn.classList.remove('running');
+        function pause() {
+            paused = true;
+            updatePauseButtons();
+            setUrlInputsDisabled(false);
+        }
 
-            endpoints.forEach(ep => {
-                document.getElementById(ep.inputId).disabled = false;
+        function resume() {
+            if (!running) {
+                // First time or after reset
+                start();
+                return;
+            }
+            paused = false;
+            updatePauseButtons();
+            setUrlInputsDisabled(true);
+            // Kick workers back into action
+            workers.forEach((worker, i) => {
+                const url = document.getElementById(endpoints[i].inputId).value.trim();
+                worker.postMessage({ url: url });
             });
+        }
+
+        function togglePause() {
+            if (paused || !running) {
+                resume();
+            } else {
+                pause();
+            }
+        }
+
+        function reset() {
+            // Stop everything
+            running = false;
+            paused = false;
 
             workers.forEach(w => w.terminate());
             workers = [];
@@ -703,11 +731,7 @@
                 updateInterval = null;
             }
 
-            chart.update();
-            updateStats();
-        }
-
-        function reset() {
+            // Clear data
             endpoints.forEach(ep => {
                 stats[ep.id] = { data: [], min: Infinity, max: 0, total: 0 };
             });
@@ -717,19 +741,20 @@
             clearCanvases();
             chart.update();
             updateStats();
+
+            // Restart
+            start();
         }
 
-        startBtn.addEventListener('click', () => {
-            if (running) {
-                stop();
-            } else {
-                reset();
-                start();
-            }
-        });
+        // Wire up buttons
+        pauseBtn.addEventListener('click', togglePause);
+        pauseBtn2.addEventListener('click', togglePause);
+        resetBtn.addEventListener('click', reset);
+        resetBtn2.addEventListener('click', reset);
 
-        // Initialize labels on load
+        // Initialize labels and auto-start
         updateLabels();
+        start();
     </script>
 </body>
 </html>
