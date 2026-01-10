@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>S80 - HTTP Latency Tester</title>
+    <link rel="stylesheet" href="normalize.css">
+    <script src="chart.min.js"></script>
+    <style>
+        body {
+            background-color: #000;
+            color: #888;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 4em;
+            color: #fff;
+            margin: 0 0 20px 0;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .url-inputs {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .url-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .color-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .url-label {
+            width: 100px;
+            font-size: 14px;
+            color: #aaa;
+        }
+        .url-input {
+            flex: 1;
+            padding: 10px 15px;
+            font-size: 16px;
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 4px;
+        }
+        .url-input:focus {
+            outline: none;
+            border-color: #666;
+        }
+        .url-input:disabled {
+            opacity: 0.6;
+        }
+        button {
+            padding: 10px 30px;
+            font-size: 16px;
+            background: #333;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #444;
+        }
+        button.running {
+            background: #553333;
+        }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .stat-group {
+            background: #111;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .stat-group-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+        .stat-group-title {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+        .stat-value {
+            font-size: 14px;
+            color: #fff;
+        }
+        .chart-container {
+            position: relative;
+            height: 400px;
+            background: #111;
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .info {
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <h1>S80</h1>
+
+    <div class="url-inputs">
+        <div class="url-row">
+            <div class="color-dot" style="background: #3B82F6;"></div>
+            <span class="url-label">Google</span>
+            <input type="text" class="url-input" id="url1" value="https://www.google.com/favicon.ico">
+        </div>
+        <div class="url-row">
+            <div class="color-dot" style="background: #F59E0B;"></div>
+            <span class="url-label">AWS</span>
+            <input type="text" class="url-input" id="url2" value="https://aws.amazon.com/favicon.ico">
+        </div>
+        <div class="url-row">
+            <div class="color-dot" style="background: #10B981;"></div>
+            <span class="url-label">Cloudflare</span>
+            <input type="text" class="url-input" id="url3" value="https://www.cloudflare.com/favicon.ico">
+        </div>
+    </div>
+
+    <div class="controls">
+        <button id="startBtn">Start</button>
+    </div>
+
+    <div class="stats">
+        <div class="stat-group">
+            <div class="stat-group-header">
+                <div class="color-dot" style="background: #3B82F6;"></div>
+                <span class="stat-group-title" style="color: #3B82F6;">Google</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Requests</span>
+                <span class="stat-value" id="req1">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Min</span>
+                <span class="stat-value" id="min1">--</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Max</span>
+                <span class="stat-value" id="max1">--</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Avg</span>
+                <span class="stat-value" id="avg1">--</span>
+            </div>
+        </div>
+        <div class="stat-group">
+            <div class="stat-group-header">
+                <div class="color-dot" style="background: #F59E0B;"></div>
+                <span class="stat-group-title" style="color: #F59E0B;">AWS</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Requests</span>
+                <span class="stat-value" id="req2">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Min</span>
+                <span class="stat-value" id="min2">--</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Max</span>
+                <span class="stat-value" id="max2">--</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Avg</span>
+                <span class="stat-value" id="avg2">--</span>
+            </div>
+        </div>
+        <div class="stat-group">
+            <div class="stat-group-header">
+                <div class="color-dot" style="background: #10B981;"></div>
+                <span class="stat-group-title" style="color: #10B981;">Cloudflare</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Requests</span>
+                <span class="stat-value" id="req3">0</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Min</span>
+                <span class="stat-value" id="min3">--</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Max</span>
+                <span class="stat-value" id="max3">--</span>
+            </div>
+            <div class="stat-row">
+                <span class="stat-label">Avg</span>
+                <span class="stat-value" id="avg3">--</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="latencyChart"></canvas>
+    </div>
+
+    <div class="info">
+        <p>This tool makes HTTP requests from your browser to measure connection latency to multiple endpoints simultaneously.</p>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('latencyChart').getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+
+        const endpoints = [
+            { id: 1, color: '#3B82F6', name: 'Google', inputId: 'url1' },
+            { id: 2, color: '#F59E0B', name: 'AWS', inputId: 'url2' },
+            { id: 3, color: '#10B981', name: 'Cloudflare', inputId: 'url3' }
+        ];
+
+        let workers = [];
+        let running = false;
+        let updateInterval = null;
+        let startTime = null;
+
+        // Stats per endpoint
+        const stats = {
+            1: { data: [], min: Infinity, max: 0, total: 0 },
+            2: { data: [], min: Infinity, max: 0, total: 0 },
+            3: { data: [], min: Infinity, max: 0, total: 0 }
+        };
+
+        const chart = new Chart(ctx, {
+            type: 'scatter',
+            data: {
+                datasets: endpoints.map(ep => ({
+                    label: ep.name,
+                    data: [],
+                    pointBackgroundColor: ep.color,
+                    pointBorderColor: ep.color,
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }))
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        type: 'linear',
+                        title: {
+                            display: true,
+                            text: 'Time (seconds)',
+                            color: '#888'
+                        },
+                        min: 0,
+                        grid: { color: '#333' },
+                        ticks: { color: '#888' }
+                    },
+                    y: {
+                        type: 'logarithmic',
+                        title: {
+                            display: true,
+                            text: 'Latency (ms)',
+                            color: '#888'
+                        },
+                        min: 1,
+                        grid: { color: '#333' },
+                        ticks: { color: '#888' }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        labels: { color: '#888' }
+                    }
+                },
+                animation: false
+            }
+        });
+
+        function updateStats() {
+            endpoints.forEach(ep => {
+                const s = stats[ep.id];
+                document.getElementById('req' + ep.id).textContent = s.data.length;
+                document.getElementById('min' + ep.id).textContent = s.min === Infinity ? '--' : s.min + 'ms';
+                document.getElementById('max' + ep.id).textContent = s.max === 0 ? '--' : s.max + 'ms';
+                document.getElementById('avg' + ep.id).textContent = s.data.length > 0
+                    ? Math.round(s.total / s.data.length) + 'ms'
+                    : '--';
+            });
+        }
+
+        function addDataPoint(endpointId, time) {
+            const elapsed = (performance.now() - startTime) / 1000; // seconds
+            const s = stats[endpointId];
+
+            s.data.push({ x: elapsed, y: time });
+            if (time < s.min) s.min = time;
+            if (time > s.max) s.max = time;
+            s.total += time;
+
+            chart.data.datasets[endpointId - 1].data.push({ x: elapsed, y: time });
+
+            // Stop after 1000 total requests
+            const totalRequests = stats[1].data.length + stats[2].data.length + stats[3].data.length;
+            if (totalRequests >= 3000) {
+                stop();
+            }
+        }
+
+        function createWorker(endpoint) {
+            const worker = new Worker('s80worker.js');
+            const url = document.getElementById(endpoint.inputId).value.trim();
+
+            worker.onmessage = function(e) {
+                const { time, error } = e.data;
+                if (!error) {
+                    addDataPoint(endpoint.id, time);
+                }
+
+                if (running) {
+                    setTimeout(() => {
+                        worker.postMessage({ url: url });
+                    }, 100);
+                }
+            };
+
+            worker.postMessage({ url: url });
+            return worker;
+        }
+
+        function start() {
+            running = true;
+            startTime = performance.now();
+            startBtn.textContent = 'Stop';
+            startBtn.classList.add('running');
+
+            // Disable inputs
+            endpoints.forEach(ep => {
+                document.getElementById(ep.inputId).disabled = true;
+            });
+
+            // Create a worker for each endpoint
+            workers = endpoints.map(ep => createWorker(ep));
+
+            updateInterval = setInterval(() => {
+                chart.update();
+                updateStats();
+            }, 100);
+        }
+
+        function stop() {
+            running = false;
+            startBtn.textContent = 'Start';
+            startBtn.classList.remove('running');
+
+            // Enable inputs
+            endpoints.forEach(ep => {
+                document.getElementById(ep.inputId).disabled = false;
+            });
+
+            workers.forEach(w => w.terminate());
+            workers = [];
+
+            if (updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
+            }
+
+            chart.update();
+            updateStats();
+        }
+
+        function reset() {
+            endpoints.forEach(ep => {
+                stats[ep.id] = { data: [], min: Infinity, max: 0, total: 0 };
+            });
+            chart.data.datasets.forEach(ds => {
+                ds.data = [];
+            });
+            chart.update();
+            updateStats();
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (running) {
+                stop();
+            } else {
+                reset();
+                start();
+            }
+        });
+    </script>
+</body>
+</html>
