@@ -327,7 +327,7 @@
                 <span class="canvas-title" id="canvasLabel1" style="color: #3B82F6;">Google</span>
                 <span class="canvas-rt" id="rt1">--</span>
             </div>
-            <canvas id="canvas1" class="latency-canvas" width="600" height="40"></canvas>
+            <canvas id="canvas1" class="latency-canvas" width="448" height="252"></canvas>
         </div>
         <div class="canvas-group">
             <div class="canvas-header">
@@ -335,7 +335,7 @@
                 <span class="canvas-title" id="canvasLabel2" style="color: #F59E0B;">Amazon</span>
                 <span class="canvas-rt" id="rt2">--</span>
             </div>
-            <canvas id="canvas2" class="latency-canvas" width="600" height="40"></canvas>
+            <canvas id="canvas2" class="latency-canvas" width="448" height="252"></canvas>
         </div>
         <div class="canvas-group">
             <div class="canvas-header">
@@ -343,7 +343,7 @@
                 <span class="canvas-title" id="canvasLabel3" style="color: #10B981;">Cloudflare</span>
                 <span class="canvas-rt" id="rt3">--</span>
             </div>
-            <canvas id="canvas3" class="latency-canvas" width="600" height="40"></canvas>
+            <canvas id="canvas3" class="latency-canvas" width="448" height="252"></canvas>
         </div>
     </div>
 
@@ -459,15 +459,15 @@
         ];
 
         const canvasState = {
-            1: { ctx: null, textX: 0, textY: 8 },
-            2: { ctx: null, textX: 0, textY: 8 },
-            3: { ctx: null, textX: 0, textY: 8 }
+            1: { ctx: null, textX: 0, textY: 14 },
+            2: { ctx: null, textX: 0, textY: 14 },
+            3: { ctx: null, textX: 0, textY: 14 }
         };
 
         endpoints.forEach(ep => {
             const canvas = document.getElementById(ep.canvasId);
             canvasState[ep.id].ctx = canvas.getContext('2d');
-            canvasState[ep.id].ctx.font = '10px Arial';
+            canvasState[ep.id].ctx.font = '14px Arial';
         });
 
         let workers = [];
@@ -582,9 +582,9 @@
 
             cs.ctx.fillStyle = color;
             cs.ctx.fillText('!', cs.textX, cs.textY);
-            cs.textX += 2;
-            if (cs.textX > 596) {
-                cs.textY += 8;
+            cs.textX += 4;
+            if (cs.textX > 444) {
+                cs.textY += 18;
                 cs.textX = 0;
             }
 
@@ -653,7 +653,7 @@
                 const cs = canvasState[ep.id];
                 cs.ctx.clearRect(0, 0, canvas.width, canvas.height);
                 cs.textX = 0;
-                cs.textY = 8;
+                cs.textY = 14;
                 document.getElementById(ep.rtId).textContent = '--';
                 document.getElementById(ep.rtId).style.color = '';
             });
