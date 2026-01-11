@@ -442,6 +442,11 @@
                 <input type="number" class="setting-input" id="timeoutInput" value="2000" min="100" max="30000">
                 <span class="setting-label">ms</span>
             </div>
+            <div class="setting-item">
+                <span class="setting-label">Delay:</span>
+                <input type="number" class="setting-input" id="delayInput" value="0" min="0" max="5000">
+                <span class="setting-label">ms</span>
+            </div>
             <button class="defaults-btn" id="defaultsBtn">Reset to Defaults</button>
         </div>
     </div>
@@ -518,6 +523,7 @@
         // Default settings
         const DEFAULT_SETTINGS = {
             timeout: 2000,
+            delay: 0,
             urls: [
                 'https://www.google.com/favicon.ico',
                 'https://aws.amazon.com/favicon.ico',
@@ -530,6 +536,7 @@
         function saveSettings() {
             const settings = {
                 timeout: parseInt(document.getElementById('timeoutInput').value) || DEFAULT_SETTINGS.timeout,
+                delay: parseInt(document.getElementById('delayInput').value) || 0,
                 urls: [
                     document.getElementById('url1').value,
                     document.getElementById('url2').value,
@@ -561,6 +568,9 @@
             if (settings.timeout) {
                 document.getElementById('timeoutInput').value = settings.timeout;
             }
+            if (settings.delay !== undefined) {
+                document.getElementById('delayInput').value = settings.delay;
+            }
             if (settings.urls && settings.urls.length >= 3) {
                 document.getElementById('url1').value = settings.urls[0];
                 document.getElementById('url2').value = settings.urls[1];
@@ -575,6 +585,7 @@
 
         function resetToDefaults() {
             document.getElementById('timeoutInput').value = DEFAULT_SETTINGS.timeout;
+            document.getElementById('delayInput').value = DEFAULT_SETTINGS.delay;
             document.getElementById('url1').value = DEFAULT_SETTINGS.urls[0];
             document.getElementById('url2').value = DEFAULT_SETTINGS.urls[1];
             document.getElementById('url3').value = DEFAULT_SETTINGS.urls[2];
@@ -587,6 +598,10 @@
 
         function getTimeout() {
             return parseInt(document.getElementById('timeoutInput').value) || DEFAULT_SETTINGS.timeout;
+        }
+
+        function getDelay() {
+            return parseInt(document.getElementById('delayInput').value) || 0;
         }
 
         function isEndpointEnabled(endpoint) {
@@ -806,7 +821,8 @@
 
             const sendRequest = () => {
                 if (running && !paused && isEndpointEnabled(endpoint)) {
-                    setTimeout(() => {
+                    const delay = getDelay();
+                    const doRequest = () => {
                         try {
                             const url = document.getElementById(endpoint.inputId).value.trim();
                             const timeout = getTimeout();
@@ -815,7 +831,12 @@
                             console.error('Failed to post message to worker:', e);
                             sendRequest();
                         }
-                    }, 100);
+                    };
+                    if (delay > 0) {
+                        setTimeout(doRequest, delay);
+                    } else {
+                        doRequest();
+                    }
                 }
             };
 
@@ -971,9 +992,11 @@
 
         // Wire up settings
         const timeoutInput = document.getElementById('timeoutInput');
+        const delayInput = document.getElementById('delayInput');
         const defaultsBtn = document.getElementById('defaultsBtn');
 
         timeoutInput.addEventListener('change', saveSettings);
+        delayInput.addEventListener('change', saveSettings);
         defaultsBtn.addEventListener('click', resetToDefaults);
 
         // Save URL changes
