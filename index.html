@@ -44,6 +44,10 @@
         button:active {
             background: #333;
         }
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
         button.running {
             background: #442222;
             border-color: #663333;
@@ -477,6 +481,9 @@
         let paused = false;
         let updateInterval = null;
         let startTime = null;
+        let pausedTime = 0;          // Accumulated time spent paused
+        let pauseStartTime = null;   // When current pause began
+        let maxReached = false;      // True when all endpoints hit 1000 tests
 
         const stats = {
             1: { data: [], min: Infinity, max: 0, total: 0 },
@@ -596,7 +603,7 @@
         }
 
         function addDataPoint(endpointId, time) {
-            const elapsed = (performance.now() - startTime) / 1000;
+            const elapsed = (performance.now() - startTime - pausedTime) / 1000;
             const s = stats[endpointId];
 
             s.data.push({ x: elapsed, y: time });
@@ -611,7 +618,11 @@
             if (s.data.length >= 1000) {
                 const allDone = endpoints.every(ep => stats[ep.id].data.length >= 1000);
                 if (allDone) {
+                    maxReached = true;
                     pause();
+                    // Disable resume buttons when max reached
+                    pauseBtn.disabled = true;
+                    pauseBtn2.disabled = true;
                 }
             }
         }
@@ -701,6 +712,7 @@
 
         function pause() {
             paused = true;
+            pauseStartTime = performance.now();
             updatePauseButtons();
             setUrlInputsDisabled(false);
         }
@@ -710,6 +722,11 @@
                 // First time or after reset
                 start();
                 return;
+            }
+            // Accumulate the time spent paused
+            if (pauseStartTime !== null) {
+                pausedTime += performance.now() - pauseStartTime;
+                pauseStartTime = null;
             }
             paused = false;
             updatePauseButtons();
@@ -733,6 +750,13 @@
             // Stop everything
             running = false;
             paused = false;
+            pausedTime = 0;
+            pauseStartTime = null;
+            maxReached = false;
+
+            // Re-enable pause buttons
+            pauseBtn.disabled = false;
+            pauseBtn2.disabled = false;
 
             workers.forEach(w => w.terminate());
             workers = [];
