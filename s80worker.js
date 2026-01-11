@@ -1,4 +1,4 @@
-function fetchWithTimeout(url, timeout = 7000) {
+function fetchWithTimeout(url, timeout) {
     let options = {
         cache: "no-store",
         mode: "no-cors"
@@ -21,28 +21,29 @@ self.onmessage = function (event) {
     let startTime;
     try {
         const url = event.data.url || 'reqspeed.jpg';
+        const timeout = event.data.timeout || 2000;
         startTime = performance.now();
-        fetchWithTimeout(url)
+        fetchWithTimeout(url, timeout)
             .then(measureResponse)
             .then(() => {
                 let completeTime = performance.now();
                 if (completeTime - startTime <= 0) {
-                    postMessage({ time: 1, error: false });
+                    postMessage({ time: 1, error: false, timeout: false });
                 }
                 else {
-                    postMessage({ time: Math.ceil(completeTime - startTime), error: false });
+                    postMessage({ time: Math.ceil(completeTime - startTime), error: false, timeout: false });
                 }
             })
             .catch(err => {
                 let completeTime = performance.now();
                 if (err && err.message === 'timeout') {
-                    postMessage({ time: 7000, error: true, message: 'timeout' });
+                    postMessage({ time: timeout, error: true, timeout: true, message: 'timeout' });
                 } else {
-                    postMessage({ time: Math.ceil(completeTime - startTime), error: true, message: err ? err.message : 'unknown' });
+                    postMessage({ time: Math.ceil(completeTime - startTime), error: true, timeout: false, message: err ? err.message : 'unknown' });
                 }
             });
     } catch (e) {
         // Catch any synchronous errors
-        postMessage({ time: 0, error: true, message: e ? e.message : 'sync error' });
+        postMessage({ time: 0, error: true, timeout: false, message: e ? e.message : 'sync error' });
     }
 };

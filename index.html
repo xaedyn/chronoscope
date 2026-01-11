@@ -189,6 +189,55 @@
             text-align: center;
             color: #555;
         }
+        .settings {
+            background: #111;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+        .settings-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+        .setting-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .setting-label {
+            font-size: 14px;
+            color: #888;
+        }
+        .setting-input {
+            width: 80px;
+            padding: 8px;
+            font-size: 14px;
+            background: #222;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 6px;
+            text-align: center;
+        }
+        .setting-input:focus {
+            outline: none;
+            border-color: #666;
+        }
+        .defaults-btn {
+            padding: 8px 16px;
+            font-size: 14px;
+            background: #333;
+            color: #888;
+            border: 1px solid #444;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-left: auto;
+        }
+        .defaults-btn:hover {
+            background: #444;
+            color: #fff;
+        }
 
         /* Tablet and up */
         @media (min-width: 700px) {
@@ -377,6 +426,17 @@
         </div>
     </div>
 
+    <div class="settings">
+        <div class="settings-row">
+            <div class="setting-item">
+                <span class="setting-label">Timeout:</span>
+                <input type="number" class="setting-input" id="timeoutInput" value="2000" min="100" max="30000">
+                <span class="setting-label">ms</span>
+            </div>
+            <button class="defaults-btn" id="defaultsBtn">Reset to Defaults</button>
+        </div>
+    </div>
+
     <div class="controls">
         <button id="pauseBtn2">Pause</button>
         <button id="resetBtn2">Reset</button>
@@ -444,6 +504,66 @@
             if (num > 1499) return colormap[1499];
             if (num < 1) return colormap[1];
             return colormap[Math.round(num)];
+        }
+
+        // Default settings
+        const DEFAULT_SETTINGS = {
+            timeout: 2000,
+            urls: [
+                'https://www.google.com/favicon.ico',
+                'https://aws.amazon.com/favicon.ico',
+                'https://www.cloudflare.com/favicon.ico'
+            ]
+        };
+
+        // Cookie functions
+        function saveSettings() {
+            const settings = {
+                timeout: parseInt(document.getElementById('timeoutInput').value) || DEFAULT_SETTINGS.timeout,
+                urls: [
+                    document.getElementById('url1').value,
+                    document.getElementById('url2').value,
+                    document.getElementById('url3').value
+                ]
+            };
+            document.cookie = 's80_settings=' + encodeURIComponent(JSON.stringify(settings)) + ';max-age=31536000;path=/';
+        }
+
+        function loadSettings() {
+            const match = document.cookie.match(/s80_settings=([^;]+)/);
+            if (match) {
+                try {
+                    return JSON.parse(decodeURIComponent(match[1]));
+                } catch (e) {
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        function applySettings(settings) {
+            if (!settings) return;
+            if (settings.timeout) {
+                document.getElementById('timeoutInput').value = settings.timeout;
+            }
+            if (settings.urls && settings.urls.length >= 3) {
+                document.getElementById('url1').value = settings.urls[0];
+                document.getElementById('url2').value = settings.urls[1];
+                document.getElementById('url3').value = settings.urls[2];
+            }
+        }
+
+        function resetToDefaults() {
+            document.getElementById('timeoutInput').value = DEFAULT_SETTINGS.timeout;
+            document.getElementById('url1').value = DEFAULT_SETTINGS.urls[0];
+            document.getElementById('url2').value = DEFAULT_SETTINGS.urls[1];
+            document.getElementById('url3').value = DEFAULT_SETTINGS.urls[2];
+            saveSettings();
+            updateLabels();
+        }
+
+        function getTimeout() {
+            return parseInt(document.getElementById('timeoutInput').value) || DEFAULT_SETTINGS.timeout;
         }
 
         function getPointRadius() {
@@ -542,6 +662,18 @@
                             padding: 8,
                             font: { size: 11 }
                         }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const point = context.raw;
+                                let label = context.dataset.label || '';
+                                if (label) label += ': ';
+                                label += point.y + ' ms';
+                                if (point.timeout) label += ' (timeout)';
+                                return label;
+                            }
+                        }
                     }
                 },
                 animation: false
@@ -585,12 +717,13 @@
             });
         }
 
-        function drawToCanvas(endpointId, time) {
+        function drawToCanvas(endpointId, time, isTimeout = false) {
             const cs = canvasState[endpointId];
-            const color = colorof(time);
+            const color = isTimeout ? '#ef4444' : colorof(time);
+            const char = isTimeout ? '.' : '!';
 
             cs.ctx.fillStyle = color;
-            cs.ctx.fillText('!', cs.textX, cs.textY);
+            cs.ctx.fillText(char, cs.textX, cs.textY);
             cs.textX += 4;
             if (cs.textX > 444) {
                 cs.textY += 12;
@@ -598,21 +731,35 @@
             }
 
             const rtEl = document.getElementById('rt' + endpointId);
-            rtEl.textContent = time + 'ms';
+            rtEl.textContent = isTimeout ? 'TIMEOUT' : time + 'ms';
             rtEl.style.color = color;
         }
 
-        function addDataPoint(endpointId, time) {
+        function addDataPoint(endpointId, time, isTimeout = false) {
             const elapsed = (performance.now() - startTime - pausedTime) / 1000;
             const s = stats[endpointId];
 
-            s.data.push({ x: elapsed, y: time });
+            s.data.push({ x: elapsed, y: time, timeout: isTimeout });
             if (time < s.min) s.min = time;
             if (time > s.max) s.max = time;
             s.total += time;
 
-            chart.data.datasets[endpointId - 1].data.push({ x: elapsed, y: time });
-            drawToCanvas(endpointId, time);
+            // Add data point with timeout info for coloring
+            const dataset = chart.data.datasets[endpointId - 1];
+            const pointIndex = dataset.data.length;
+            dataset.data.push({ x: elapsed, y: time, timeout: isTimeout });
+
+            // Set point color - red for timeouts
+            if (!dataset.pointBackgroundColor || typeof dataset.pointBackgroundColor === 'string') {
+                const baseColor = dataset.pointBackgroundColor || endpoints[endpointId - 1].color;
+                dataset.pointBackgroundColor = dataset.data.map((p, i) => p.timeout ? '#ef4444' : baseColor);
+                dataset.pointBorderColor = dataset.data.map((p, i) => p.timeout ? '#ef4444' : baseColor);
+            } else {
+                dataset.pointBackgroundColor.push(isTimeout ? '#ef4444' : endpoints[endpointId - 1].color);
+                dataset.pointBorderColor.push(isTimeout ? '#ef4444' : endpoints[endpointId - 1].color);
+            }
+
+            drawToCanvas(endpointId, time, isTimeout);
 
             // Stop after ~1000 per endpoint
             if (s.data.length >= 1000) {
@@ -635,7 +782,8 @@
                     setTimeout(() => {
                         try {
                             const url = document.getElementById(endpoint.inputId).value.trim();
-                            worker.postMessage({ url: url });
+                            const timeout = getTimeout();
+                            worker.postMessage({ url: url, timeout: timeout });
                         } catch (e) {
                             console.error('Failed to post message to worker:', e);
                             sendRequest();
@@ -645,9 +793,9 @@
             };
 
             worker.onmessage = function(e) {
-                const { time, error } = e.data;
-                if (!error && time > 0) {
-                    addDataPoint(endpoint.id, time);
+                const { time, error, timeout: isTimeout } = e.data;
+                if (time > 0) {
+                    addDataPoint(endpoint.id, time, isTimeout);
                 }
                 sendRequest();
             };
@@ -659,7 +807,8 @@
 
             try {
                 const url = document.getElementById(endpoint.inputId).value.trim();
-                worker.postMessage({ url: url });
+                const timeout = getTimeout();
+                worker.postMessage({ url: url, timeout: timeout });
             } catch (e) {
                 console.error('Failed initial post to worker:', e);
                 sendRequest();
@@ -734,7 +883,8 @@
             // Kick workers back into action
             workers.forEach((worker, i) => {
                 const url = document.getElementById(endpoints[i].inputId).value.trim();
-                worker.postMessage({ url: url });
+                const timeout = getTimeout();
+                worker.postMessage({ url: url, timeout: timeout });
             });
         }
 
@@ -786,6 +936,24 @@
         pauseBtn2.addEventListener('click', togglePause);
         resetBtn.addEventListener('click', reset);
         resetBtn2.addEventListener('click', reset);
+
+        // Wire up settings
+        const timeoutInput = document.getElementById('timeoutInput');
+        const defaultsBtn = document.getElementById('defaultsBtn');
+
+        timeoutInput.addEventListener('change', saveSettings);
+        defaultsBtn.addEventListener('click', resetToDefaults);
+
+        // Save URL changes
+        endpoints.forEach(ep => {
+            document.getElementById(ep.inputId).addEventListener('change', () => {
+                saveSettings();
+                updateLabels();
+            });
+        });
+
+        // Load saved settings
+        applySettings(loadSettings());
 
         // Initialize labels and auto-start
         updateLabels();
