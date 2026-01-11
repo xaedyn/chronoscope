@@ -163,6 +163,12 @@
             align-items: center;
             gap: 8px;
         }
+        .enabled-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #667eea;
+        }
         .url-label {
             font-size: 14px;
             font-weight: 600;
@@ -405,6 +411,7 @@
     <div class="url-inputs">
         <div class="url-row">
             <div class="url-header">
+                <input type="checkbox" class="enabled-checkbox" id="enabled1" checked>
                 <div class="color-dot" style="background: #3B82F6;"></div>
                 <span class="url-label" id="label1" style="color: #3B82F6;">Google</span>
             </div>
@@ -412,6 +419,7 @@
         </div>
         <div class="url-row">
             <div class="url-header">
+                <input type="checkbox" class="enabled-checkbox" id="enabled2" checked>
                 <div class="color-dot" style="background: #F59E0B;"></div>
                 <span class="url-label" id="label2" style="color: #F59E0B;">Amazon</span>
             </div>
@@ -419,6 +427,7 @@
         </div>
         <div class="url-row">
             <div class="url-header">
+                <input type="checkbox" class="enabled-checkbox" id="enabled3" checked>
                 <div class="color-dot" style="background: #10B981;"></div>
                 <span class="url-label" id="label3" style="color: #10B981;">Cloudflare</span>
             </div>
@@ -513,7 +522,8 @@
                 'https://www.google.com/favicon.ico',
                 'https://aws.amazon.com/favicon.ico',
                 'https://www.cloudflare.com/favicon.ico'
-            ]
+            ],
+            enabled: [true, true, true]
         };
 
         // Cookie functions
@@ -524,6 +534,11 @@
                     document.getElementById('url1').value,
                     document.getElementById('url2').value,
                     document.getElementById('url3').value
+                ],
+                enabled: [
+                    document.getElementById('enabled1').checked,
+                    document.getElementById('enabled2').checked,
+                    document.getElementById('enabled3').checked
                 ]
             };
             document.cookie = 's80_settings=' + encodeURIComponent(JSON.stringify(settings)) + ';max-age=31536000;path=/';
@@ -551,6 +566,11 @@
                 document.getElementById('url2').value = settings.urls[1];
                 document.getElementById('url3').value = settings.urls[2];
             }
+            if (settings.enabled && settings.enabled.length >= 3) {
+                document.getElementById('enabled1').checked = settings.enabled[0];
+                document.getElementById('enabled2').checked = settings.enabled[1];
+                document.getElementById('enabled3').checked = settings.enabled[2];
+            }
         }
 
         function resetToDefaults() {
@@ -558,12 +578,19 @@
             document.getElementById('url1').value = DEFAULT_SETTINGS.urls[0];
             document.getElementById('url2').value = DEFAULT_SETTINGS.urls[1];
             document.getElementById('url3').value = DEFAULT_SETTINGS.urls[2];
+            document.getElementById('enabled1').checked = DEFAULT_SETTINGS.enabled[0];
+            document.getElementById('enabled2').checked = DEFAULT_SETTINGS.enabled[1];
+            document.getElementById('enabled3').checked = DEFAULT_SETTINGS.enabled[2];
             saveSettings();
             updateLabels();
         }
 
         function getTimeout() {
             return parseInt(document.getElementById('timeoutInput').value) || DEFAULT_SETTINGS.timeout;
+        }
+
+        function isEndpointEnabled(endpoint) {
+            return document.getElementById(endpoint.enabledId).checked;
         }
 
         function getPointRadius() {
@@ -579,9 +606,9 @@
         const colors = ['#3B82F6', '#F59E0B', '#10B981'];
 
         const endpoints = [
-            { id: 1, color: colors[0], inputId: 'url1', labelId: 'label1', statLabelId: 'statLabel1', canvasLabelId: 'canvasLabel1', canvasId: 'canvas1', rtId: 'rt1' },
-            { id: 2, color: colors[1], inputId: 'url2', labelId: 'label2', statLabelId: 'statLabel2', canvasLabelId: 'canvasLabel2', canvasId: 'canvas2', rtId: 'rt2' },
-            { id: 3, color: colors[2], inputId: 'url3', labelId: 'label3', statLabelId: 'statLabel3', canvasLabelId: 'canvasLabel3', canvasId: 'canvas3', rtId: 'rt3' }
+            { id: 1, color: colors[0], inputId: 'url1', labelId: 'label1', statLabelId: 'statLabel1', canvasLabelId: 'canvasLabel1', canvasId: 'canvas1', rtId: 'rt1', enabledId: 'enabled1' },
+            { id: 2, color: colors[1], inputId: 'url2', labelId: 'label2', statLabelId: 'statLabel2', canvasLabelId: 'canvasLabel2', canvasId: 'canvas2', rtId: 'rt2', enabledId: 'enabled2' },
+            { id: 3, color: colors[2], inputId: 'url3', labelId: 'label3', statLabelId: 'statLabel3', canvasLabelId: 'canvasLabel3', canvasId: 'canvas3', rtId: 'rt3', enabledId: 'enabled3' }
         ];
 
         const canvasState = {
@@ -778,7 +805,7 @@
             const worker = new Worker('s80worker.js');
 
             const sendRequest = () => {
-                if (running && !paused) {
+                if (running && !paused && isEndpointEnabled(endpoint)) {
                     setTimeout(() => {
                         try {
                             const url = document.getElementById(endpoint.inputId).value.trim();
@@ -805,13 +832,16 @@
                 sendRequest();
             };
 
-            try {
-                const url = document.getElementById(endpoint.inputId).value.trim();
-                const timeout = getTimeout();
-                worker.postMessage({ url: url, timeout: timeout });
-            } catch (e) {
-                console.error('Failed initial post to worker:', e);
-                sendRequest();
+            // Only start if enabled
+            if (isEndpointEnabled(endpoint)) {
+                try {
+                    const url = document.getElementById(endpoint.inputId).value.trim();
+                    const timeout = getTimeout();
+                    worker.postMessage({ url: url, timeout: timeout });
+                } catch (e) {
+                    console.error('Failed initial post to worker:', e);
+                    sendRequest();
+                }
             }
 
             return worker;
@@ -880,11 +910,13 @@
             paused = false;
             updatePauseButtons();
             setUrlInputsDisabled(true);
-            // Kick workers back into action
+            // Kick workers back into action (only enabled ones)
             workers.forEach((worker, i) => {
-                const url = document.getElementById(endpoints[i].inputId).value.trim();
-                const timeout = getTimeout();
-                worker.postMessage({ url: url, timeout: timeout });
+                if (isEndpointEnabled(endpoints[i])) {
+                    const url = document.getElementById(endpoints[i].inputId).value.trim();
+                    const timeout = getTimeout();
+                    worker.postMessage({ url: url, timeout: timeout });
+                }
             });
         }
 
@@ -950,6 +982,8 @@
                 saveSettings();
                 updateLabels();
             });
+            // Save enabled checkbox changes
+            document.getElementById(ep.enabledId).addEventListener('change', saveSettings);
         });
 
         // Load saved settings
