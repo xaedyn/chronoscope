@@ -461,22 +461,13 @@
     </div>
 
     <script>
-        // Extract label from URL (domain name without TLD)
+        // Extract label from URL (full hostname)
         function extractLabel(url) {
             try {
-                const hostname = new URL(url).hostname;
-                const parts = hostname.split('.');
-                if (parts.length >= 2) {
-                    return parts[parts.length - 2];
-                }
-                return parts[0];
+                return new URL(url).hostname;
             } catch (e) {
                 return 'Unknown';
             }
-        }
-
-        function capitalize(str) {
-            return str.charAt(0).toUpperCase() + str.slice(1);
         }
 
         // HSL to RGB conversion
@@ -657,7 +648,7 @@
             type: 'scatter',
             data: {
                 datasets: endpoints.map(ep => ({
-                    label: capitalize(extractLabel(document.getElementById(ep.inputId).value)),
+                    label: extractLabel(document.getElementById(ep.inputId).value),
                     data: [],
                     pointBackgroundColor: ep.color,
                     pointBorderColor: ep.color,
@@ -734,7 +725,7 @@
         function updateLabels() {
             endpoints.forEach(ep => {
                 const url = document.getElementById(ep.inputId).value;
-                const label = capitalize(extractLabel(url));
+                const label = extractLabel(url);
                 document.getElementById(ep.labelId).textContent = label;
                 document.getElementById(ep.statLabelId).textContent = label;
                 document.getElementById(ep.canvasLabelId).textContent = label;
@@ -820,6 +811,10 @@
             const worker = new Worker('s80worker.js');
 
             const sendRequest = () => {
+                // Stop this endpoint if it has hit 1000 tests
+                if (stats[endpoint.id].data.length >= 1000) {
+                    return;
+                }
                 if (running && !paused && isEndpointEnabled(endpoint)) {
                     const delay = getDelay();
                     const doRequest = () => {
