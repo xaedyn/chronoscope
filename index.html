@@ -793,16 +793,64 @@
             }
 
             drawToCanvas(endpointId, time, isTimeout);
+        }
 
-            // Stop after ~1000 per endpoint
-            if (s.data.length >= 1000) {
-                const allDone = endpoints.every(ep => stats[ep.id].data.length >= 1000);
-                if (allDone) {
-                    maxReached = true;
-                    pause();
-                    // Disable resume buttons when max reached
-                    pauseBtn.disabled = true;
-                    pauseBtn2.disabled = true;
+        // Track pending responses for synchronized rounds
+        let pendingResponses = new Set();
+
+        function startRound() {
+            if (!running || paused) return;
+
+            // Get enabled endpoints that haven't hit 1000
+            const activeEndpoints = endpoints.filter(ep =>
+                isEndpointEnabled(ep) && stats[ep.id].data.length < 1000
+            );
+
+            if (activeEndpoints.length === 0) {
+                // All done
+                maxReached = true;
+                pause();
+                pauseBtn.disabled = true;
+                pauseBtn2.disabled = true;
+                return;
+            }
+
+            // Mark all active endpoints as pending
+            pendingResponses = new Set(activeEndpoints.map(ep => ep.id));
+
+            // Send request to each active endpoint
+            activeEndpoints.forEach(ep => {
+                try {
+                    const url = document.getElementById(ep.inputId).value.trim();
+                    const timeout = getTimeout();
+                    workers[ep.id - 1].postMessage({ url, timeout });
+                } catch (e) {
+                    console.error('Failed to post to worker:', e);
+                    pendingResponses.delete(ep.id);
+                }
+            });
+
+            // If all failed immediately, try next round
+            if (pendingResponses.size === 0) {
+                startRound();
+            }
+        }
+
+        function onWorkerResponse(endpointId, time, isTimeout) {
+            if (time > 0) {
+                addDataPoint(endpointId, time, isTimeout);
+            }
+
+            // Mark this endpoint as done for this round
+            pendingResponses.delete(endpointId);
+
+            // If all pending responses are in, start next round
+            if (pendingResponses.size === 0 && running && !paused) {
+                const delay = getDelay();
+                if (delay > 0) {
+                    setTimeout(startRound, delay);
+                } else {
+                    startRound();
                 }
             }
         }
@@ -810,55 +858,15 @@
         function createWorker(endpoint) {
             const worker = new Worker('s80worker.js');
 
-            const sendRequest = () => {
-                // Stop this endpoint if it has hit 1000 tests
-                if (stats[endpoint.id].data.length >= 1000) {
-                    return;
-                }
-                if (running && !paused && isEndpointEnabled(endpoint)) {
-                    const delay = getDelay();
-                    const doRequest = () => {
-                        try {
-                            const url = document.getElementById(endpoint.inputId).value.trim();
-                            const timeout = getTimeout();
-                            worker.postMessage({ url: url, timeout: timeout });
-                        } catch (e) {
-                            console.error('Failed to post message to worker:', e);
-                            sendRequest();
-                        }
-                    };
-                    if (delay > 0) {
-                        setTimeout(doRequest, delay);
-                    } else {
-                        doRequest();
-                    }
-                }
-            };
-
             worker.onmessage = function(e) {
                 const { time, timeout: isTimeout } = e.data;
-                if (time > 0) {
-                    addDataPoint(endpoint.id, time, isTimeout);
-                }
-                sendRequest();
+                onWorkerResponse(endpoint.id, time, isTimeout);
             };
 
             worker.onerror = function(e) {
                 console.error('Worker error for ' + endpoint.inputId + ':', e);
-                sendRequest();
+                onWorkerResponse(endpoint.id, 0, false);
             };
-
-            // Only start if enabled
-            if (isEndpointEnabled(endpoint)) {
-                try {
-                    const url = document.getElementById(endpoint.inputId).value.trim();
-                    const timeout = getTimeout();
-                    worker.postMessage({ url: url, timeout: timeout });
-                } catch (e) {
-                    console.error('Failed initial post to worker:', e);
-                    sendRequest();
-                }
-            }
 
             return worker;
         }
@@ -899,6 +907,9 @@
 
             workers = endpoints.map(ep => createWorker(ep));
 
+            // Start first synchronized round
+            startRound();
+
             updateInterval = setInterval(() => {
                 chart.update('none');
                 updateStats();
@@ -926,14 +937,8 @@
             paused = false;
             updatePauseButtons();
             setUrlInputsDisabled(true);
-            // Kick workers back into action (only enabled ones)
-            workers.forEach((worker, i) => {
-                if (isEndpointEnabled(endpoints[i])) {
-                    const url = document.getElementById(endpoints[i].inputId).value.trim();
-                    const timeout = getTimeout();
-                    worker.postMessage({ url: url, timeout: timeout });
-                }
-            });
+            // Start a new synchronized round
+            startRound();
         }
 
         function togglePause() {
