@@ -794,8 +794,11 @@
 
             worker.onmessage = function(e) {
                 const { time, error, timeout: isTimeout } = e.data;
-                if (time > 0) {
-                    addDataPoint(endpoint.id, time, isTimeout);
+                // Only record successful requests or explicit timeouts
+                if (isTimeout) {
+                    addDataPoint(endpoint.id, time, true);
+                } else if (!error && time > 0) {
+                    addDataPoint(endpoint.id, time, false);
                 }
                 sendRequest();
             };
