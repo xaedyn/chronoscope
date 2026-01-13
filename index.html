@@ -144,6 +144,16 @@
             display: block;
             border: 1px solid #333;
         }
+        .url-hint {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-bottom: 8px;
+            font-style: italic;
+        }
+        .url-hint.hidden {
+            display: none;
+        }
         .url-inputs {
             display: flex;
             flex-direction: column;
@@ -299,7 +309,7 @@
 
     <div class="controls">
         <button id="pauseBtn">Pause</button>
-        <button id="resetBtn">Reset</button>
+        <button id="resetBtn">Restart</button>
     </div>
 
     <div class="chart-container">
@@ -408,6 +418,7 @@
         </div>
     </div>
 
+    <div class="url-hint" id="urlHint">Pause to edit URLs</div>
     <div class="url-inputs">
         <div class="url-row">
             <div class="url-header">
@@ -423,7 +434,7 @@
                 <div class="color-dot" style="background: #F59E0B;"></div>
                 <span class="url-label" id="label2" style="color: #F59E0B;">Amazon</span>
             </div>
-            <input type="text" class="url-input" id="url2" value="https://aws.amazon.com/favicon.ico" disabled>
+            <input type="text" class="url-input" id="url2" value="https://www.amazon.com/favicon.ico" disabled>
         </div>
         <div class="url-row">
             <div class="url-header">
@@ -453,7 +464,7 @@
 
     <div class="controls">
         <button id="pauseBtn2">Pause</button>
-        <button id="resetBtn2">Reset</button>
+        <button id="resetBtn2">Restart</button>
     </div>
 
     <div class="info">
@@ -517,7 +528,7 @@
             delay: 0,
             urls: [
                 'https://www.google.com/favicon.ico',
-                'https://aws.amazon.com/favicon.ico',
+                'https://www.amazon.com/favicon.ico',
                 'https://www.cloudflare.com/favicon.ico'
             ],
             enabled: [true, true, true]
@@ -895,6 +906,8 @@
             pauseBtn2.textContent = text;
             pauseBtn.classList.toggle('running', !paused);
             pauseBtn2.classList.toggle('running', !paused);
+            // Show hint when running, hide when paused
+            document.getElementById('urlHint').classList.toggle('hidden', paused);
         }
 
         function start() {
