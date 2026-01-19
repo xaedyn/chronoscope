@@ -821,20 +821,9 @@
             if (time > s.max) s.max = time;
             s.total += time;
 
-            // Add data point with timeout info for coloring
+            // Add data point with timeout info for tooltip
             const dataset = chart.data.datasets[endpointId - 1];
-            const pointIndex = dataset.data.length;
             dataset.data.push({ x: elapsed, y: time, timeout: isTimeout });
-
-            // Set point color - red for timeouts
-            if (!dataset.pointBackgroundColor || typeof dataset.pointBackgroundColor === 'string') {
-                const baseColor = dataset.pointBackgroundColor || endpoints[endpointId - 1].color;
-                dataset.pointBackgroundColor = dataset.data.map((p, i) => p.timeout ? '#ef4444' : baseColor);
-                dataset.pointBorderColor = dataset.data.map((p, i) => p.timeout ? '#ef4444' : baseColor);
-            } else {
-                dataset.pointBackgroundColor.push(isTimeout ? '#ef4444' : endpoints[endpointId - 1].color);
-                dataset.pointBorderColor.push(isTimeout ? '#ef4444' : endpoints[endpointId - 1].color);
-            }
 
             drawToCanvas(endpointId, time, isTimeout);
         }
