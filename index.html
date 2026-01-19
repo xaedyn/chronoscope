@@ -656,6 +656,37 @@
             3: { data: [], min: Infinity, max: 0, total: 0 }
         };
 
+        // Plugin to draw horizontal timeout line
+        const timeoutLinePlugin = {
+            id: 'timeoutLine',
+            afterDraw: (chart) => {
+                const timeout = getTimeout();
+                const yScale = chart.scales.y;
+                const xScale = chart.scales.x;
+
+                if (timeout < yScale.min || timeout > yScale.max) return;
+
+                const y = yScale.getPixelForValue(timeout);
+                const ctx = chart.ctx;
+
+                ctx.save();
+                ctx.beginPath();
+                ctx.moveTo(xScale.left, y);
+                ctx.lineTo(xScale.right, y);
+                ctx.strokeStyle = '#ef4444';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+
+                // Label
+                ctx.fillStyle = '#ef4444';
+                ctx.font = '10px Arial';
+                ctx.textAlign = 'right';
+                ctx.fillText('timeout', xScale.right - 4, y - 4);
+                ctx.restore();
+            }
+        };
+
         const chart = new Chart(ctx, {
             type: 'scatter',
             data: {
@@ -668,6 +699,7 @@
                     pointHoverRadius: getPointRadius() + 2
                 }))
             },
+            plugins: [timeoutLinePlugin],
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
