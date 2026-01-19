@@ -648,6 +648,7 @@
         let pausedTime = 0;          // Accumulated time spent paused
         let pauseStartTime = null;   // When current pause began
         let maxReached = false;      // True when all endpoints hit 1000 tests
+        let epoch = 0;               // Incremented on reset to invalidate stale setTimeout callbacks
 
         const stats = {
             1: { data: [], min: Infinity, max: 0, total: 0 },
@@ -859,7 +860,11 @@
             if (pendingResponses.size === 0 && running && !paused) {
                 const delay = getDelay();
                 if (delay > 0) {
-                    setTimeout(startRound, delay);
+                    // Capture current epoch to detect stale callbacks after reset
+                    const currentEpoch = epoch;
+                    setTimeout(() => {
+                        if (epoch === currentEpoch) startRound();
+                    }, delay);
                 } else {
                     startRound();
                 }
@@ -870,7 +875,11 @@
             const worker = new Worker('s80worker.js');
 
             worker.onmessage = function(e) {
-                const { time, timeout: isTimeout } = e.data;
+                const { time, timeout: isTimeout, error, errorMsg } = e.data;
+                if (error) {
+                    // Network error (ERR_INSUFFICIENT_RESOURCES, etc) - don't create data point
+                    console.warn('Request error for ' + endpoint.inputId + ':', errorMsg || 'unknown');
+                }
                 onWorkerResponse(endpoint.id, time, isTimeout);
             };
 
@@ -969,6 +978,8 @@
             pausedTime = 0;
             pauseStartTime = null;
             maxReached = false;
+            epoch++;  // Invalidate any pending setTimeout callbacks
+            pendingResponses.clear();
 
             // Re-enable pause buttons
             pauseBtn.disabled = false;
