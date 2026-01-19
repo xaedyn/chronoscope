@@ -932,10 +932,12 @@
             });
         }
 
-        function setUrlInputsDisabled(disabled) {
+        function setInputsDisabled(disabled) {
             endpoints.forEach(ep => {
                 document.getElementById(ep.inputId).disabled = disabled;
             });
+            document.getElementById('timeoutInput').disabled = disabled;
+            document.getElementById('delayInput').disabled = disabled;
         }
 
         function updatePauseButtons() {
@@ -954,7 +956,7 @@
             paused = false;
             startTime = performance.now();
             updatePauseButtons();
-            setUrlInputsDisabled(true);
+            setInputsDisabled(true);
 
             workers = endpoints.map(ep => createWorker(ep));
 
@@ -971,7 +973,7 @@
             paused = true;
             pauseStartTime = performance.now();
             updatePauseButtons();
-            setUrlInputsDisabled(false);
+            setInputsDisabled(false);
         }
 
         function resume() {
@@ -987,7 +989,7 @@
             }
             paused = false;
             updatePauseButtons();
-            setUrlInputsDisabled(true);
+            setInputsDisabled(true);
             // Start a new synchronized round
             startRound();
         }
