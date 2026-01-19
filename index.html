@@ -913,10 +913,13 @@
             }
         }
 
-        function createWorker(endpoint) {
+        function createWorker(endpoint, workerEpoch) {
             const worker = new Worker('s80worker.js');
 
             worker.onmessage = function(e) {
+                // Ignore responses from workers created in previous epochs (stale after reset)
+                if (workerEpoch !== epoch) return;
+
                 const { time, timeout: isTimeout, error, errorMsg } = e.data;
                 if (error) {
                     // Network error (ERR_INSUFFICIENT_RESOURCES, etc) - don't create data point
@@ -926,6 +929,9 @@
             };
 
             worker.onerror = function(e) {
+                // Ignore errors from workers created in previous epochs
+                if (workerEpoch !== epoch) return;
+
                 console.error('Worker error for ' + endpoint.inputId + ':', e);
                 onWorkerResponse(endpoint.id, 0, false);
             };
@@ -971,7 +977,7 @@
             updatePauseButtons();
             setInputsDisabled(true);
 
-            workers = endpoints.map(ep => createWorker(ep));
+            workers = endpoints.map(ep => createWorker(ep, epoch));
 
             // Start first synchronized round
             startRound();

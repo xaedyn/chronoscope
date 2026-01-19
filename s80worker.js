@@ -10,9 +10,10 @@ self.onmessage = function (event) {
             if (done) return;
             const elapsed = Math.ceil(performance.now() - startTime);
             // Only count as success if it completed before timeout
+            // (requests completing at or after timeout are handled by timeout handler)
             if (elapsed < timeout) {
                 done = true;
-                postMessage({ time: elapsed > 0 ? elapsed : 1, error: false, timeout: false });
+                postMessage({ time: Math.max(1, elapsed), error: false, timeout: false });
             }
         })
         .catch((err) => {
