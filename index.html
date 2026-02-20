@@ -325,7 +325,7 @@
     <h1>S80</h1>
 
     <div class="controls">
-        <button id="pauseBtn">Pause</button>
+        <button id="abortBtn">Abort</button>
         <button id="resetBtn">Restart</button>
     </div>
 
@@ -437,7 +437,7 @@
 
     <div class="settings-header">
         <span class="settings-title">Settings</span>
-        <span class="settings-hint" id="settingsHint">(pause to edit)</span>
+        <span class="settings-hint" id="settingsHint">(abort to edit)</span>
     </div>
 
     <div class="url-inputs">
@@ -484,7 +484,7 @@
     </div>
 
     <div class="controls">
-        <button id="pauseBtn2">Pause</button>
+        <button id="abortBtn2">Abort</button>
         <button id="resetBtn2">Restart</button>
     </div>
 
@@ -632,12 +632,12 @@
         }
 
         function getPointRadius() {
-            return window.innerWidth < 600 ? 1 : 1.5;
+            return window.innerWidth < 600 ? 0.75 : 1;
         }
 
         const ctx = document.getElementById('latencyChart').getContext('2d');
-        const pauseBtn = document.getElementById('pauseBtn');
-        const pauseBtn2 = document.getElementById('pauseBtn2');
+        const abortBtn = document.getElementById('abortBtn');
+        const abortBtn2 = document.getElementById('abortBtn2');
         const resetBtn = document.getElementById('resetBtn');
         const resetBtn2 = document.getElementById('resetBtn2');
 
@@ -663,13 +663,15 @@
 
         let workers = [];
         let running = false;
-        let paused = false;
         let updateInterval = null;
         let startTime = null;
-        let pausedTime = 0;          // Accumulated time spent paused
-        let pauseStartTime = null;   // When current pause began
         let maxReached = false;      // True when all endpoints hit 1000 tests
         let epoch = 0;               // Incremented on reset to invalidate stale setTimeout callbacks
+
+        // Freeze detection heartbeat
+        let lastHeartbeat = null;
+        let heartbeatInterval = null;
+        const FREEZE_THRESHOLD = 3000; // Auto-abort if JS frozen for 3+ seconds
 
         const stats = {
             1: { data: [], min: Infinity, max: 0, total: 0 },
@@ -834,7 +836,7 @@
         }
 
         function addDataPoint(endpointId, time, isTimeout = false) {
-            const elapsed = (performance.now() - startTime - pausedTime) / 1000;
+            const elapsed = (performance.now() - startTime) / 1000;
             const s = stats[endpointId];
 
             s.data.push({ x: elapsed, y: time, timeout: isTimeout });
@@ -853,7 +855,7 @@
         let pendingResponses = new Set();
 
         function startRound() {
-            if (!running || paused) return;
+            if (!running) return;
 
             // Get enabled endpoints that haven't hit 1000
             const activeEndpoints = endpoints.filter(ep =>
@@ -861,11 +863,8 @@
             );
 
             if (activeEndpoints.length === 0) {
-                // All done
                 maxReached = true;
-                pause();
-                pauseBtn.disabled = true;
-                pauseBtn2.disabled = true;
+                abort();
                 return;
             }
 
@@ -899,7 +898,7 @@
             pendingResponses.delete(endpointId);
 
             // If all pending responses are in, start next round
-            if (pendingResponses.size === 0 && running && !paused) {
+            if (pendingResponses.size === 0 && running) {
                 const delay = getDelay();
                 if (delay > 0) {
                     // Capture current epoch to detect stale callbacks after reset
@@ -959,22 +958,76 @@
             document.getElementById('delayInput').disabled = disabled;
         }
 
-        function updatePauseButtons() {
-            const text = paused ? 'Resume' : 'Pause';
-            pauseBtn.textContent = text;
-            pauseBtn2.textContent = text;
-            pauseBtn.classList.toggle('running', !paused);
-            pauseBtn2.classList.toggle('running', !paused);
-            // Show hint when running, hide when paused
-            document.getElementById('settingsHint').classList.toggle('hidden', paused);
+        function updateAbortButtons() {
+            if (running) {
+                abortBtn.textContent = 'Abort';
+                abortBtn.disabled = false;
+                abortBtn.classList.add('running');
+                abortBtn2.textContent = 'Abort';
+                abortBtn2.disabled = false;
+                abortBtn2.classList.add('running');
+                document.getElementById('settingsHint').classList.remove('hidden');
+            } else {
+                abortBtn.textContent = maxReached ? 'Done' : 'Aborted';
+                abortBtn.disabled = true;
+                abortBtn.classList.remove('running');
+                abortBtn2.textContent = maxReached ? 'Done' : 'Aborted';
+                abortBtn2.disabled = true;
+                abortBtn2.classList.remove('running');
+                document.getElementById('settingsHint').classList.add('hidden');
+            }
+        }
+
+        function startHeartbeat() {
+            lastHeartbeat = performance.now();
+            heartbeatInterval = setInterval(() => {
+                const now = performance.now();
+                if (now - lastHeartbeat > FREEZE_THRESHOLD) {
+                    console.warn('JS freeze detected (' + Math.round(now - lastHeartbeat) + 'ms gap), auto-aborting');
+                    abort();
+                }
+                lastHeartbeat = now;
+            }, 1000);
+        }
+
+        function stopHeartbeat() {
+            if (heartbeatInterval) {
+                clearInterval(heartbeatInterval);
+                heartbeatInterval = null;
+            }
+            lastHeartbeat = null;
+        }
+
+        function abort() {
+            if (!running) return;
+            running = false;
+            epoch++;
+            pendingResponses.clear();
+
+            workers.forEach(w => w.terminate());
+            workers = [];
+
+            if (updateInterval) {
+                clearInterval(updateInterval);
+                updateInterval = null;
+            }
+
+            stopHeartbeat();
+
+            // Final update
+            chart.update('none');
+            updateStats();
+
+            updateAbortButtons();
+            setInputsDisabled(false);
         }
 
         function start() {
             updateLabels();
             running = true;
-            paused = false;
+            maxReached = false;
             startTime = performance.now();
-            updatePauseButtons();
+            updateAbortButtons();
             setInputsDisabled(true);
 
             workers = endpoints.map(ep => createWorker(ep, epoch));
@@ -986,54 +1039,18 @@
                 chart.update('none');
                 updateStats();
             }, 100);
-        }
 
-        function pause() {
-            paused = true;
-            pauseStartTime = performance.now();
-            updatePauseButtons();
-            setInputsDisabled(false);
-        }
-
-        function resume() {
-            if (!running) {
-                // First time or after reset
-                start();
-                return;
-            }
-            // Accumulate the time spent paused
-            if (pauseStartTime !== null) {
-                pausedTime += performance.now() - pauseStartTime;
-                pauseStartTime = null;
-            }
-            paused = false;
-            updatePauseButtons();
-            setInputsDisabled(true);
-            // Start a new synchronized round
-            startRound();
-        }
-
-        function togglePause() {
-            if (paused || !running) {
-                resume();
-            } else {
-                pause();
-            }
+            startHeartbeat();
         }
 
         function reset() {
             // Stop everything
             running = false;
-            paused = false;
-            pausedTime = 0;
-            pauseStartTime = null;
             maxReached = false;
             epoch++;  // Invalidate any pending setTimeout callbacks
             pendingResponses.clear();
 
-            // Re-enable pause buttons
-            pauseBtn.disabled = false;
-            pauseBtn2.disabled = false;
+            stopHeartbeat();
 
             workers.forEach(w => w.terminate());
             workers = [];
@@ -1059,8 +1076,8 @@
         }
 
         // Wire up buttons
-        pauseBtn.addEventListener('click', togglePause);
-        pauseBtn2.addEventListener('click', togglePause);
+        abortBtn.addEventListener('click', abort);
+        abortBtn2.addEventListener('click', abort);
         resetBtn.addEventListener('click', reset);
         resetBtn2.addEventListener('click', reset);
 
