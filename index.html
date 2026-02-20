@@ -169,10 +169,6 @@
             cursor: pointer;
             accent-color: #667eea;
         }
-        .url-label {
-            font-size: 14px;
-            font-weight: 600;
-        }
         .url-input {
             width: 100%;
             padding: 12px;
@@ -446,7 +442,6 @@
             <div class="url-header">
                 <input type="checkbox" class="enabled-checkbox" id="enabled1" checked>
                 <div class="color-dot" style="background: #3B82F6;"></div>
-                <span class="url-label" id="label1" style="color: #3B82F6;">Google</span>
             </div>
             <input type="text" class="url-input" id="url1" value="https://www.google.com/favicon.ico" disabled>
         </div>
@@ -454,7 +449,6 @@
             <div class="url-header">
                 <input type="checkbox" class="enabled-checkbox" id="enabled2" checked>
                 <div class="color-dot" style="background: #F59E0B;"></div>
-                <span class="url-label" id="label2" style="color: #F59E0B;">Amazon</span>
             </div>
             <input type="text" class="url-input" id="url2" value="https://www.amazon.com/favicon.ico" disabled>
         </div>
@@ -462,7 +456,6 @@
             <div class="url-header">
                 <input type="checkbox" class="enabled-checkbox" id="enabled3" checked>
                 <div class="color-dot" style="background: #10B981;"></div>
-                <span class="url-label" id="label3" style="color: #10B981;">Cloudflare</span>
             </div>
             <input type="text" class="url-input" id="url3" value="https://www.cloudflare.com/favicon.ico" disabled>
         </div>
@@ -651,9 +644,9 @@
         const colors = ['#3B82F6', '#F59E0B', '#10B981'];
 
         const endpoints = [
-            { id: 1, color: colors[0], inputId: 'url1', labelId: 'label1', statLabelId: 'statLabel1', canvasLabelId: 'canvasLabel1', canvasId: 'canvas1', rtId: 'rt1', enabledId: 'enabled1' },
-            { id: 2, color: colors[1], inputId: 'url2', labelId: 'label2', statLabelId: 'statLabel2', canvasLabelId: 'canvasLabel2', canvasId: 'canvas2', rtId: 'rt2', enabledId: 'enabled2' },
-            { id: 3, color: colors[2], inputId: 'url3', labelId: 'label3', statLabelId: 'statLabel3', canvasLabelId: 'canvasLabel3', canvasId: 'canvas3', rtId: 'rt3', enabledId: 'enabled3' }
+            { id: 1, color: colors[0], inputId: 'url1', statLabelId: 'statLabel1', canvasLabelId: 'canvasLabel1', canvasId: 'canvas1', rtId: 'rt1', enabledId: 'enabled1' },
+            { id: 2, color: colors[1], inputId: 'url2', statLabelId: 'statLabel2', canvasLabelId: 'canvasLabel2', canvasId: 'canvas2', rtId: 'rt2', enabledId: 'enabled2' },
+            { id: 3, color: colors[2], inputId: 'url3', statLabelId: 'statLabel3', canvasLabelId: 'canvasLabel3', canvasId: 'canvas3', rtId: 'rt3', enabledId: 'enabled3' }
         ];
 
         const canvasState = {
@@ -799,7 +792,6 @@
             endpoints.forEach(ep => {
                 const url = document.getElementById(ep.inputId).value;
                 const label = extractLabel(url);
-                document.getElementById(ep.labelId).textContent = label;
                 document.getElementById(ep.statLabelId).textContent = label;
                 document.getElementById(ep.canvasLabelId).textContent = label;
                 chart.data.datasets[ep.id - 1].label = label;
