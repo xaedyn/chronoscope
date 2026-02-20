@@ -212,14 +212,6 @@
             font-weight: 600;
             color: #aaa;
         }
-        .settings-hint {
-            font-size: 12px;
-            color: #666;
-            font-style: italic;
-        }
-        .settings-hint.hidden {
-            visibility: hidden;
-        }
         .settings-row {
             display: flex;
             flex-wrap: wrap;
@@ -415,7 +407,7 @@
                 <span class="canvas-title" id="canvasLabel1" style="color: #3B82F6;">Google</span>
                 <span class="canvas-rt" id="rt1">--</span>
             </div>
-            <canvas id="canvas1" class="latency-canvas" width="448" height="252"></canvas>
+            <canvas id="canvas1" class="latency-canvas" width="448" height="244"></canvas>
         </div>
         <div class="canvas-group">
             <div class="canvas-header">
@@ -423,7 +415,7 @@
                 <span class="canvas-title" id="canvasLabel2" style="color: #F59E0B;">Amazon</span>
                 <span class="canvas-rt" id="rt2">--</span>
             </div>
-            <canvas id="canvas2" class="latency-canvas" width="448" height="252"></canvas>
+            <canvas id="canvas2" class="latency-canvas" width="448" height="244"></canvas>
         </div>
         <div class="canvas-group">
             <div class="canvas-header">
@@ -431,13 +423,12 @@
                 <span class="canvas-title" id="canvasLabel3" style="color: #10B981;">Cloudflare</span>
                 <span class="canvas-rt" id="rt3">--</span>
             </div>
-            <canvas id="canvas3" class="latency-canvas" width="448" height="252"></canvas>
+            <canvas id="canvas3" class="latency-canvas" width="448" height="244"></canvas>
         </div>
     </div>
 
     <div class="settings-header">
         <span class="settings-title">Settings</span>
-        <span class="settings-hint" id="settingsHint">(abort to edit)</span>
     </div>
 
     <div class="url-inputs">
@@ -668,10 +659,9 @@
         let maxReached = false;      // True when all endpoints hit 1000 tests
         let epoch = 0;               // Incremented on reset to invalidate stale setTimeout callbacks
 
-        // Freeze detection heartbeat
-        let lastHeartbeat = null;
-        let heartbeatInterval = null;
-        const FREEZE_THRESHOLD = 3000; // Auto-abort if JS frozen for 3+ seconds
+        // Freeze detection via update interval
+        let lastTick = null;
+        const FREEZE_THRESHOLD = 1000; // Auto-abort if JS frozen for 1+ second
 
         const stats = {
             1: { data: [], min: Infinity, max: 0, total: 0 },
@@ -859,7 +849,7 @@
 
             // Get enabled endpoints that haven't hit 1000
             const activeEndpoints = endpoints.filter(ep =>
-                isEndpointEnabled(ep) && stats[ep.id].data.length < 2239
+                isEndpointEnabled(ep) && stats[ep.id].data.length < 2240
             );
 
             if (activeEndpoints.length === 0) {
@@ -966,7 +956,6 @@
                 abortBtn2.textContent = 'Abort';
                 abortBtn2.disabled = false;
                 abortBtn2.classList.add('running');
-                document.getElementById('settingsHint').classList.remove('hidden');
             } else {
                 abortBtn.textContent = maxReached ? 'Done' : 'Aborted';
                 abortBtn.disabled = true;
@@ -974,28 +963,7 @@
                 abortBtn2.textContent = maxReached ? 'Done' : 'Aborted';
                 abortBtn2.disabled = true;
                 abortBtn2.classList.remove('running');
-                document.getElementById('settingsHint').classList.add('hidden');
             }
-        }
-
-        function startHeartbeat() {
-            lastHeartbeat = performance.now();
-            heartbeatInterval = setInterval(() => {
-                const now = performance.now();
-                if (now - lastHeartbeat > FREEZE_THRESHOLD) {
-                    console.warn('JS freeze detected (' + Math.round(now - lastHeartbeat) + 'ms gap), auto-aborting');
-                    abort();
-                }
-                lastHeartbeat = now;
-            }, 1000);
-        }
-
-        function stopHeartbeat() {
-            if (heartbeatInterval) {
-                clearInterval(heartbeatInterval);
-                heartbeatInterval = null;
-            }
-            lastHeartbeat = null;
         }
 
         function abort() {
@@ -1012,7 +980,7 @@
                 updateInterval = null;
             }
 
-            stopHeartbeat();
+            lastTick = null;
 
             // Final update
             chart.update('none');
@@ -1027,6 +995,7 @@
             running = true;
             maxReached = false;
             startTime = performance.now();
+            lastTick = performance.now();
             updateAbortButtons();
             setInputsDisabled(true);
 
@@ -1036,11 +1005,18 @@
             startRound();
 
             updateInterval = setInterval(() => {
+                // Freeze detection: if gap since last tick exceeds threshold, auto-abort
+                const now = performance.now();
+                if (lastTick !== null && now - lastTick > FREEZE_THRESHOLD) {
+                    console.warn('JS freeze detected (' + Math.round(now - lastTick) + 'ms gap), auto-aborting');
+                    abort();
+                    return;
+                }
+                lastTick = now;
+
                 chart.update('none');
                 updateStats();
             }, 100);
-
-            startHeartbeat();
         }
 
         function reset() {
@@ -1049,8 +1025,6 @@
             maxReached = false;
             epoch++;  // Invalidate any pending setTimeout callbacks
             pendingResponses.clear();
-
-            stopHeartbeat();
 
             workers.forEach(w => w.terminate());
             workers = [];
