@@ -641,9 +641,9 @@
         ];
 
         const canvasState = {
-            1: { ctx: null, textX: 0, textY: 14 },
-            2: { ctx: null, textX: 0, textY: 14 },
-            3: { ctx: null, textX: 0, textY: 14 }
+            1: { ctx: null, textX: 0, textY: 13 },
+            2: { ctx: null, textX: 0, textY: 13 },
+            3: { ctx: null, textX: 0, textY: 13 }
         };
 
         endpoints.forEach(ep => {
@@ -934,7 +934,7 @@
                 const cs = canvasState[ep.id];
                 cs.ctx.clearRect(0, 0, canvas.width, canvas.height);
                 cs.textX = 0;
-                cs.textY = 14;
+                cs.textY = 13;
                 document.getElementById(ep.rtId).textContent = '--';
                 document.getElementById(ep.rtId).style.color = '';
             });
