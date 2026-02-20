@@ -212,6 +212,15 @@
             font-weight: 600;
             color: #aaa;
         }
+        .settings-saved {
+            font-size: 12px;
+            color: #10B981;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .settings-saved.visible {
+            opacity: 1;
+        }
         .settings-row {
             display: flex;
             flex-wrap: wrap;
@@ -429,6 +438,7 @@
 
     <div class="settings-header">
         <span class="settings-title">Settings</span>
+        <span class="settings-saved" id="settingsSaved">Saved</span>
     </div>
 
     <div class="url-inputs">
@@ -563,6 +573,12 @@
                 ]
             };
             document.cookie = 's80_settings=' + encodeURIComponent(JSON.stringify(settings)) + ';max-age=31536000;path=/';
+
+            // Flash "Saved" indicator
+            const saved = document.getElementById('settingsSaved');
+            saved.classList.add('visible');
+            clearTimeout(saveSettings._timer);
+            saveSettings._timer = setTimeout(() => saved.classList.remove('visible'), 5000);
         }
 
         function loadSettings() {
