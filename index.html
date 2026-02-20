@@ -1086,18 +1086,19 @@
         const delayInput = document.getElementById('delayInput');
         const defaultsBtn = document.getElementById('defaultsBtn');
 
-        timeoutInput.addEventListener('change', saveSettings);
-        delayInput.addEventListener('change', saveSettings);
-        defaultsBtn.addEventListener('click', resetToDefaults);
+        timeoutInput.addEventListener('change', () => { saveSettings(); abort(); });
+        delayInput.addEventListener('change', () => { saveSettings(); abort(); });
+        defaultsBtn.addEventListener('click', () => { resetToDefaults(); abort(); });
 
         // Save URL changes
         endpoints.forEach(ep => {
             document.getElementById(ep.inputId).addEventListener('change', () => {
                 saveSettings();
                 updateLabels();
+                abort();
             });
             // Save enabled checkbox changes
-            document.getElementById(ep.enabledId).addEventListener('change', saveSettings);
+            document.getElementById(ep.enabledId).addEventListener('change', () => { saveSettings(); abort(); });
         });
 
         // Load saved settings
