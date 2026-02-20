@@ -859,7 +859,7 @@
 
             // Get enabled endpoints that haven't hit 1000
             const activeEndpoints = endpoints.filter(ep =>
-                isEndpointEnabled(ep) && stats[ep.id].data.length < 1000
+                isEndpointEnabled(ep) && stats[ep.id].data.length < 2239
             );
 
             if (activeEndpoints.length === 0) {
