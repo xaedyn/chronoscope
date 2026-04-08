@@ -75,15 +75,20 @@ export class RenderScheduler {
   }
 
   private runFrame(): void {
+    // Effects always tick (animations run independently of data changes)
+    if (!this.effectsDisabled) {
+      for (const fn of this.effectsRenderers) fn();
+    }
+
+    // Data + interaction only redraw when marked dirty
+    if (!this.dirty) return;
+    this.dirty = false;
+
     const dataStart = performance.now();
     for (const fn of this.dataRenderers) fn();
     const dataMs = performance.now() - dataStart;
 
     this.updateOverloadStreak(dataMs);
-
-    if (!this.effectsDisabled && dataMs < DATA_BUDGET_MS) {
-      for (const fn of this.effectsRenderers) fn();
-    }
 
     for (const fn of this.interactionRenderers) fn();
   }
