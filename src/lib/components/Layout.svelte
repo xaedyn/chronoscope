@@ -2,15 +2,54 @@
 <!-- CSS Grid shell: header, sidebar (EndpointPanel), main area (viz + cards),  -->
 <!-- and controls bar. Responsive across mobile/tablet/desktop.                   -->
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
+  import { get } from 'svelte/store';
   import { tokens } from '$lib/tokens';
+  import { measurementStore } from '$lib/stores/measurements';
+  import { endpointStore } from '$lib/stores/endpoints';
   import Header from './Header.svelte';
   import EndpointPanel from './EndpointPanel.svelte';
   import VisualizationArea from './VisualizationArea.svelte';
   import SummaryCards from './SummaryCards.svelte';
   import Controls from './Controls.svelte';
 
-  // No props needed — Controls is self-contained via lifecycle store.
+  let announcer: HTMLDivElement;
+  let prevLifecycle = get(measurementStore).lifecycle;
+  let unsubLifecycle: (() => void) | null = null;
+
+  function announce(msg: string): void {
+    if (!announcer) return;
+    announcer.textContent = '';
+    // Force a DOM flush so screen readers pick up the change
+    setTimeout(() => { announcer.textContent = msg; }, 50);
+  }
+
+  onMount(() => {
+    unsubLifecycle = measurementStore.subscribe((state) => {
+      const cur = state.lifecycle;
+      const prev = prevLifecycle;
+
+      if (prev !== 'running' && cur === 'running') {
+        const n = get(endpointStore).filter(ep => ep.enabled).length;
+        announce(`Test started with ${n} endpoint${n === 1 ? '' : 's'}`);
+      } else if (prev === 'running' && cur === 'stopping') {
+        const rounds = state.roundCounter;
+        announce(`Test stopped after ${rounds} round${rounds === 1 ? '' : 's'}`);
+      } else if (prev !== 'completed' && cur === 'completed') {
+        const rounds = state.roundCounter;
+        announce(`Test completed after ${rounds} round${rounds === 1 ? '' : 's'}`);
+      }
+
+      prevLifecycle = cur;
+    });
+  });
+
+  onDestroy(() => {
+    unsubLifecycle?.();
+  });
 </script>
+
+<a href="#results" class="skip-link">Skip to results</a>
 
 <div
   class="app-layout"
@@ -39,7 +78,7 @@
     </aside>
 
     <!-- Main column: visualization + summary cards -->
-    <main class="layout-main">
+    <main id="results" class="layout-main">
       <div class="layout-viz">
         <VisualizationArea />
       </div>
@@ -55,7 +94,49 @@
   </div>
 </div>
 
+<!-- ARIA live region for test state announcements -->
+<div
+  bind:this={announcer}
+  id="sonde-announcer"
+  role="status"
+  aria-live="polite"
+  aria-atomic="true"
+  class="sr-only"
+></div>
+
 <style>
+  /* ── Skip link ───────────────────────────────────────────────────────────── */
+  .skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    z-index: 9999;
+    padding: 8px 16px;
+    background: var(--accent, #4a90d9);
+    color: #fff;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 0 0 4px 0;
+    transition: top 100ms ease;
+  }
+
+  .skip-link:focus {
+    top: 0;
+  }
+
+  /* ── Screen-reader only ──────────────────────────────────────────────────── */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   /* ── Root layout ─────────────────────────────────────────────────────────── */
   .app-layout {
     display: grid;

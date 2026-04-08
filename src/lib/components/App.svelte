@@ -12,6 +12,7 @@
   import { MeasurementEngine } from '$lib/engine/measurement-engine';
   import { loadPersistedSettings, saveSettings } from '$lib/utils/persistence';
   import { initHashRouter } from '$lib/share/hash-router';
+  import { initShortcuts } from '$lib/utils/shortcuts';
   import type { PersistedSettings } from '$lib/types';
   import Layout from './Layout.svelte';
   import SettingsDrawer from './SettingsDrawer.svelte';
@@ -112,6 +113,7 @@
   let unsubSettings: (() => void) | null = null;
   let unsubEndpoints: (() => void) | null = null;
   let unsubUi: (() => void) | null = null;
+  let destroyShortcuts: (() => void) | null = null;
 
   let persistDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -201,6 +203,9 @@
 
     // 6. Setup persistence sync
     setupPersistenceSync();
+
+    // 7. Register keyboard shortcuts
+    destroyShortcuts = initShortcuts();
   });
 
   onDestroy(() => {
@@ -209,6 +214,7 @@
     unsubEndpoints?.();
     unsubUi?.();
     unsubLifecycle?.();
+    destroyShortcuts?.();
     if (persistDebounceTimer !== null) clearTimeout(persistDebounceTimer);
   });
 </script>
