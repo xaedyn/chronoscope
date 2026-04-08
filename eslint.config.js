@@ -1,6 +1,7 @@
 import tseslint from 'typescript-eslint';
 import sveltePlugin from 'eslint-plugin-svelte';
 import svelteParser from 'svelte-eslint-parser';
+import noRawVisualValues from './eslint-rules/no-raw-visual-values.js';
 
 export default tseslint.config(
   {
@@ -27,8 +28,12 @@ export default tseslint.config(
     },
   },
   {
+    plugins: {
+      'local': { rules: { 'no-raw-visual-values': noRawVisualValues } },
+    },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
+      'local/no-raw-visual-values': 'error',
       'no-restricted-syntax': [
         'error',
         {
@@ -40,6 +45,9 @@ export default tseslint.config(
   },
   {
     files: ['src/lib/tokens.ts'],
-    rules: { 'no-restricted-syntax': 'off' },
+    rules: {
+      'no-restricted-syntax': 'off',
+      'local/no-raw-visual-values': 'off',
+    },
   },
 );
