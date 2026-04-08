@@ -143,13 +143,89 @@ export class EffectsRenderer {
     return this.activePings.size;
   }
 
-  /** Draw radar sweep animation when no data is present. */
+  /** Draw radar sweep animation when no data is present (empty state). */
   drawEmptyState(now: number): void {
     const { ctx, canvas } = this;
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-    // Full implementation in Task 5
-    void now;
+
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (width === 0 || height === 0) return;
+
+    // Initialize sweep start time on first call
+    if (this.sweepStartTime === null) {
+      this.sweepStartTime = now;
+    }
+
+    ctx.clearRect(0, 0, width, height);
+
+    const elapsed = now - this.sweepStartTime;
+    const angle = (elapsed / tokens.canvas.emptyState.sweepPeriod) * 2 * Math.PI;
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const radius = Math.max(width, height) * 0.6;
+    const trailAngle = (tokens.canvas.emptyState.trailAngleDeg * Math.PI) / 180;
+
+    // Sweep trail (fading arc via conic gradient)
+    try {
+      const gradient = ctx.createConicGradient(angle - trailAngle, centerX, centerY);
+      gradient.addColorStop(0, 'transparent');
+      gradient.addColorStop(0.8, tokens.color.chrome.accent + '15');
+      gradient.addColorStop(1, tokens.color.chrome.accent + '40');
+
+      ctx.save();
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.arc(centerX, centerY, radius, angle - trailAngle, angle);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    } catch {
+      // createConicGradient not supported in jsdom — skip gradient, still draw line
+    }
+
+    // Sweep line
+    const endX = centerX + Math.cos(angle) * radius;
+    const endY = centerY + Math.sin(angle) * radius;
+    ctx.save();
+    ctx.strokeStyle = tokens.color.chrome.accent;
+    ctx.globalAlpha = tokens.canvas.emptyState.sweepLineOpacity;
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.lineTo(endX, endY);
+    ctx.stroke();
+    ctx.restore();
+
+    // Concentric rings (subtle)
+    ctx.save();
+    ctx.globalAlpha = tokens.canvas.emptyState.ringOpacity;
+    ctx.strokeStyle = tokens.color.chrome.border;
+    ctx.lineWidth = 0.5;
+    ctx.setLineDash([]);
+    for (let i = 1; i <= 3; i++) {
+      const r = radius * (i / 3);
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, r, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Instructional text
+    ctx.save();
+    ctx.globalAlpha = tokens.canvas.emptyState.textOpacity;
+    ctx.fillStyle = tokens.color.text.secondary;
+    ctx.font = `${tokens.typography.body.fontSize}px ${tokens.typography.body.fontFamily}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Add endpoints and start a test', centerX, centerY + radius * 0.15);
+
+    ctx.font = `${tokens.typography.caption.fontSize}px ${tokens.typography.caption.fontFamily}`;
+    ctx.fillStyle = tokens.color.text.muted;
+    ctx.fillText('Latency data will appear here', centerX, centerY + radius * 0.15 + 24);
+    ctx.restore();
   }
 
   // ── Internal rendering ─────────────────────────────────────────────────────

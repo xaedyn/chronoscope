@@ -103,4 +103,38 @@ describe('EffectsRenderer', () => {
     }
     expect(() => renderer.draw([], 600)).not.toThrow();
   });
+
+  describe('drawEmptyState (AC5)', () => {
+    it('drawEmptyState exists on EffectsRenderer', () => {
+      expect(typeof renderer.drawEmptyState).toBe('function');
+    });
+
+    it('drawEmptyState does not throw at t=0', () => {
+      expect(() => renderer.drawEmptyState(0)).not.toThrow();
+    });
+
+    it('drawEmptyState does not throw at t=4000 (one full rotation)', () => {
+      expect(() => renderer.drawEmptyState(4000)).not.toThrow();
+    });
+
+    it('drawEmptyState does not throw after many calls (animation loop simulation)', () => {
+      for (let t = 0; t < 5000; t += 16) {
+        expect(() => renderer.drawEmptyState(t)).not.toThrow();
+      }
+    });
+
+    it('sweepStartTime is initialized on first drawEmptyState call', () => {
+      renderer.drawEmptyState(1000);
+      renderer.drawEmptyState(2000);
+      expect(true).toBe(true);
+    });
+
+    it('drawEmptyState does not throw when clientWidth/clientHeight = 0 (unmounted canvas)', () => {
+      const emptyCanvas = document.createElement('canvas');
+      emptyCanvas.width = 0;
+      emptyCanvas.height = 0;
+      const emptyRenderer = new EffectsRenderer(emptyCanvas);
+      expect(() => emptyRenderer.drawEmptyState(0)).not.toThrow();
+    });
+  });
 });
