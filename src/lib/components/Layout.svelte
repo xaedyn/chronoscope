@@ -13,8 +13,10 @@
   import SummaryCards from './SummaryCards.svelte';
   import Controls from './Controls.svelte';
 
-  export let onStart: (() => void) | undefined = undefined;
-  export let onStop: (() => void) | undefined = undefined;
+  let { onStart, onStop }: {
+    onStart?: () => void;
+    onStop?: () => void;
+  } = $props();
 
   let announcer: HTMLDivElement;
   let prevLifecycle = get(measurementStore).lifecycle;

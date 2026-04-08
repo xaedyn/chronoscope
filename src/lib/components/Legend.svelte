@@ -48,8 +48,8 @@
       tabindex="0"
       aria-label="{ep.label || ep.url} — {ep.enabled ? 'visible, click to hide' : 'hidden, click to show'}"
       aria-pressed={ep.enabled}
-      on:click={() => toggleEndpoint(ep.id)}
-      on:keydown={(e) => handleKeydown(e, ep.id)}
+      onclick={() => toggleEndpoint(ep.id)}
+      onkeydown={(e) => handleKeydown(e, ep.id)}
     >
       <span
         class="swatch"

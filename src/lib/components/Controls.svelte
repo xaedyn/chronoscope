@@ -7,33 +7,35 @@
   import { uiStore } from '$lib/stores/ui';
   import { tokens } from '$lib/tokens';
 
-  export let onStart: (() => void) | undefined = undefined;
-  export let onStop: (() => void) | undefined = undefined;
+  let { onStart, onStop }: {
+    onStart?: () => void;
+    onStop?: () => void;
+  } = $props();
 
   // Derive button state from lifecycle
-  $: lifecycle = $measurementStore.lifecycle;
+  let lifecycle = $derived($measurementStore.lifecycle);
 
-  $: startStopLabel = (() => {
+  let startStopLabel = $derived.by(() => {
     switch (lifecycle) {
       case 'starting':  return 'Starting…';
       case 'running':   return 'Stop';
       case 'stopping':  return 'Stopping…';
       default:          return 'Start Test';
     }
-  })();
+  });
 
-  $: startStopDisabled = lifecycle === 'starting' || lifecycle === 'stopping';
+  let startStopDisabled = $derived(lifecycle === 'starting' || lifecycle === 'stopping');
 
-  $: startStopVariant = lifecycle === 'running' ? 'stop' : 'start';
+  let startStopVariant = $derived(lifecycle === 'running' ? 'stop' : 'start');
 
-  $: statusAnnouncement = (() => {
+  let statusAnnouncement = $derived.by(() => {
     switch (lifecycle) {
       case 'running':   return 'Test running';
       case 'stopped':   return 'Test stopped';
       case 'completed': return 'Test complete';
       default:          return '';
     }
-  })();
+  });
 
   function handleStartStop(): void {
     if (lifecycle === 'running') {
@@ -85,7 +87,7 @@
     disabled={startStopDisabled}
     aria-disabled={startStopDisabled}
     aria-label={startStopLabel}
-    on:click={handleStartStop}
+    onclick={handleStartStop}
   >
     {startStopLabel}
   </button>
@@ -97,7 +99,7 @@
     aria-label="Open settings"
     aria-expanded={$uiStore.showSettings}
     aria-controls="settings-drawer"
-    on:click={handleSettings}
+    onclick={handleSettings}
   >
     ⚙
   </button>
@@ -109,7 +111,7 @@
     aria-label="Share results"
     aria-expanded={$uiStore.showShare}
     aria-controls="share-popover"
-    on:click={handleShare}
+    onclick={handleShare}
   >
     ↗
   </button>

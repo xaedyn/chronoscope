@@ -6,8 +6,8 @@
   import { endpointStore } from '$lib/stores/endpoints';
   import { tokens } from '$lib/tokens';
 
-  $: hasEndpoints = $endpointStore.some(ep => ep.enabled && ep.url.trim().length > 0);
-  $: message = hasEndpoints ? 'Ready' : 'Configure endpoints to begin';
+  let hasEndpoints = $derived($endpointStore.some(ep => ep.enabled && ep.url.trim().length > 0));
+  let message = $derived(hasEndpoints ? 'Ready' : 'Configure endpoints to begin');
 </script>
 
 {#if $measurementStore.lifecycle === 'idle'}

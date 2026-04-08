@@ -13,31 +13,33 @@
 
   let dialogEl: HTMLDialogElement;
 
-  $: isRunning = $measurementStore.lifecycle === 'running' || $measurementStore.lifecycle === 'starting';
-  $: showSettings = $uiStore.showSettings;
+  let isRunning = $derived($measurementStore.lifecycle === 'running' || $measurementStore.lifecycle === 'starting');
+  let showSettings = $derived($uiStore.showSettings);
 
   // Local copies of settings for binding
-  let timeout: number = get(settingsStore).timeout;
-  let delay: number = get(settingsStore).delay;
-  let cap: number = get(settingsStore).cap;
-  let corsMode: 'no-cors' | 'cors' = get(settingsStore).corsMode;
+  let timeout: number = $state(get(settingsStore).timeout);
+  let delay: number = $state(get(settingsStore).delay);
+  let cap: number = $state(get(settingsStore).cap);
+  let corsMode: 'no-cors' | 'cors' = $state(get(settingsStore).corsMode);
 
   // Sync local state when store changes externally (e.g. loaded from persistence)
-  $: {
+  $effect(() => {
     timeout = $settingsStore.timeout;
     delay = $settingsStore.delay;
     cap = $settingsStore.cap;
     corsMode = $settingsStore.corsMode;
-  }
+  });
 
   // Manage dialog open/close
-  $: if (dialogEl) {
-    if (showSettings && !dialogEl.open) {
-      dialogEl.showModal();
-    } else if (!showSettings && dialogEl.open) {
-      dialogEl.close();
+  $effect(() => {
+    if (dialogEl) {
+      if (showSettings && !dialogEl.open) {
+        dialogEl.showModal();
+      } else if (!showSettings && dialogEl.open) {
+        dialogEl.close();
+      }
     }
-  }
+  });
 
   onMount(() => {
     // Since this component only mounts when showSettings is true, open immediately.
@@ -79,7 +81,7 @@
     if (!isRunning) settingsStore.update(s => ({ ...s, corsMode: mode }));
   }
 
-  let showClearConfirm = false;
+  let showClearConfirm = $state(false);
 
   function requestClear(): void {
     showClearConfirm = true;
@@ -123,7 +125,7 @@
   style:--spacing-lg="{tokens.spacing.lg}px"
   style:--spacing-xl="{tokens.spacing.xl}px"
   aria-label="Settings"
-  on:click={handleBackdropClick}
+  onclick={handleBackdropClick}
 >
   <div class="drawer-content" role="document">
     <!-- Header -->
@@ -133,7 +135,7 @@
         type="button"
         class="close-btn"
         aria-label="Close settings"
-        on:click={close}
+        onclick={close}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M3 3l10 10M13 3L3 13" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -156,7 +158,7 @@
           max="30000"
           step="500"
           bind:value={timeout}
-          on:change={applyTimeout}
+          onchange={applyTimeout}
           aria-describedby="timeout-desc"
         />
         <p id="timeout-desc" class="field-description">Maximum time to wait for a response before marking it as a timeout.</p>
@@ -176,7 +178,7 @@
           max="10000"
           step="100"
           bind:value={delay}
-          on:change={applyDelay}
+          onchange={applyDelay}
           aria-describedby="delay-desc"
         />
         <p id="delay-desc" class="field-description">Wait time between measurement rounds for all endpoints.</p>
@@ -196,7 +198,7 @@
           max="10000"
           step="1"
           bind:value={cap}
-          on:change={applyCap}
+          onchange={applyCap}
           aria-describedby="cap-desc"
         />
         <p id="cap-desc" class="field-description">Stop the test after this many rounds. Set to 0 to run indefinitely.</p>
@@ -219,7 +221,7 @@
                 value="no-cors"
                 checked={corsMode === 'no-cors'}
                 disabled={isRunning}
-                on:change={() => applyCorsMode('no-cors')}
+                onchange={() => applyCorsMode('no-cors')}
               />
               <span class="radio-text">no-cors</span>
               <span class="radio-hint">Opaque requests — timing data limited</span>
@@ -231,7 +233,7 @@
                 value="cors"
                 checked={corsMode === 'cors'}
                 disabled={isRunning}
-                on:change={() => applyCorsMode('cors')}
+                onchange={() => applyCorsMode('cors')}
               />
               <span class="radio-text">cors</span>
               <span class="radio-hint">Full CORS — requires server headers</span>
@@ -251,7 +253,7 @@
           <button
             type="button"
             class="btn-danger"
-            on:click={requestClear}
+            onclick={requestClear}
           >
             Clear results
           </button>
@@ -259,8 +261,8 @@
           <div class="confirm-group" role="alert" aria-live="assertive">
             <p class="confirm-text">This will reset all measurements. Are you sure?</p>
             <div class="confirm-actions">
-              <button type="button" class="btn-danger" on:click={confirmClear}>Yes, clear all</button>
-              <button type="button" class="btn-secondary" on:click={cancelClear}>Cancel</button>
+              <button type="button" class="btn-danger" onclick={confirmClear}>Yes, clear all</button>
+              <button type="button" class="btn-secondary" onclick={cancelClear}>Cancel</button>
             </div>
           </div>
         {/if}

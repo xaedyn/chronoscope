@@ -12,7 +12,7 @@
   import type { ActiveView } from '$lib/types';
 
   // On mobile, when in 'split' mode, toggle which panel is visible
-  let mobileSplitTab: 'timeline' | 'heatmap' = 'timeline';
+  let mobileSplitTab: 'timeline' | 'heatmap' = $state('timeline');
 
   function setView(view: ActiveView): void {
     uiStore.setActiveView(view);
@@ -43,7 +43,7 @@
       aria-controls="panel-timeline"
       class="view-btn"
       class:active={$uiStore.activeView === 'timeline'}
-      on:click={() => setView('timeline')}
+      onclick={() => setView('timeline')}
     >
       Timeline
     </button>
@@ -53,7 +53,7 @@
       aria-controls="panel-heatmap"
       class="view-btn"
       class:active={$uiStore.activeView === 'heatmap'}
-      on:click={() => setView('heatmap')}
+      onclick={() => setView('heatmap')}
     >
       Heatmap
     </button>
@@ -62,7 +62,7 @@
       aria-selected={$uiStore.activeView === 'split'}
       class="view-btn"
       class:active={$uiStore.activeView === 'split'}
-      on:click={() => setView('split')}
+      onclick={() => setView('split')}
     >
       Split
     </button>
@@ -99,14 +99,14 @@
           <button
             class="split-tab-btn"
             class:active={mobileSplitTab === 'timeline'}
-            on:click={() => { mobileSplitTab = 'timeline'; }}
+            onclick={() => { mobileSplitTab = 'timeline'; }}
           >
             Timeline
           </button>
           <button
             class="split-tab-btn"
             class:active={mobileSplitTab === 'heatmap'}
-            on:click={() => { mobileSplitTab = 'heatmap'; }}
+            onclick={() => { mobileSplitTab = 'heatmap'; }}
           >
             Heatmap
           </button>

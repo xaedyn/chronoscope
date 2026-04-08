@@ -28,13 +28,13 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
 <div
   class="backdrop"
   role="presentation"
-  on:click={handleBackdropClick}
+  onclick={handleBackdropClick}
   style:--surface-overlay={tokens.color.surface.overlay}
   style:--surface-elevated={tokens.color.surface.elevated}
   style:--border={tokens.color.chrome.border}
@@ -62,7 +62,7 @@
         class="close-btn"
         type="button"
         aria-label="Close keyboard shortcuts"
-        on:click={close}
+        onclick={close}
       >
         ✕
       </button>

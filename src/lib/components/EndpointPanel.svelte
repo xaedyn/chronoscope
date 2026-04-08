@@ -9,14 +9,14 @@
 
   const MAX_ENDPOINTS = 10;
 
-  $: isRunning = $measurementStore.lifecycle === 'running' || $measurementStore.lifecycle === 'starting';
+  let isRunning = $derived($measurementStore.lifecycle === 'running' || $measurementStore.lifecycle === 'starting');
 
-  function handleRemove(event: CustomEvent<{ id: string }>): void {
-    endpointStore.removeEndpoint(event.detail.id);
+  function handleRemove(id: string): void {
+    endpointStore.removeEndpoint(id);
   }
 
-  function handleUpdate(event: CustomEvent<{ id: string; patch: Record<string, unknown> }>): void {
-    endpointStore.updateEndpoint(event.detail.id, event.detail.patch);
+  function handleUpdate(id: string, patch: Record<string, unknown>): void {
+    endpointStore.updateEndpoint(id, patch);
   }
 
   function addEndpoint(): void {
@@ -49,8 +49,8 @@
           isLast={$endpointStore.length === 1}
           lastLatency={epState?.lastLatency ?? null}
           lastStatus={epState?.lastStatus ?? null}
-          on:remove={handleRemove}
-          on:update={handleUpdate}
+          onRemove={handleRemove}
+          onUpdate={handleUpdate}
         />
       </li>
     {/each}
@@ -62,7 +62,7 @@
       class="add-btn"
       disabled={$endpointStore.length >= MAX_ENDPOINTS || isRunning}
       aria-disabled={$endpointStore.length >= MAX_ENDPOINTS || isRunning}
-      on:click={addEndpoint}
+      onclick={addEndpoint}
     >
       + Add endpoint
     </button>

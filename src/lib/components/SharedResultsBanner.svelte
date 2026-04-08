@@ -7,7 +7,7 @@
   import { measurementStore } from '$lib/stores/measurements';
   import { tokens } from '$lib/tokens';
 
-  $: timestamp = $uiStore.sharedResultsTimestamp;
+  let timestamp = $derived($uiStore.sharedResultsTimestamp);
 
   function formatTimestamp(ts: number | null): string {
     if (ts === null) return 'an earlier session';
@@ -51,7 +51,7 @@
   <button
     type="button"
     class="btn-run-again"
-    on:click={handleRunAgain}
+    onclick={handleRunAgain}
   >
     Run Again
   </button>

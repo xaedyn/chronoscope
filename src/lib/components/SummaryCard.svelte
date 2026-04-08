@@ -7,31 +7,34 @@
   import { uiStore } from '$lib/stores/ui';
   import { tokens } from '$lib/tokens';
 
-  export let endpointId: string;
+  let { endpointId }: { endpointId: string } = $props();
 
-  $: endpoint = $endpointStore.find(ep => ep.id === endpointId);
-  $: stats = $statisticsStore[endpointId];
-  $: epState = $measurementStore.endpoints[endpointId];
-  $: isExpanded = $uiStore.expandedCards.has(endpointId);
+  let endpoint = $derived($endpointStore.find(ep => ep.id === endpointId));
+  let stats = $derived($statisticsStore[endpointId]);
+  let epState = $derived($measurementStore.endpoints[endpointId]);
+  let isExpanded = $derived($uiStore.expandedCards.has(endpointId));
 
-  $: ready = stats?.ready ?? false;
-  $: sampleCount = stats?.sampleCount ?? epState?.samples.length ?? 0;
-  $: tierLevel = epState?.tierLevel ?? 1;
-  $: color = endpoint?.color ?? tokens.color.endpoint[0] ?? '#4a90d9';
+  let ready = $derived(stats?.ready ?? false);
+  let sampleCount = $derived(stats?.sampleCount ?? epState?.samples.length ?? 0);
+  let tierLevel = $derived(epState?.tierLevel ?? 1);
+  let color = $derived(endpoint?.color ?? tokens.color.endpoint[0] ?? '#4a90d9');
 
   // Connection reuse delta threshold
   const REUSE_DELTA_THRESHOLD = 0.2;
-  $: showReuseDelta =
+  let showReuseDelta = $derived(
     ready &&
     stats?.connectionReuseDelta !== null &&
     stats?.connectionReuseDelta !== undefined &&
-    Math.abs(stats.connectionReuseDelta) > REUSE_DELTA_THRESHOLD * (stats?.p50 ?? 1);
+    Math.abs(stats.connectionReuseDelta) > REUSE_DELTA_THRESHOLD * (stats?.p50 ?? 1)
+  );
 
   // Tier 2 waterfall: compute percentages from tier2Averages
-  $: tier2 = stats?.tier2Averages;
-  $: tier2Total = tier2
-    ? tier2.dnsLookup + tier2.tcpConnect + tier2.tlsHandshake + tier2.ttfb + tier2.contentTransfer
-    : 0;
+  let tier2 = $derived(stats?.tier2Averages);
+  let tier2Total = $derived(
+    tier2
+      ? tier2.dnsLookup + tier2.tcpConnect + tier2.tlsHandshake + tier2.ttfb + tier2.contentTransfer
+      : 0
+  );
 
   function pct(val: number): string {
     if (tier2Total <= 0) return '0%';
@@ -47,8 +50,8 @@
   }
 
   // Estimate first vs subsequent latency from connection reuse delta
-  $: firstLatency = showReuseDelta && stats ? stats.p50 + (stats.connectionReuseDelta ?? 0) : null;
-  $: subsequentLatency = showReuseDelta && stats ? stats.p50 : null;
+  let firstLatency = $derived(showReuseDelta && stats ? stats.p50 + (stats.connectionReuseDelta ?? 0) : null);
+  let subsequentLatency = $derived(showReuseDelta && stats ? stats.p50 : null);
 </script>
 
 <article
@@ -97,7 +100,7 @@
         aria-expanded={isExpanded}
         aria-controls="card-detail-{endpointId}"
         aria-label="{isExpanded ? 'Collapse' : 'Expand'} details for {endpoint?.label ?? endpointId}"
-        on:click={toggleExpand}
+        onclick={toggleExpand}
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
           <path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>

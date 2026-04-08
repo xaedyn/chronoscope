@@ -2,60 +2,67 @@
 <!-- Single endpoint row: URL input, color dot, enable toggle, remove button,  -->
 <!-- and inline latency display.                                                 -->
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { tokens } from '$lib/tokens';
   import { latencyToColor } from '$lib/renderers/color-map';
   import type { Endpoint, SampleStatus } from '$lib/types';
 
   // ── Props ────────────────────────────────────────────────────────────────────
-  export let endpoint: Endpoint;
-  export let isRunning: boolean = false;
-  export let isLast: boolean = false;
-  /** Last measured latency (null if no data yet) */
-  export let lastLatency: number | null = null;
-  /** Last measured status */
-  export let lastStatus: SampleStatus | null = null;
-
-  // ── Events ───────────────────────────────────────────────────────────────────
-  const dispatch = createEventDispatcher<{
-    remove: { id: string };
-    update: { id: string; patch: Partial<Omit<Endpoint, 'id'>> };
-  }>();
+  let {
+    endpoint,
+    isRunning = false,
+    isLast = false,
+    lastLatency = null,
+    lastStatus = null,
+    onRemove,
+    onUpdate,
+  }: {
+    endpoint: Endpoint;
+    isRunning?: boolean;
+    isLast?: boolean;
+    lastLatency?: number | null;
+    lastStatus?: SampleStatus | null;
+    onRemove?: (id: string) => void;
+    onUpdate?: (id: string, patch: Partial<Omit<Endpoint, 'id'>>) => void;
+  } = $props();
 
   // ── Derived display values ────────────────────────────────────────────────────
 
-  $: dotColor = lastLatency !== null && lastStatus === 'ok'
-    ? latencyToColor(lastLatency)
-    : lastStatus === 'timeout'
-      ? tokens.color.status.timeout
-      : lastStatus === 'error'
-        ? tokens.color.status.error
-        : endpoint.color;
+  let dotColor = $derived(
+    lastLatency !== null && lastStatus === 'ok'
+      ? latencyToColor(lastLatency)
+      : lastStatus === 'timeout'
+        ? tokens.color.status.timeout
+        : lastStatus === 'error'
+          ? tokens.color.status.error
+          : endpoint.color
+  );
 
-  $: latencyText = (() => {
+  let latencyText = $derived.by(() => {
     if (lastStatus === null || lastLatency === null) return '';
     if (lastStatus === 'timeout') return 'timeout';
     if (lastStatus === 'error') return 'error';
     return `${Math.round(lastLatency)}ms`;
-  })();
+  });
 
-  $: latencyColor = lastStatus === 'timeout' || lastStatus === 'error'
-    ? tokens.color.status.timeout
-    : tokens.color.text.secondary;
+  let latencyColor = $derived(
+    lastStatus === 'timeout' || lastStatus === 'error'
+      ? tokens.color.status.timeout
+      : tokens.color.text.secondary
+  );
 
   // ── Handlers ─────────────────────────────────────────────────────────────────
 
   function handleUrlChange(e: Event): void {
     const input = e.currentTarget as HTMLInputElement;
-    dispatch('update', { id: endpoint.id, patch: { url: input.value } });
+    onUpdate?.(endpoint.id, { url: input.value });
   }
 
   function handleToggle(): void {
-    dispatch('update', { id: endpoint.id, patch: { enabled: !endpoint.enabled } });
+    onUpdate?.(endpoint.id, { enabled: !endpoint.enabled });
   }
 
   function handleRemove(): void {
-    dispatch('remove', { id: endpoint.id });
+    onRemove?.(endpoint.id);
   }
 </script>
 
@@ -91,7 +98,7 @@
     readonly={isRunning}
     placeholder="https://example.com"
     aria-label="Endpoint URL"
-    on:change={handleUrlChange}
+    onchange={handleUrlChange}
   />
 
   <!-- Latency text -->
@@ -112,7 +119,7 @@
       class="toggle-input"
       checked={endpoint.enabled}
       disabled={isRunning}
-      on:change={handleToggle}
+      onchange={handleToggle}
     />
     <span class="toggle-track" aria-hidden="true"></span>
   </label>
@@ -124,7 +131,7 @@
       class="remove-btn"
       aria-label="Remove endpoint {endpoint.url}"
       disabled={isRunning}
-      on:click={handleRemove}
+      onclick={handleRemove}
     >
       ✕
     </button>

@@ -15,19 +15,21 @@
   const MAX_URL_CHARS = 8000;
 
   let popoverEl: HTMLDivElement;
-  let copiedConfig = false;
-  let copiedResults = false;
-  let fallbackUrl: string | null = null;
+  let copiedConfig = $state(false);
+  let copiedResults = $state(false);
+  let fallbackUrl: string | null = $state(null);
   let fallbackInputEl: HTMLInputElement;
 
-  $: hasResults = Object.keys($measurementStore.endpoints).length > 0 &&
-    Object.values($measurementStore.endpoints).some(ep => ep.samples.length > 0);
+  let hasResults = $derived(
+    Object.keys($measurementStore.endpoints).length > 0 &&
+    Object.values($measurementStore.endpoints).some(ep => ep.samples.length > 0)
+  );
 
-  $: configPayload = buildConfigPayload();
-  $: resultsPayload = hasResults ? buildResultsPayload() : null;
-  $: configSize = estimateShareSize(configPayload);
-  $: resultsSize = resultsPayload ? estimateShareSize(resultsPayload) : 0;
-  $: resultsTruncated = resultsSize > MAX_URL_CHARS;
+  let configPayload = $derived(buildConfigPayload());
+  let resultsPayload = $derived(hasResults ? buildResultsPayload() : null);
+  let configSize = $derived(estimateShareSize(configPayload));
+  let resultsSize = $derived(resultsPayload ? estimateShareSize(resultsPayload) : 0);
+  let resultsTruncated = $derived(resultsSize > MAX_URL_CHARS);
 
   function buildConfigPayload(): SharePayload {
     const endpoints = get(endpointStore);
@@ -141,8 +143,8 @@
 <div
   class="share-overlay"
   role="presentation"
-  on:click={handleOverlayClick}
-  on:keydown={handleKeydown}
+  onclick={handleOverlayClick}
+  onkeydown={handleKeydown}
   style:--surface-overlay={tokens.color.surface.overlay}
   style:--surface-elevated={tokens.color.surface.elevated}
   style:--surface-raised={tokens.color.surface.raised}
@@ -175,7 +177,7 @@
         type="button"
         class="btn-close"
         aria-label="Close share dialog"
-        on:click={close}
+        onclick={close}
       >
         ×
       </button>
@@ -200,7 +202,7 @@
           type="button"
           class="btn-copy"
           class:copied={copiedConfig}
-          on:click={handleCopyConfig}
+          onclick={handleCopyConfig}
         >
           {copiedConfig ? 'Copied!' : 'Copy Config Link'}
         </button>
@@ -220,7 +222,7 @@
           class:copied={copiedResults}
           disabled={!hasResults}
           aria-disabled={!hasResults}
-          on:click={handleCopyResults}
+          onclick={handleCopyResults}
         >
           {copiedResults ? 'Copied!' : 'Copy Results Link'}
         </button>
