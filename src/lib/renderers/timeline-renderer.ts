@@ -86,7 +86,7 @@ export class TimelineRenderer {
     }
   }
 
-  private drawFreezeMarkers(events: FreezeEvent[]): void {
+  private drawFreezeMarkers(events: readonly FreezeEvent[]): void {
     const { ctx } = this;
     if (!ctx) return;
     const { paddingLeft, paddingTop, plotWidth, plotHeight } = this.layout;
