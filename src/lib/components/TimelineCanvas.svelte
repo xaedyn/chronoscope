@@ -12,7 +12,8 @@
   import { InteractionRenderer } from '$lib/renderers/interaction-renderer';
   import { RenderScheduler } from '$lib/renderers/render-scheduler';
   import { tokens } from '$lib/tokens';
-  import type { ScatterPoint, SonarPing } from '$lib/types';
+  import { prepareFrame, computeXTicks } from '$lib/renderers/timeline-data-pipeline';
+  import type { FrameData, MeasurementState, ScatterPoint, SonarPing } from '$lib/types';
 
   // ── DOM refs ────────────────────────────────────────────────────────────────
   let container: HTMLDivElement;
@@ -26,8 +27,17 @@
   let interactionRenderer: InteractionRenderer;
   let scheduler: RenderScheduler;
 
-  // ── Current scatter points keyed by endpointId ─────────────────────────────
-  let pointsByEndpoint = new Map<string, ScatterPoint[]>();
+  // ── FrameData state ─────────────────────────────────────────────────────────
+  let currentFrameData: FrameData = {
+    pointsByEndpoint: new Map(),
+    ribbonsByEndpoint: new Map(),
+    yRange: { min: 1, max: 1000, isLog: false, gridlines: [] },
+    xTicks: [],
+    maxRound: 0,
+    freezeEvents: [],
+    hasData: false,
+  };
+  let hasData = false;
 
   // Track known sample counts to detect new samples for sonar pings
   const sampleCounts = new Map<string, number>();
@@ -55,7 +65,18 @@
     applyDpr(interactionCanvas, w, h);
 
     timelineRenderer?.resize();
-    effectsRenderer; // no resize method needed
+
+    // Recompute X ticks with actual canvas width
+    if (currentFrameData.hasData) {
+      const plotPaddingLeft = tokens.spacing.xxxl + tokens.spacing.xl;
+      const plotPaddingRight = tokens.spacing.lg;
+      const plotWidth = Math.max(w - plotPaddingLeft - plotPaddingRight, 100);
+      currentFrameData = {
+        ...currentFrameData,
+        xTicks: computeXTicks(currentFrameData.maxRound, plotWidth),
+      };
+    }
+
     scheduler?.markDirty();
   }
 
@@ -68,31 +89,45 @@
 
   let pingIdCounter = 0;
 
-  function recomputePoints(measureState: typeof $measurementStore): void {
+  function recomputePoints(measureState: MeasurementState): void {
     const endpoints = get(endpointStore);
-    const newMap = new Map<string, ScatterPoint[]>();
 
+    // Compute actual plot width for X ticks
+    const cssWidth = container?.getBoundingClientRect().width ?? 800;
+    const plotPaddingLeft = tokens.spacing.xxxl + tokens.spacing.xl;
+    const plotPaddingRight = tokens.spacing.lg;
+    const plotWidth = Math.max(cssWidth - plotPaddingLeft - plotPaddingRight, 100);
+
+    // Build FrameData via pipeline
+    const frameData = prepareFrame(endpoints, measureState);
+
+    // Recompute X ticks with actual plot width
+    const xTicks = computeXTicks(frameData.maxRound, plotWidth);
+    currentFrameData = { ...frameData, xTicks };
+
+    hasData = frameData.hasData;
+
+    // Update maxRound on renderer for toCanvasCoords to work (ping creation)
+    timelineRenderer?.setMaxRound(frameData.maxRound);
+
+    // Detect new samples → emit sonar pings
     for (const ep of endpoints) {
       const epState = measureState.endpoints[ep.id];
-      if (!epState || epState.samples.length === 0) {
-        newMap.set(ep.id, []);
-        continue;
-      }
+      if (!epState || epState.samples.length === 0) continue;
 
-      const points = TimelineRenderer.computePoints(epState.samples, ep.id, ep.color);
-      newMap.set(ep.id, points);
-
-      // Detect new samples → emit sonar ping
       const prevCount = sampleCounts.get(ep.id) ?? 0;
       const newCount = epState.samples.length;
+
       if (newCount > prevCount) {
         const latestSample = epState.samples[newCount - 1];
-        const latestPoint = points[newCount - 1];
-        if (latestPoint) {
+        const points = currentFrameData.pointsByEndpoint.get(ep.id);
+        const latestPoint = points?.[newCount - 1];
+        if (latestSample && latestPoint && timelineRenderer) {
+          const { cx, cy } = timelineRenderer.toCanvasCoords(latestPoint);
           const ping: SonarPing = {
             id: `ping-${++pingIdCounter}`,
-            x: latestPoint.x,
-            y: latestPoint.y,
+            x: cx,
+            y: cy,
             color: ep.color,
             tier: latencyToTier(latestSample.latency, latestSample.status),
             startTime: performance.now(),
@@ -103,7 +138,6 @@
       }
     }
 
-    pointsByEndpoint = newMap;
     scheduler?.markDirty();
   }
 
@@ -167,10 +201,12 @@
     let nearest: ScatterPoint | null = null;
     let minDist = 20; // px hit radius
 
-    for (const [, pts] of pointsByEndpoint) {
+    for (const [, pts] of currentFrameData.pointsByEndpoint) {
       for (const pt of pts) {
-        const dx = pt.x - x;
-        const dy = pt.y - y;
+        if (!timelineRenderer) break;
+        const { cx, cy } = timelineRenderer.toCanvasCoords(pt);
+        const dx = cx - x;
+        const dy = cy - y;
         const d = Math.sqrt(dx * dx + dy * dy);
         if (d < minDist) {
           minDist = d;
@@ -203,18 +239,19 @@
     const pt = findNearest(x, y);
 
     if (pt) {
+      const { cx, cy } = timelineRenderer.toCanvasCoords(pt);
       uiStore.setHover({
         endpointId: pt.endpointId,
         roundId: pt.round,
-        x: pt.x,
-        y: pt.y,
+        x: cx,
+        y: cy,
         latency: pt.latency,
         status: pt.status,
         timestamp: 0,
       });
       const ui = get(uiStore);
       interactionRenderer?.drawHover(
-        { endpointId: pt.endpointId, roundId: pt.round, x: pt.x, y: pt.y, latency: pt.latency, status: pt.status, timestamp: 0 },
+        { endpointId: pt.endpointId, roundId: pt.round, x: cx, y: cy, latency: pt.latency, status: pt.status, timestamp: 0 },
         ui.showCrosshairs,
       );
     } else {
@@ -247,7 +284,8 @@
     const pt = findNearest(x, y);
 
     if (pt) {
-      const target = { endpointId: pt.endpointId, roundId: pt.round, x: pt.x, y: pt.y, latency: pt.latency, status: pt.status, timestamp: 0 };
+      const { cx, cy } = timelineRenderer.toCanvasCoords(pt);
+      const target = { endpointId: pt.endpointId, roundId: pt.round, x: cx, y: cy, latency: pt.latency, status: pt.status, timestamp: 0 };
       uiStore.setSelected(target);
       interactionRenderer?.drawSelection(target);
     } else {
@@ -303,12 +341,15 @@
     scheduler = new RenderScheduler();
 
     scheduler.registerDataRenderer(() => {
-      const freezeEvents = get(measurementStore).freezeEvents;
-      timelineRenderer.draw(pointsByEndpoint, freezeEvents);
+      timelineRenderer.draw(currentFrameData);
     });
 
     scheduler.registerEffectsRenderer(() => {
-      effectsRenderer.draw([], performance.now());
+      if (hasData) {
+        effectsRenderer.draw([], performance.now());
+      } else {
+        effectsRenderer.drawEmptyState(performance.now());
+      }
     });
 
     scheduler.registerInteractionRenderer(() => {
