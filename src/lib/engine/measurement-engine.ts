@@ -7,6 +7,8 @@ import { measurementStore } from '../stores/measurements';
 import { endpointStore } from '../stores/endpoints';
 import { settingsStore } from '../stores/settings';
 import { FreezeDetector } from '../utils/freeze-detector';
+import { defaultWorkerFactory } from './worker-factory';
+import type { WorkerFactory } from './worker-factory';
 import type { Endpoint } from '../types';
 import type { MainToWorkerMessage, WorkerToMainMessage } from '../types';
 
@@ -19,8 +21,10 @@ export class MeasurementEngine {
   private workers: ManagedWorker[] = [];
   private roundTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly freezeDetector: FreezeDetector;
+  private readonly workerFactory: WorkerFactory;
 
-  constructor() {
+  constructor(workerFactory?: WorkerFactory) {
+    this.workerFactory = workerFactory ?? defaultWorkerFactory;
     this.freezeDetector = new FreezeDetector(() => get(measurementStore).roundCounter);
     this.freezeDetector.onFreeze((event) => {
       measurementStore.addFreezeEvent(event);
@@ -150,8 +154,8 @@ export class MeasurementEngine {
 
   private _spawnWorkers(endpoints: Endpoint[]): void {
     this.workers = endpoints.map(ep => {
-      // This line will throw in jsdom where Worker is not defined.
-      const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
+      // Uses the injected factory — allows test environments to substitute mock workers.
+      const worker = this.workerFactory.create(new URL('./worker.ts', import.meta.url));
       worker.addEventListener('message', (event: MessageEvent<WorkerToMainMessage>) => {
         this._handleWorkerMessage(event.data);
       });
