@@ -15,6 +15,8 @@
   import type { PersistedSettings } from '$lib/types';
   import Layout from './Layout.svelte';
   import SettingsDrawer from './SettingsDrawer.svelte';
+  import SharePopover from './SharePopover.svelte';
+  import SharedResultsBanner from './SharedResultsBanner.svelte';
 
   let engine: MeasurementEngine | null = null;
 
@@ -212,9 +214,15 @@
 </script>
 
 <div id="sonde-root">
+  {#if $uiStore.isSharedView}
+    <SharedResultsBanner />
+  {/if}
   <Layout />
   {#if $uiStore.showSettings}
     <SettingsDrawer />
+  {/if}
+  {#if $uiStore.showShare}
+    <SharePopover />
   {/if}
 </div>
 
