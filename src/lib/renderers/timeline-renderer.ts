@@ -44,7 +44,7 @@ export class TimelineRenderer {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  draw(pointsByEndpoint: Map<string, ScatterPoint[]>, freezeEvents?: FreezeEvent[]): void {
+  draw(pointsByEndpoint: ReadonlyMap<string, readonly ScatterPoint[]>, freezeEvents?: readonly FreezeEvent[]): void {
     const { ctx, canvas } = this;
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
@@ -152,6 +152,7 @@ export class TimelineRenderer {
 
   /** Convert a ScatterPoint to canvas pixel coordinates. Call after draw() has set maxRound. */
   toCanvasCoords(pt: ScatterPoint): { cx: number; cy: number } {
+    this.layout = this.computeLayout();
     return this.pointToCanvas(pt);
   }
 
