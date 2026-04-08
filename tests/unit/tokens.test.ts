@@ -72,3 +72,32 @@ describe('tokens', () => {
     expect(tokens.canvas.sonarPing.timeout.finalRadius).toBe(48);
   });
 });
+
+describe('new pipeline tokens', () => {
+  it('exposes canvas.ribbon tokens', () => {
+    expect(tokens.canvas.ribbon.fillOpacity).toBe(0.15);
+    expect(tokens.canvas.ribbon.medianOpacity).toBe(0.6);
+    expect(tokens.canvas.ribbon.medianLineWidth).toBe(1.5);
+    expect(Array.isArray(tokens.canvas.ribbon.medianLineDash)).toBe(true);
+  });
+
+  it('exposes canvas.emptyState tokens', () => {
+    expect(tokens.canvas.emptyState.sweepPeriod).toBe(4000);
+    expect(tokens.canvas.emptyState.sweepLineOpacity).toBe(0.25);
+    expect(tokens.canvas.emptyState.ringOpacity).toBe(0.08);
+    expect(tokens.canvas.emptyState.textOpacity).toBe(0.5);
+  });
+
+  it('exposes canvas.xAxis tokens', () => {
+    expect(tokens.canvas.xAxis.minLabelSpacing).toBe(60);
+    expect(tokens.canvas.xAxis.labelOffsetY).toBe(4);
+    expect(tokens.canvas.xAxis.paddingBottom).toBe(32);
+  });
+
+  it('exposes canvas.yAxis tokens', () => {
+    expect(tokens.canvas.yAxis.rollingWindowSize).toBe(20);
+    expect(tokens.canvas.yAxis.percentileClampLow).toBe(2);
+    expect(tokens.canvas.yAxis.percentileClampHigh).toBe(98);
+    expect(tokens.canvas.yAxis.logScaleThreshold).toBe(50);
+  });
+});

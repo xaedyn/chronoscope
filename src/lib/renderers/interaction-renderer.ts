@@ -24,7 +24,7 @@ export class InteractionRenderer {
   clear(): void {
     const { ctx, canvas } = this;
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
   }
 
   /**
@@ -35,7 +35,7 @@ export class InteractionRenderer {
     const { ctx, canvas } = this;
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 
     // Hover ring
     ctx.save();
@@ -58,7 +58,7 @@ export class InteractionRenderer {
     const { ctx, canvas } = this;
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 
     ctx.save();
     ctx.strokeStyle = tokens.color.chrome.accent;
@@ -84,13 +84,13 @@ export class InteractionRenderer {
     // Horizontal line
     ctx.beginPath();
     ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
+    ctx.lineTo(canvas.clientWidth, y);
     ctx.stroke();
 
     // Vertical line
     ctx.beginPath();
     ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
+    ctx.lineTo(x, canvas.clientHeight);
     ctx.stroke();
 
     ctx.restore();

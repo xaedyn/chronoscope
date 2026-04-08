@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { percentile, stddev, confidenceInterval95, computeEndpointStatistics } from '../../src/lib/utils/statistics';
+import { percentile, percentileSorted, stddev, confidenceInterval95, computeEndpointStatistics } from '../../src/lib/utils/statistics';
 import { statisticsStore } from '../../src/lib/stores/statistics';
 import { measurementStore } from '../../src/lib/stores/measurements';
 import type { MeasurementSample } from '../../src/lib/types';
@@ -205,6 +205,26 @@ describe('computeEndpointStatistics', () => {
   it('includes the endpointId in the result', () => {
     const stats = computeEndpointStatistics('my-endpoint', makeSamples([50]));
     expect(stats.endpointId).toBe('my-endpoint');
+  });
+});
+
+describe('percentileSorted', () => {
+  it('returns correct P50 from pre-sorted array', () => {
+    const sorted = [10, 20, 30, 40, 50];
+    expect(percentileSorted(sorted, 50)).toBe(30);
+  });
+
+  it('matches percentile() output for same data', () => {
+    const data = [45, 12, 88, 3, 67, 23, 91, 55, 34, 76];
+    const sorted = [...data].sort((a, b) => a - b);
+    expect(percentileSorted(sorted, 25)).toBe(percentile(data, 25));
+    expect(percentileSorted(sorted, 50)).toBe(percentile(data, 50));
+    expect(percentileSorted(sorted, 75)).toBe(percentile(data, 75));
+    expect(percentileSorted(sorted, 98)).toBe(percentile(data, 98));
+  });
+
+  it('returns 0 for empty array', () => {
+    expect(percentileSorted([], 50)).toBe(0);
   });
 });
 

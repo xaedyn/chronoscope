@@ -182,6 +182,38 @@ export const tokens = {
       slow:    { initialRadius: 3, finalRadius: 32, maxConcurrent: 3 },
       timeout: { initialRadius: 3, finalRadius: 48, maxConcurrent: 1 },
     },
+
+    ribbon: {
+      fillOpacity: 0.15,
+      medianOpacity: 0.6,
+      medianLineWidth: 1.5,
+      medianLineDash: [4, 4] as readonly number[],
+    },
+
+    emptyState: {
+      sweepPeriod: 4000,
+      sweepLineOpacity: 0.25,
+      ringOpacity: 0.08,
+      textOpacity: 0.5,
+      trailAngleDeg: 60,
+    },
+
+    xAxis: {
+      minLabelSpacing: 60,
+      labelOffsetY: 4,
+      paddingBottom: 32,
+    },
+
+    yAxis: {
+      rollingWindowSize: 20,
+      percentileClampLow: 2,
+      percentileClampHigh: 98,
+      logScaleThreshold: 50,
+      linearHeadroomPct: 0.2,
+      minHeadroomMs: 5,
+      minVisibleRangeMs: 10,
+      targetGridlineCount: 5,
+    },
   },
 
   breakpoints: { mobile: 375, tablet: 768, desktop: 1024, wide: 1440 },

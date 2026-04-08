@@ -15,6 +15,7 @@ import type {
   TestLifecycleState,
 } from '../../src/lib/types';
 import { DEFAULT_SETTINGS, DEFAULT_ENDPOINTS } from '../../src/lib/types';
+import type { FrameData, RibbonData, XTick, YRange, Gridline } from '../../src/lib/types';
 
 describe('types', () => {
   it('TestLifecycleState is a valid discriminated union', () => {
@@ -90,6 +91,22 @@ describe('types', () => {
     expect(DEFAULT_ENDPOINTS[1]?.url).toBe('https://1.1.1.1');
   });
 
+  it('UIState has showKeyboardHelp field', () => {
+    const state: UIState = {
+      activeView: 'timeline',
+      expandedCards: new Set(),
+      hoverTarget: null,
+      selectedTarget: null,
+      showCrosshairs: false,
+      showSettings: false,
+      showShare: false,
+      showKeyboardHelp: false,
+      isSharedView: false,
+      sharedResultsTimestamp: null,
+    };
+    expect(state.showKeyboardHelp).toBe(false);
+  });
+
   it('UIState includes shared view fields', () => {
     const state: UIState = {
       activeView: 'timeline',
@@ -99,9 +116,47 @@ describe('types', () => {
       showCrosshairs: false,
       showSettings: false,
       showShare: false,
+      showKeyboardHelp: false,
       isSharedView: false,
       sharedResultsTimestamp: null,
     };
     expect(state.isSharedView).toBe(false);
+  });
+});
+
+describe('pipeline types', () => {
+  it('Gridline interface has ms, normalizedY, and label', () => {
+    const g: Gridline = { ms: 100, normalizedY: 0.5, label: '100ms' };
+    expect(g.ms).toBe(100);
+    expect(g.normalizedY).toBe(0.5);
+    expect(g.label).toBe('100ms');
+  });
+
+  it('YRange interface has min, max, isLog, and gridlines', () => {
+    const yr: YRange = { min: 1, max: 1000, isLog: false, gridlines: [] };
+    expect(yr.isLog).toBe(false);
+  });
+
+  it('XTick interface has round, normalizedX, and label', () => {
+    const t: XTick = { round: 10, normalizedX: 0.5, label: '10' };
+    expect(t.round).toBe(10);
+  });
+
+  it('RibbonData interface has p25Path, p50Path, p75Path', () => {
+    const r: RibbonData = { p25Path: [[1, 0.2]], p50Path: [[1, 0.5]], p75Path: [[1, 0.8]] };
+    expect(r.p50Path).toHaveLength(1);
+  });
+
+  it('FrameData interface has all required fields', () => {
+    const fd: FrameData = {
+      pointsByEndpoint: new Map(),
+      ribbonsByEndpoint: new Map(),
+      yRange: { min: 1, max: 1000, isLog: false, gridlines: [] },
+      xTicks: [],
+      maxRound: 0,
+      freezeEvents: [],
+      hasData: false,
+    };
+    expect(fd.hasData).toBe(false);
   });
 });

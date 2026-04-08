@@ -64,6 +64,7 @@ export class EffectsRenderer {
 
   // Active pings grouped by tier for O(1) maxConcurrent enforcement
   private readonly activePings: Map<string, SonarPing> = new Map();
+  private sweepStartTime: number | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -118,7 +119,7 @@ export class EffectsRenderer {
 
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
@@ -140,6 +141,15 @@ export class EffectsRenderer {
   /** Returns the number of currently tracked (not-yet-expired) pings. */
   getActivePingCount(): number {
     return this.activePings.size;
+  }
+
+  /** Draw radar sweep animation when no data is present. */
+  drawEmptyState(now: number): void {
+    const { ctx, canvas } = this;
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+    // Full implementation in Task 5
+    void now;
   }
 
   // ── Internal rendering ─────────────────────────────────────────────────────

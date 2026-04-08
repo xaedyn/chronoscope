@@ -24,6 +24,16 @@ export function percentile(values: number[], p: number): number {
   return sorted[rank - 1];
 }
 
+/**
+ * Nearest-rank percentile from a PRE-SORTED ascending array.
+ * Caller must sort before calling — no internal copy or sort.
+ */
+export function percentileSorted(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const idx = Math.ceil((p / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, idx)];
+}
+
 // ── Population standard deviation ─────────────────────────────────────────
 export function stddev(values: number[]): number {
   if (values.length <= 1) return 0;

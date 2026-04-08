@@ -240,3 +240,43 @@ export interface SonarPing {
   readonly tier: 'fast' | 'medium' | 'slow' | 'timeout';
   startTime: number;
 }
+
+// ── Pipeline output types ─────────────────────────────────────────────────
+
+export interface Gridline {
+  readonly ms: number;
+  readonly normalizedY: number;
+  readonly label: string;
+}
+
+export interface YRange {
+  readonly min: number;
+  readonly max: number;
+  readonly isLog: boolean;
+  readonly gridlines: readonly Gridline[];
+}
+
+export interface XTick {
+  readonly round: number;
+  readonly normalizedX: number;
+  readonly label: string;
+}
+
+export interface RibbonData {
+  /** P25 path: [round, normalizedY][] — bottom edge of ribbon band */
+  readonly p25Path: readonly (readonly [number, number])[];
+  /** P50 path: [round, normalizedY][] — median line */
+  readonly p50Path: readonly (readonly [number, number])[];
+  /** P75 path: [round, normalizedY][] — top edge of ribbon band */
+  readonly p75Path: readonly (readonly [number, number])[];
+}
+
+export interface FrameData {
+  readonly pointsByEndpoint: ReadonlyMap<string, readonly ScatterPoint[]>;
+  readonly ribbonsByEndpoint: ReadonlyMap<string, RibbonData>;
+  readonly yRange: YRange;
+  readonly xTicks: readonly XTick[];
+  readonly maxRound: number;
+  readonly freezeEvents: readonly FreezeEvent[];
+  readonly hasData: boolean;
+}

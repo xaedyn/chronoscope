@@ -31,6 +31,7 @@ export class TimelineRenderer {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D | null;
   private layout: CanvasLayout;
+  private maxRound = 1;
 
   // Halo cache: color hex → OffscreenCanvas or ImageData pattern
   private readonly haloCache = new Map<string, CanvasPattern | null>();
@@ -46,7 +47,16 @@ export class TimelineRenderer {
   draw(pointsByEndpoint: Map<string, ScatterPoint[]>, freezeEvents?: FreezeEvent[]): void {
     const { ctx, canvas } = this;
     if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+
+    // Compute maxRound across all endpoints for X-axis normalization
+    let max = 0;
+    for (const [, points] of pointsByEndpoint) {
+      for (const pt of points) {
+        if (pt.round > max) max = pt.round;
+      }
+    }
+    this.maxRound = Math.max(max, 1);
 
     this.drawBackground();
     this.drawGridlines();
@@ -81,16 +91,13 @@ export class TimelineRenderer {
     if (!ctx) return;
     const { paddingLeft, paddingTop, plotWidth, plotHeight } = this.layout;
 
-    // Determine total rounds from the latest freeze event round
-    const maxRound = Math.max(...events.map(e => e.round), 1);
-
     ctx.save();
     ctx.strokeStyle = 'rgba(255, 200, 100, 0.6)';
     ctx.lineWidth = 1;
     ctx.setLineDash([4, 4]);
 
     for (const ev of events) {
-      const norm = ev.round / maxRound;
+      const norm = ev.round / this.maxRound;
       const x = paddingLeft + norm * plotWidth;
       ctx.beginPath();
       ctx.moveTo(x, paddingTop);
@@ -130,15 +137,27 @@ export class TimelineRenderer {
     const paddingLeft   = tokens.spacing.xxxl + tokens.spacing.xl; // room for Y labels
     const paddingRight  = tokens.spacing.lg;
     const paddingTop    = tokens.spacing.md;
-    const paddingBottom = tokens.spacing.xl;
+    const paddingBottom = tokens.canvas.xAxis.paddingBottom;
     return {
       paddingLeft,
       paddingRight,
       paddingTop,
       paddingBottom,
-      plotWidth:  this.canvas.width  - paddingLeft - paddingRight,
-      plotHeight: this.canvas.height - paddingTop  - paddingBottom,
+      plotWidth:  this.canvas.clientWidth  - paddingLeft - paddingRight,
+      plotHeight: this.canvas.clientHeight - paddingTop  - paddingBottom,
     };
+  }
+
+  // ── Public coordinate conversion ────────────────────────────────────────────
+
+  /** Convert a ScatterPoint to canvas pixel coordinates. Call after draw() has set maxRound. */
+  toCanvasCoords(pt: ScatterPoint): { cx: number; cy: number } {
+    return this.pointToCanvas(pt);
+  }
+
+  /** Update maxRound externally (e.g. during recomputePoints, before draw). */
+  setMaxRound(value: number): void {
+    this.maxRound = Math.max(value, 1);
   }
 
   // ── Drawing helpers ────────────────────────────────────────────────────────
@@ -147,7 +166,7 @@ export class TimelineRenderer {
     const { ctx, canvas } = this;
     if (!ctx) return;
     ctx.fillStyle = tokens.color.surface.canvas;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
   }
 
   private drawGridlines(): void {
@@ -188,7 +207,7 @@ export class TimelineRenderer {
 
   private pointToCanvas(pt: ScatterPoint): { cx: number; cy: number } {
     const { paddingLeft, paddingTop, plotWidth, plotHeight } = this.layout;
-    const cx = paddingLeft + (pt.x / Math.max(pt.x, 1)) * plotWidth;
+    const cx = paddingLeft + (pt.x / this.maxRound) * plotWidth;
     const cy = paddingTop + (1 - pt.y) * plotHeight;
     return { cx, cy };
   }

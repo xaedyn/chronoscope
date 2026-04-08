@@ -85,6 +85,17 @@ describe('EffectsRenderer', () => {
     expect(renderer.getActivePingCount()).toBe(0);
   });
 
+  it('should use clientWidth/clientHeight for clearRect, not canvas.width/canvas.height (AC2)', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1600;
+    canvas.height = 800;
+    Object.defineProperty(canvas, 'clientWidth', { get: () => 800, configurable: true });
+    Object.defineProperty(canvas, 'clientHeight', { get: () => 400, configurable: true });
+    const renderer = new EffectsRenderer(canvas);
+    expect(() => renderer.draw([], 0)).not.toThrow();
+    expect(() => renderer.drawEmptyState(0)).not.toThrow();
+  });
+
   it('draws different tiers without throwing', () => {
     const tiers: SonarPing['tier'][] = ['fast', 'medium', 'slow', 'timeout'];
     for (const tier of tiers) {
