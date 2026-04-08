@@ -186,10 +186,75 @@
     }
   }
 
+  // ── Accessible text summary ─────────────────────────────────────────────────
+
+  let a11ySummary = '';
+
+  function computeTrend(samples: number[]): string {
+    if (samples.length < 20) return 'stable';
+    const first10 = samples.slice(0, 10);
+    const last10 = samples.slice(-10);
+    const avgFirst = first10.reduce((a, b) => a + b, 0) / first10.length;
+    const avgLast = last10.reduce((a, b) => a + b, 0) / last10.length;
+    const delta = (avgLast - avgFirst) / (avgFirst || 1);
+    // Also check variability
+    const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
+    const variance = samples.reduce((a, b) => a + (b - mean) ** 2, 0) / samples.length;
+    const stddev = Math.sqrt(variance);
+    if (stddev > mean * 0.5) return 'variable';
+    if (delta > 0.2) return 'increasing';
+    if (delta < -0.2) return 'decreasing';
+    return 'stable';
+  }
+
+  function buildA11ySummary(): void {
+    const endpoints = get(endpointStore);
+    const measureState = get(measurementStore);
+
+    const nEndpoints = endpoints.length;
+    const nRounds = measureState.roundCounter;
+
+    if (nEndpoints === 0 || nRounds === 0) {
+      a11ySummary = 'Heatmap: no data yet.';
+      return;
+    }
+
+    // Compute averages per endpoint
+    const stats = endpoints.map(ep => {
+      const epState = measureState.endpoints[ep.id];
+      if (!epState || epState.samples.length === 0) return null;
+      const okSamples = epState.samples.filter(s => s.status === 'ok').map(s => s.latency);
+      if (okSamples.length === 0) return null;
+      const avg = okSamples.reduce((a, b) => a + b, 0) / okSamples.length;
+      return { label: ep.label || ep.url, avg, samples: okSamples };
+    }).filter(Boolean) as { label: string; avg: number; samples: number[] }[];
+
+    if (stats.length === 0) {
+      a11ySummary = `Heatmap summary: ${nEndpoints} endpoints tested over ${nRounds} rounds. No successful responses yet.`;
+      return;
+    }
+
+    const sorted = [...stats].sort((a, b) => a.avg - b.avg);
+    const fastest = sorted[0]!;
+    const slowest = sorted[sorted.length - 1]!;
+
+    // Trend uses all samples across all endpoints
+    const allSamples = stats.flatMap(s => s.samples);
+    const trend = computeTrend(allSamples);
+
+    a11ySummary = [
+      `Heatmap summary: ${nEndpoints} endpoint${nEndpoints !== 1 ? 's' : ''} tested over ${nRounds} round${nRounds !== 1 ? 's' : ''}.`,
+      `${fastest.label} averages ${Math.round(fastest.avg)}ms (fastest).`,
+      stats.length > 1 ? `${slowest.label} averages ${Math.round(slowest.avg)}ms (slowest).` : '',
+      `Latency is ${trend}.`,
+    ].filter(Boolean).join(' ');
+  }
+
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
   let unsubscribe: (() => void) | null = null;
   let resizeObserver: ResizeObserver | null = null;
+  let summaryTimer: ReturnType<typeof setInterval> | null = null;
 
   onMount(() => {
     renderer = new HeatmapRenderer(canvas);
@@ -205,11 +270,16 @@
     canvas.addEventListener('pointermove', handlePointerMove);
     canvas.addEventListener('pointerleave', handlePointerLeave);
     canvas.addEventListener('click', handleClick as EventListener);
+
+    // Build initial summary and refresh every 5 seconds
+    buildA11ySummary();
+    summaryTimer = setInterval(() => buildA11ySummary(), 5000);
   });
 
   onDestroy(() => {
     unsubscribe?.();
     resizeObserver?.disconnect();
+    if (summaryTimer !== null) clearInterval(summaryTimer);
     canvas?.removeEventListener('pointermove', handlePointerMove);
     canvas?.removeEventListener('pointerleave', handlePointerLeave);
     canvas?.removeEventListener('click', handleClick as EventListener);
@@ -225,6 +295,7 @@
   style:background={tokens.color.surface.canvas}
 >
   <canvas bind:this={canvas} class="heatmap-canvas" aria-hidden="true"></canvas>
+  <p class="sr-only" aria-live="polite">{a11ySummary}</p>
 </div>
 
 <style>
@@ -241,5 +312,17 @@
     width: 100%;
     height: 100%;
     cursor: pointer;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

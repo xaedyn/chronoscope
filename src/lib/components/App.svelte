@@ -18,6 +18,7 @@
   import SettingsDrawer from './SettingsDrawer.svelte';
   import SharePopover from './SharePopover.svelte';
   import SharedResultsBanner from './SharedResultsBanner.svelte';
+  import KeyboardOverlay from './KeyboardOverlay.svelte';
 
   let engine: MeasurementEngine | null = null;
 
@@ -229,6 +230,9 @@
   {/if}
   {#if $uiStore.showShare}
     <SharePopover />
+  {/if}
+  {#if $uiStore.showKeyboardHelp}
+    <KeyboardOverlay />
   {/if}
 </div>
 

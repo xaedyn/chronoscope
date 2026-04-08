@@ -33,7 +33,10 @@ function handleKeydown(e: KeyboardEvent): void {
   switch (key) {
     case 'Escape': {
       const ui = get(uiStore);
-      if (ui.showSettings) {
+      if (ui.showKeyboardHelp) {
+        uiStore.toggleKeyboardHelp();
+        e.preventDefault();
+      } else if (ui.showSettings) {
         uiStore.toggleSettings();
         e.preventDefault();
       } else if (ui.showShare) {
@@ -47,8 +50,7 @@ function handleKeydown(e: KeyboardEvent): void {
     }
 
     case '?': {
-      // Toggle keyboard help overlay (flag in uiStore — overlay is Task 25)
-      // uiStore.toggleHelp() would go here; for now just prevent default
+      uiStore.toggleKeyboardHelp();
       e.preventDefault();
       break;
     }

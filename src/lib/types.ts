@@ -174,6 +174,7 @@ export interface UIState {
   showCrosshairs: boolean;
   showSettings: boolean;
   showShare: boolean;
+  showKeyboardHelp: boolean;
   isSharedView: boolean;
   sharedResultsTimestamp: number | null;
 }

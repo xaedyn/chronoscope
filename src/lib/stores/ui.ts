@@ -13,6 +13,7 @@ const initialState = (): UIState => ({
   showCrosshairs: false,
   showSettings: false,
   showShare: false,
+  showKeyboardHelp: false,
   isSharedView: false,
   sharedResultsTimestamp: null,
 });
@@ -42,6 +43,9 @@ function createUiStore() {
     },
     toggleShare(): void {
       update((s) => ({ ...s, showShare: !s.showShare }));
+    },
+    toggleKeyboardHelp(): void {
+      update((s) => ({ ...s, showKeyboardHelp: !s.showKeyboardHelp }));
     },
     setSharedView(isShared: boolean, timestamp: number | null = null): void {
       update((s) => ({
