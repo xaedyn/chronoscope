@@ -1,22 +1,10 @@
 // src/lib/renderers/timeline-renderer.ts
-// Canvas 2D scatter plot with logarithmic Y-axis (latency) and linear X-axis (round).
-// Pre-renders glow halos cached by color. Handles ok/timeout/error point shapes.
+// Canvas 2D scatter plot with dynamic Y-axis, ribbon bands, and X-axis ticks.
+// Accepts a single FrameData argument from the timeline-data-pipeline.
 
 import { tokens } from '$lib/tokens';
 import { STATUS_COLORS } from '$lib/renderers/color-map';
-import type { ScatterPoint, MeasurementSample, FreezeEvent } from '$lib/types';
-
-// Gridline latencies to mark on the Y-axis
-const Y_GRID_MS = [1, 5, 10, 50, 100, 500, 1000, 5000, 10000] as const;
-
-// Log scale helper: maps latency ms → [0, 1] within our display range
-const LOG_MIN = Math.log10(1);
-const LOG_MAX = Math.log10(10000);
-
-function latencyToNorm(ms: number): number {
-  const clamped = Math.max(1, ms);
-  return (Math.log10(clamped) - LOG_MIN) / (LOG_MAX - LOG_MIN);
-}
+import type { ScatterPoint, FreezeEvent, FrameData, YRange, RibbonData, XTick } from '$lib/types';
 
 interface CanvasLayout {
   paddingLeft: number;
@@ -44,32 +32,28 @@ export class TimelineRenderer {
 
   // ── Public API ─────────────────────────────────────────────────────────────
 
-  draw(pointsByEndpoint: ReadonlyMap<string, readonly ScatterPoint[]>, freezeEvents?: readonly FreezeEvent[]): void {
+  draw(frameData: FrameData): void {
     const { ctx, canvas } = this;
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
 
-    // Compute maxRound across all endpoints for X-axis normalization
-    let max = 0;
-    for (const [, points] of pointsByEndpoint) {
-      for (const pt of points) {
-        if (pt.round > max) max = pt.round;
-      }
-    }
-    this.maxRound = Math.max(max, 1);
+    this.maxRound = Math.max(frameData.maxRound, 1);
 
     this.drawBackground();
-    this.drawGridlines();
+    this.drawGridlines(frameData.yRange);
 
     // Freeze gap markers (before points so they sit behind)
-    if (freezeEvents && freezeEvents.length > 0) {
-      this.drawFreezeMarkers(freezeEvents);
+    if (frameData.freezeEvents.length > 0) {
+      this.drawFreezeMarkers(frameData.freezeEvents);
     }
+
+    // Ribbons (behind points)
+    this.drawRibbons(frameData.ribbonsByEndpoint, frameData.pointsByEndpoint);
 
     // Phase 1: glow halos (additive compositing)
     ctx.save();
     ctx.globalCompositeOperation = 'screen';
-    for (const [, points] of pointsByEndpoint) {
+    for (const [, points] of frameData.pointsByEndpoint) {
       for (const pt of points) {
         if (pt.status === 'ok') {
           this.drawHalo(pt);
@@ -79,11 +63,95 @@ export class TimelineRenderer {
     ctx.restore();
 
     // Phase 2: point shapes (normal compositing)
-    for (const [, points] of pointsByEndpoint) {
+    for (const [, points] of frameData.pointsByEndpoint) {
       for (const pt of points) {
         this.drawPoint(pt);
       }
     }
+
+    // X-axis on top
+    this.drawXAxis(frameData.xTicks);
+  }
+
+  resize(): void {
+    this.layout = this.computeLayout();
+    this.haloCache.clear();
+  }
+
+  /** Convert a ScatterPoint to canvas pixel coordinates. Call after draw() has set maxRound. */
+  toCanvasCoords(pt: ScatterPoint): { cx: number; cy: number } {
+    this.layout = this.computeLayout();
+    return this.pointToCanvas(pt);
+  }
+
+  /** Update maxRound externally (e.g. during recomputePoints, before draw). */
+  setMaxRound(value: number): void {
+    this.maxRound = Math.max(value, 1);
+  }
+
+  // ── Layout ─────────────────────────────────────────────────────────────────
+
+  private computeLayout(): CanvasLayout {
+    const paddingLeft   = tokens.spacing.xxxl + tokens.spacing.xl; // room for Y labels
+    const paddingRight  = tokens.spacing.lg;
+    const paddingTop    = tokens.spacing.md;
+    const paddingBottom = tokens.canvas.xAxis.paddingBottom;
+    return {
+      paddingLeft,
+      paddingRight,
+      paddingTop,
+      paddingBottom,
+      plotWidth:  this.canvas.clientWidth  - paddingLeft - paddingRight,
+      plotHeight: this.canvas.clientHeight - paddingTop  - paddingBottom,
+    };
+  }
+
+  // ── Drawing helpers ────────────────────────────────────────────────────────
+
+  private drawBackground(): void {
+    const { ctx, canvas } = this;
+    if (!ctx) return;
+    ctx.fillStyle = tokens.color.surface.canvas;
+    ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
+  }
+
+  private drawGridlines(yRange: YRange): void {
+    const { ctx } = this;
+    if (!ctx) return;
+    const { paddingLeft, paddingTop, plotWidth, plotHeight } = this.layout;
+
+    ctx.save();
+    ctx.strokeStyle = tokens.color.chrome.border;
+    ctx.globalAlpha = tokens.canvas.gridLineOpacity;
+    ctx.setLineDash(tokens.canvas.gridLineDash as unknown as number[]);
+    ctx.lineWidth = 1;
+
+    const labelFont = `${tokens.typography.caption.fontSize}px ${tokens.typography.caption.fontFamily}`;
+    ctx.font = labelFont;
+    ctx.fillStyle = tokens.color.text.muted;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+
+    for (const gridline of yRange.gridlines) {
+      const y = paddingTop + (1 - gridline.normalizedY) * plotHeight;
+
+      ctx.beginPath();
+      ctx.moveTo(paddingLeft, y);
+      ctx.lineTo(paddingLeft + plotWidth, y);
+      ctx.stroke();
+
+      ctx.globalAlpha = tokens.canvas.axisLineOpacity;
+      ctx.fillText(gridline.label, paddingLeft - tokens.spacing.xs, y);
+      ctx.globalAlpha = tokens.canvas.gridLineOpacity;
+    }
+
+    // Scale indicator at bottom-left
+    ctx.globalAlpha = tokens.canvas.axisLineOpacity;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(yRange.isLog ? 'log' : 'linear', paddingLeft, paddingTop + plotHeight + tokens.spacing.xs);
+
+    ctx.restore();
   }
 
   private drawFreezeMarkers(events: readonly FreezeEvent[]): void {
@@ -108,99 +176,105 @@ export class TimelineRenderer {
     ctx.restore();
   }
 
-  resize(): void {
-    this.layout = this.computeLayout();
-    this.haloCache.clear();
-  }
-
-  // ── Static conversion ──────────────────────────────────────────────────────
-
-  static computePoints(
-    samples: MeasurementSample[],
-    endpointId: string,
-    color: string,
-  ): ScatterPoint[] {
-    return samples.map((s) => ({
-      x: s.round,
-      y: latencyToNorm(Math.max(1, s.latency)),
-      latency: s.latency,
-      status: s.status,
-      endpointId,
-      round: s.round,
-      color,
-    }));
-  }
-
-  // ── Layout ─────────────────────────────────────────────────────────────────
-
-  private computeLayout(): CanvasLayout {
-    const paddingLeft   = tokens.spacing.xxxl + tokens.spacing.xl; // room for Y labels
-    const paddingRight  = tokens.spacing.lg;
-    const paddingTop    = tokens.spacing.md;
-    const paddingBottom = tokens.canvas.xAxis.paddingBottom;
-    return {
-      paddingLeft,
-      paddingRight,
-      paddingTop,
-      paddingBottom,
-      plotWidth:  this.canvas.clientWidth  - paddingLeft - paddingRight,
-      plotHeight: this.canvas.clientHeight - paddingTop  - paddingBottom,
-    };
-  }
-
-  // ── Public coordinate conversion ────────────────────────────────────────────
-
-  /** Convert a ScatterPoint to canvas pixel coordinates. Call after draw() has set maxRound. */
-  toCanvasCoords(pt: ScatterPoint): { cx: number; cy: number } {
-    this.layout = this.computeLayout();
-    return this.pointToCanvas(pt);
-  }
-
-  /** Update maxRound externally (e.g. during recomputePoints, before draw). */
-  setMaxRound(value: number): void {
-    this.maxRound = Math.max(value, 1);
-  }
-
-  // ── Drawing helpers ────────────────────────────────────────────────────────
-
-  private drawBackground(): void {
-    const { ctx, canvas } = this;
-    if (!ctx) return;
-    ctx.fillStyle = tokens.color.surface.canvas;
-    ctx.fillRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-  }
-
-  private drawGridlines(): void {
+  private drawRibbons(
+    ribbonsByEndpoint: ReadonlyMap<string, RibbonData>,
+    pointsByEndpoint: ReadonlyMap<string, readonly ScatterPoint[]>,
+  ): void {
     const { ctx } = this;
     if (!ctx) return;
     const { paddingLeft, paddingTop, plotWidth, plotHeight } = this.layout;
 
-    ctx.save();
-    ctx.strokeStyle = tokens.color.chrome.border;
-    ctx.globalAlpha = tokens.canvas.gridLineOpacity;
-    ctx.setLineDash(tokens.canvas.gridLineDash as number[]);
-    ctx.lineWidth = 1;
+    for (const [endpointId, ribbon] of ribbonsByEndpoint) {
+      // Get color from the first point of this endpoint
+      const points = pointsByEndpoint.get(endpointId);
+      const color = points?.[0]?.color ?? '#4a90d9';
 
+      // P25-P75 filled band
+      if (ribbon.p25Path.length > 0 && ribbon.p75Path.length > 0) {
+        ctx.save();
+        ctx.globalAlpha = tokens.canvas.ribbon.fillOpacity;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+
+        // Forward along P75 (top edge)
+        for (let i = 0; i < ribbon.p75Path.length; i++) {
+          const [round, normY] = ribbon.p75Path[i]!;
+          const x = paddingLeft + (round / this.maxRound) * plotWidth;
+          const y = paddingTop + (1 - normY) * plotHeight;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+
+        // Backward along P25 (bottom edge)
+        for (let i = ribbon.p25Path.length - 1; i >= 0; i--) {
+          const [round, normY] = ribbon.p25Path[i]!;
+          const x = paddingLeft + (round / this.maxRound) * plotWidth;
+          const y = paddingTop + (1 - normY) * plotHeight;
+          ctx.lineTo(x, y);
+        }
+
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // P50 median dashed line
+      if (ribbon.p50Path.length > 0) {
+        ctx.save();
+        ctx.globalAlpha = tokens.canvas.ribbon.medianOpacity;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = tokens.canvas.ribbon.medianLineWidth;
+        ctx.setLineDash(tokens.canvas.ribbon.medianLineDash as unknown as number[]);
+        ctx.beginPath();
+
+        for (let i = 0; i < ribbon.p50Path.length; i++) {
+          const [round, normY] = ribbon.p50Path[i]!;
+          const x = paddingLeft + (round / this.maxRound) * plotWidth;
+          const y = paddingTop + (1 - normY) * plotHeight;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  private drawXAxis(xTicks: readonly XTick[]): void {
+    const { ctx } = this;
+    if (!ctx) return;
+    const { paddingLeft, paddingTop, plotWidth, plotHeight } = this.layout;
+
+    const axisY = paddingTop + plotHeight;
+
+    ctx.save();
+
+    // 1px axis line
+    ctx.strokeStyle = tokens.color.chrome.border;
+    ctx.globalAlpha = tokens.canvas.axisLineOpacity;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(paddingLeft, axisY);
+    ctx.lineTo(paddingLeft + plotWidth, axisY);
+    ctx.stroke();
+
+    // Tick labels
     const labelFont = `${tokens.typography.caption.fontSize}px ${tokens.typography.caption.fontFamily}`;
     ctx.font = labelFont;
     ctx.fillStyle = tokens.color.text.muted;
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
 
-    for (const ms of Y_GRID_MS) {
-      const norm = latencyToNorm(ms);
-      // Y=0 at top, so invert: high latency → low y
-      const y = paddingTop + (1 - norm) * plotHeight;
+    for (const tick of xTicks) {
+      const x = paddingLeft + tick.normalizedX * plotWidth;
+      ctx.fillText(tick.label, x, axisY + tokens.canvas.xAxis.labelOffsetY);
+    }
 
-      ctx.beginPath();
-      ctx.moveTo(paddingLeft, y);
-      ctx.lineTo(paddingLeft + plotWidth, y);
-      ctx.stroke();
-
-      const label = ms >= 1000 ? `${ms / 1000}s` : `${ms}ms`;
-      ctx.globalAlpha = tokens.canvas.axisLineOpacity;
-      ctx.fillText(label, paddingLeft - tokens.spacing.xs, y);
-      ctx.globalAlpha = tokens.canvas.gridLineOpacity;
+    // "Round" axis label centered below (only when plotWidth >= 200)
+    if (plotWidth >= 200) {
+      ctx.fillText('Round', paddingLeft + plotWidth / 2, axisY + tokens.canvas.xAxis.labelOffsetY + tokens.typography.caption.fontSize + 2);
     }
 
     ctx.restore();

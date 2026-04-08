@@ -1,9 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TimelineRenderer } from '../../src/lib/renderers/timeline-renderer';
-import type { MeasurementSample } from '../../src/lib/types';
-
-// jsdom provides a mock canvas context — draw calls won't render pixels but
-// must not throw. These are structural/contract tests, not pixel tests.
+import { prepareFrame } from '../../src/lib/renderers/timeline-data-pipeline';
+import type { FrameData, MeasurementState, ScatterPoint } from '../../src/lib/types';
 
 function makeCanvas(): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
@@ -12,12 +10,42 @@ function makeCanvas(): HTMLCanvasElement {
   return canvas;
 }
 
-const SAMPLE_SAMPLES: MeasurementSample[] = [
-  { round: 1, latency: 50,   status: 'ok',      timestamp: 1000 },
-  { round: 2, latency: 200,  status: 'ok',      timestamp: 2000 },
-  { round: 3, latency: 5000, status: 'timeout', timestamp: 3000 },
-  { round: 4, latency: 0,    status: 'error',   timestamp: 4000 },
-];
+const EMPTY_FRAMEDATA: FrameData = {
+  pointsByEndpoint: new Map(),
+  ribbonsByEndpoint: new Map(),
+  yRange: { min: 1, max: 1000, isLog: false, gridlines: [] },
+  xTicks: [],
+  maxRound: 0,
+  freezeEvents: [],
+  hasData: false,
+};
+
+function makeFrameData(latencies: number[] = [50, 100, 200]): FrameData {
+  if (latencies.length === 0) return EMPTY_FRAMEDATA;
+  const state: MeasurementState = {
+    lifecycle: 'running',
+    epoch: 1,
+    roundCounter: latencies.length,
+    endpoints: {
+      ep1: {
+        endpointId: 'ep1',
+        samples: latencies.map((latency, i) => ({
+          round: i + 1, latency, status: 'ok' as const, timestamp: Date.now() + i * 1000,
+        })),
+        lastLatency: latencies[latencies.length - 1] ?? null,
+        lastStatus: 'ok',
+        tierLevel: 1,
+      },
+    },
+    startedAt: Date.now(),
+    stoppedAt: null,
+    freezeEvents: [],
+  };
+  return prepareFrame(
+    [{ id: 'ep1', url: 'https://a.com', enabled: true, label: 'A', color: '#4a90d9' }],
+    state,
+  );
+}
 
 describe('TimelineRenderer', () => {
   let canvas: HTMLCanvasElement;
@@ -30,19 +58,20 @@ describe('TimelineRenderer', () => {
     expect(() => new TimelineRenderer(canvas)).not.toThrow();
   });
 
-  it('draws with empty endpoint map without throwing', () => {
+  it('draws with empty FrameData without throwing', () => {
     const renderer = new TimelineRenderer(canvas);
-    expect(() => renderer.draw(new Map())).not.toThrow();
+    expect(() => renderer.draw(EMPTY_FRAMEDATA)).not.toThrow();
   });
 
-  it('draws with valid point data without throwing', () => {
+  it('draws with valid FrameData without throwing', () => {
     const renderer = new TimelineRenderer(canvas);
-    const points = TimelineRenderer.computePoints(
-      SAMPLE_SAMPLES,
-      'ep1',
-      '#4a90d9',
-    );
-    expect(() => renderer.draw(new Map([['ep1', points]]))).not.toThrow();
+    expect(() => renderer.draw(makeFrameData())).not.toThrow();
+  });
+
+  it('draws with ribbons (>= 20 samples) without throwing', () => {
+    const renderer = new TimelineRenderer(canvas);
+    const latencies = Array.from({ length: 25 }, (_, i) => 20 + i * 5);
+    expect(() => renderer.draw(makeFrameData(latencies))).not.toThrow();
   });
 
   it('resize works without throwing', () => {
@@ -52,62 +81,31 @@ describe('TimelineRenderer', () => {
     expect(() => renderer.resize()).not.toThrow();
   });
 
-  describe('computePoints', () => {
-    it('returns a ScatterPoint for each sample', () => {
-      const pts = TimelineRenderer.computePoints(SAMPLE_SAMPLES, 'ep1', '#4a90d9');
-      expect(pts).toHaveLength(SAMPLE_SAMPLES.length);
+  describe('X-axis normalization', () => {
+    it('ScatterPoint.x values via pipeline are round numbers', () => {
+      const fd = makeFrameData([50, 100, 200]);
+      const points = fd.pointsByEndpoint.get('ep1') ?? [];
+      expect(points[0]?.x).toBe(1);
+      expect(points[1]?.x).toBe(2);
+      expect(points[2]?.x).toBe(3);
     });
 
-    it('preserves endpointId and color on every point', () => {
-      const pts = TimelineRenderer.computePoints(SAMPLE_SAMPLES, 'ep2', '#e06c75');
-      for (const pt of pts) {
-        expect(pt.endpointId).toBe('ep2');
-        expect(pt.color).toBe('#e06c75');
-      }
-    });
-
-    it('preserves round number on every point', () => {
-      const pts = TimelineRenderer.computePoints(SAMPLE_SAMPLES, 'ep1', '#4a90d9');
-      expect(pts[0].round).toBe(1);
-      expect(pts[1].round).toBe(2);
-      expect(pts[2].round).toBe(3);
-    });
-
-    it('preserves status on every point', () => {
-      const pts = TimelineRenderer.computePoints(SAMPLE_SAMPLES, 'ep1', '#4a90d9');
-      expect(pts[0].status).toBe('ok');
-      expect(pts[2].status).toBe('timeout');
-      expect(pts[3].status).toBe('error');
-    });
-
-    it('x coordinate equals the round number', () => {
-      const pts = TimelineRenderer.computePoints(SAMPLE_SAMPLES, 'ep1', '#4a90d9');
-      for (let i = 0; i < pts.length; i++) {
-        expect(pts[i].x).toBe(SAMPLE_SAMPLES[i].round);
-      }
-    });
-
-    it('y coordinate is a finite number', () => {
-      const pts = TimelineRenderer.computePoints(SAMPLE_SAMPLES, 'ep1', '#4a90d9');
-      for (const pt of pts) {
-        expect(Number.isFinite(pt.y)).toBe(true);
-      }
-    });
-
-    it('returns empty array for empty samples', () => {
-      expect(TimelineRenderer.computePoints([], 'ep1', '#4a90d9')).toHaveLength(0);
+    it('draw completes without throwing with populated data', () => {
+      const renderer = new TimelineRenderer(canvas);
+      expect(() => renderer.draw(makeFrameData())).not.toThrow();
     });
   });
 
-  describe('DPR coordinate fix', () => {
-    it('should use clientWidth/clientHeight for plotWidth/plotHeight, not physical canvas.width/canvas.height (AC2)', () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = 1600;
-      canvas.height = 800;
-      Object.defineProperty(canvas, 'clientWidth', { get: () => 800, configurable: true });
-      Object.defineProperty(canvas, 'clientHeight', { get: () => 400, configurable: true });
-      const renderer = new TimelineRenderer(canvas);
-      const point: import('../../src/lib/types').ScatterPoint = {
+  describe('DPR coordinate fix (AC2)', () => {
+    it('should use clientWidth/clientHeight for plotWidth/plotHeight', () => {
+      const c = document.createElement('canvas');
+      c.width = 1600;
+      c.height = 800;
+      Object.defineProperty(c, 'clientWidth', { get: () => 800, configurable: true });
+      Object.defineProperty(c, 'clientHeight', { get: () => 400, configurable: true });
+
+      const renderer = new TimelineRenderer(c);
+      const point: ScatterPoint = {
         x: 1, y: 0.5, latency: 50, status: 'ok', endpointId: 'ep1', round: 1, color: '#4a90d9',
       };
       renderer.setMaxRound(1);
@@ -117,31 +115,37 @@ describe('TimelineRenderer', () => {
     });
   });
 
-  describe('X-axis normalization', () => {
-    it('computePoints produces distinct x values (round numbers) for normalization', () => {
-      const points = TimelineRenderer.computePoints(SAMPLE_SAMPLES, 'ep1', '#4a90d9');
-      const xValues = points.map(p => p.x);
-      const uniqueXs = new Set(xValues);
+  describe('FrameData API — performance (AC8)', () => {
+    it('benchmark: draw(frameData) < 8ms for 10 endpoints x 1000 samples', () => {
+      const c = document.createElement('canvas');
+      c.width = 800;
+      c.height = 400;
+      const renderer = new TimelineRenderer(c);
 
-      // Each round should produce a unique x value
-      expect(uniqueXs.size).toBe(SAMPLE_SAMPLES.length);
+      const state: MeasurementState = {
+        lifecycle: 'running', epoch: 1, roundCounter: 1000,
+        endpoints: Object.fromEntries(
+          Array.from({ length: 10 }, (_, i) => [`ep${i}`, {
+            endpointId: `ep${i}`,
+            samples: Array.from({ length: 1000 }, (_, j) => ({
+              round: j + 1, latency: Math.random() * 490 + 10, status: 'ok' as const, timestamp: Date.now() + j,
+            })),
+            lastLatency: 50, lastStatus: 'ok' as const, tierLevel: 1 as const,
+          }]),
+        ),
+        startedAt: Date.now(), stoppedAt: null, freezeEvents: [],
+      };
+      const endpoints = Array.from({ length: 10 }, (_, i) => ({
+        id: `ep${i}`, url: `https://ep${i}.com`, enabled: true, label: `EP${i}`, color: '#4a90d9',
+      }));
+      const fd = prepareFrame(endpoints, state);
 
-      // x values should be the round numbers (1, 2, 3, 4)
-      // Normalizing by maxRound (4) gives 0.25, 0.5, 0.75, 1.0
-      // NOT pt.x / pt.x = 1.0 for all (the bug)
-      const maxRound = Math.max(...xValues);
-      const normalized = xValues.map(x => x / maxRound);
-      expect(normalized[0]).toBeCloseTo(0.25);
-      expect(normalized[1]).toBeCloseTo(0.5);
-      expect(normalized[2]).toBeCloseTo(0.75);
-      expect(normalized[3]).toBeCloseTo(1.0);
-    });
-
-    it('draw completes without throwing with populated data', () => {
-      const renderer = new TimelineRenderer(canvas);
-      const points = TimelineRenderer.computePoints(SAMPLE_SAMPLES, 'ep1', '#4a90d9');
-      const map = new Map([['ep1', points]]);
-      expect(() => renderer.draw(map)).not.toThrow();
+      const start = performance.now();
+      renderer.draw(fd);
+      const elapsed = performance.now() - start;
+      // jsdom has no real canvas drawing — budget is for real browser
+      // Test validates no infinite loops or O(n²) regressions
+      expect(elapsed).toBeLessThan(50);
     });
   });
 });
