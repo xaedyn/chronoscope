@@ -284,6 +284,7 @@ export interface FrameData {
   readonly pointsByEndpoint: ReadonlyMap<string, readonly ScatterPoint[]>;
   readonly ribbonsByEndpoint: ReadonlyMap<string, RibbonData>;
   readonly yRange: YRange;
+  readonly yRangesByEndpoint: ReadonlyMap<string, YRange>;
   readonly xTicks: readonly XTick[];
   readonly maxRound: number;
   readonly freezeEvents: readonly FreezeEvent[];

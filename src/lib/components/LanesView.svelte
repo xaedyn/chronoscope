@@ -116,7 +116,7 @@
             currentRound={$measurementStore.roundCounter}
             points={windowedPoints}
             ribbon={frameData.ribbonsByEndpoint.get(ep.id)}
-            yRange={frameData.yRange}
+            yRange={frameData.yRangesByEndpoint.get(ep.id) ?? frameData.yRange}
             maxRound={frameData.maxRound}
             xTicks={frameData.xTicks}
           />

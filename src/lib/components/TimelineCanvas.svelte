@@ -58,6 +58,7 @@
     pointsByEndpoint: new Map(),
     ribbonsByEndpoint: new Map(),
     yRange: { min: 1, max: 1000, isLog: false, gridlines: [] },
+    yRangesByEndpoint: new Map(),
     xTicks: [],
     maxRound: 0,
     freezeEvents: [],
