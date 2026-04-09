@@ -533,7 +533,7 @@ New heatmap cells appear with:
 - Overlapping points: Later points draw on top. Dense clusters show aggregate glow from compositing.
 
 **Axes:**
-- Y-axis: Latency in ms. Logarithmic scale (base 10). Gridlines at 1, 10, 100, 1000, 10000ms. Labels in `typography.label`.
+- Y-axis: Latency in ms. Adaptive scale (linear when P98/P2 ratio <= 50x, log otherwise). Dynamic gridlines computed per frame. Labels in `typography.label`. Scale indicator ("log"/"linear") at bottom-left.
 - X-axis: Round number (0, 10, 20...). Labels in `typography.label`.
 - Gridlines: `color.chrome.border` at 30% opacity, 1px, dashed (4px dash, 8px gap).
 - Axis lines: `color.chrome.border` at 60% opacity, 1px solid.
@@ -698,22 +698,25 @@ Sonde is dark-only in v1. There is no light theme. The dark theme is not "invert
 
 **What it shows:**
 - X-axis: measurement round number (sequential integer, starting at 0)
-- Y-axis: latency in milliseconds, logarithmic scale (base 10)
+- Y-axis: latency in milliseconds, adaptive scale (linear for typical web latencies, log for wide-range datasets)
 - One data point per measurement per endpoint per round
 - Points colored by endpoint's assigned color
+- Trace ribbons (P25-P75 variance bands with P50 median line) for endpoints with >= 20 samples
 - Timeouts plotted at the timeout boundary value with distinct timeout marker
 - Errors plotted at y-axis maximum with error marker
 
 **Y-axis scale:**
-- Logarithmic (base 10) by default
-- Gridlines at: 1ms, 5ms, 10ms, 50ms, 100ms, 500ms, 1s, 5s, 10s
-- Axis auto-ranges to fit data with 10% padding above highest point
-- Minimum y-axis range: 1ms -- 1000ms (even if all data is within a narrower band)
+- Adaptive: linear when P98/P2 ratio <= 50x, logarithmic (base 10) when > 50x
+- Percentile-clamped auto-ranging (P2-P98 with 20% headroom)
+- Dynamic gridlines computed per frame at nice-step intervals
+- Minimum visible range: 10ms
+- Scale indicator ("log"/"linear") shown at bottom-left of plot area
+- Canvas utilization >= 60% of plotHeight for typical datasets
 
 **X-axis:**
 - Linear, one unit per round
-- Labels at regular intervals (every 10 rounds at default zoom)
-- Scrolls right as new data arrives, keeping the last 50 rounds visible by default
+- Adaptive tick density with 60px minimum label spacing and nice-step snapping
+- Always shows round 1 and max round; no overlapping labels at any width >= 375px
 
 **Zoom/Pan:**
 - Mousewheel/pinch: zoom both axes (shift + wheel for y-only, ctrl/cmd + wheel for x-only)
@@ -1079,14 +1082,14 @@ There is no backend, no API, no database, no server-side processing. The entire 
 
 ### Very Fast Responses (<1ms)
 
-- Logged accurately. The logarithmic y-axis renders sub-1ms points near the bottom.
+- Logged accurately. The adaptive y-axis renders sub-1ms points near the bottom of the visible range.
 - Values displayed with one decimal: "0.3ms", "0.8ms".
 - At 100us timer resolution (without cross-origin isolation), the minimum meaningful measurement is ~0.1ms. Values of exactly 0ms are flagged as "below timer resolution" in the tooltip.
 
 ### Very Slow Responses (>10s)
 
-- Plotted at their actual position on the logarithmic y-axis (which extends to accommodate).
-- Y-axis auto-ranges: if a 15s response arrives, the axis extends to 20s with a new gridline at 10s.
+- Plotted at their actual position on the adaptive y-axis (which auto-ranges to accommodate via P2-P98 clamping).
+- Y-axis auto-ranges via percentile clamping: extreme outliers may be clamped to the axis edge rather than extending the range, keeping the majority of data legible.
 - These points are valid data, not outliers to be hidden. They are visually prominent (high on the chart, colored red/critical on the latency scale).
 - If the response exceeds the configured timeout, it is recorded as a timeout, not a slow response.
 

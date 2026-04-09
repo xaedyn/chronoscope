@@ -252,9 +252,9 @@
 
   // ── Lifecycle ───────────────────────────────────────────────────────────────
 
-  let unsubscribe: (() => void) | null = null;
+  let unsubscribeMeasurements: (() => void) | null = null;
+  let unsubscribeEndpoints: (() => void) | null = null;
   let resizeObserver: ResizeObserver | null = null;
-  let summaryTimer: ReturnType<typeof setInterval> | null = null;
 
   onMount(() => {
     renderer = new HeatmapRenderer(canvas);
@@ -263,23 +263,33 @@
     resizeObserver.observe(container);
     resizeCanvas();
 
-    unsubscribe = measurementStore.subscribe((state) => {
+    // Debounce live-region updates to avoid spamming screen readers during active runs
+    let a11yTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedA11ySummary = () => {
+      if (a11yTimer) clearTimeout(a11yTimer);
+      a11yTimer = setTimeout(() => buildA11ySummary(), 2000);
+    };
+
+    unsubscribeMeasurements = measurementStore.subscribe((state) => {
       buildCells(state);
+      debouncedA11ySummary();
+    });
+
+    // Redraw and update summary when endpoints are added/removed/reordered/renamed
+    unsubscribeEndpoints = endpointStore.subscribe(() => {
+      buildCells(get(measurementStore));
+      debouncedA11ySummary();
     });
 
     canvas.addEventListener('pointermove', handlePointerMove);
     canvas.addEventListener('pointerleave', handlePointerLeave);
     canvas.addEventListener('click', handleClick as EventListener);
-
-    // Build initial summary and refresh every 5 seconds
-    buildA11ySummary();
-    summaryTimer = setInterval(() => buildA11ySummary(), 5000);
   });
 
   onDestroy(() => {
-    unsubscribe?.();
+    unsubscribeMeasurements?.();
+    unsubscribeEndpoints?.();
     resizeObserver?.disconnect();
-    if (summaryTimer !== null) clearInterval(summaryTimer);
     canvas?.removeEventListener('pointermove', handlePointerMove);
     canvas?.removeEventListener('pointerleave', handlePointerLeave);
     canvas?.removeEventListener('click', handleClick as EventListener);

@@ -91,7 +91,7 @@
   }
 
   .endpoint-list > li {
-    display: contents;
+    display: block;
   }
 
   /* ── Footer ──────────────────────────────────────────────────────────────── */
