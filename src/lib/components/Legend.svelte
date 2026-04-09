@@ -9,7 +9,7 @@
 
   function truncate(text: string): string {
     if (text.length <= MAX_LABEL_LEN) return text;
-    return text.slice(0, MAX_LABEL_LEN - 1) + '…';
+    return text.slice(0, MAX_LABEL_LEN - 1) + '\u2026';
   }
 
   function toggleEndpoint(id: string): void {
@@ -17,19 +17,11 @@
     if (!ep) return;
     endpointStore.updateEndpoint(id, { enabled: !ep.enabled });
   }
-
-  function handleKeydown(e: KeyboardEvent, id: string): void {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      toggleEndpoint(id);
-    }
-  }
 </script>
 
-<div
+<ul
   class="legend"
-  role="list"
-  aria-label="Endpoint legend — click to toggle visibility"
+  aria-label="Endpoint legend \u2014 click to toggle visibility"
   style:--border={tokens.color.chrome.border}
   style:--text-secondary={tokens.color.text.secondary}
   style:--text-muted={tokens.color.text.muted}
@@ -41,64 +33,70 @@
   style:--radius-sm="{tokens.radius.sm}px"
 >
   {#each $endpointStore as ep (ep.id)}
-    <div
-      class="legend-item"
-      class:disabled={!ep.enabled}
-      role="listitem"
-      tabindex="0"
-      aria-label="{ep.label || ep.url} — {ep.enabled ? 'visible, click to hide' : 'hidden, click to show'}"
-      aria-pressed={ep.enabled}
-      onclick={() => toggleEndpoint(ep.id)}
-      onkeydown={(e) => handleKeydown(e, ep.id)}
-    >
-      <span
-        class="swatch"
-        aria-hidden="true"
-        style:background={ep.enabled ? ep.color : 'transparent'}
-        style:border-color={ep.color}
-      ></span>
-      <span class="label">{truncate(ep.label || ep.url)}</span>
-    </div>
+    <li class="legend-item" class:disabled={!ep.enabled}>
+      <button
+        type="button"
+        class="legend-btn"
+        aria-label="{ep.label || ep.url} \u2014 {ep.enabled ? 'visible, click to hide' : 'hidden, click to show'}"
+        aria-pressed={ep.enabled}
+        onclick={() => toggleEndpoint(ep.id)}
+      >
+        <span
+          class="swatch"
+          aria-hidden="true"
+          style:background={ep.enabled ? ep.color : 'transparent'}
+          style:border-color={ep.color}
+        ></span>
+        <span class="label">{truncate(ep.label || ep.url)}</span>
+      </button>
+    </li>
   {/each}
-</div>
+</ul>
 
 <style>
   .legend {
+    list-style: none;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    margin: 0;
     display: flex;
     flex-wrap: wrap;
     gap: var(--spacing-xs);
-    padding: var(--spacing-xs) var(--spacing-sm);
     border-top: 1px solid var(--border);
     flex-shrink: 0;
   }
 
   .legend-item {
     display: flex;
+  }
+
+  .legend-item.disabled {
+    opacity: 0.45;
+  }
+
+  .legend-btn {
+    display: flex;
     align-items: center;
     gap: var(--spacing-xxs);
     padding: var(--spacing-xxs) var(--spacing-xs);
+    border: none;
     border-radius: var(--radius-sm);
+    background: transparent;
     cursor: pointer;
     color: var(--text-secondary);
     font-size: 11px;
     font-family: 'Inter', sans-serif;
     user-select: none;
     transition: background 150ms ease;
-    outline: none;
   }
 
-  .legend-item:hover,
-  .legend-item:focus-visible {
+  .legend-btn:hover,
+  .legend-btn:focus-visible {
     background: var(--surface-raised);
   }
 
-  .legend-item:focus-visible {
+  .legend-btn:focus-visible {
     outline: 2px solid var(--accent, #4a90d9);
     outline-offset: 1px;
-  }
-
-  .legend-item.disabled {
-    opacity: 0.45;
   }
 
   .swatch {
