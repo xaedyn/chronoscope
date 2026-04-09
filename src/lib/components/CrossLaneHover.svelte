@@ -49,6 +49,15 @@
     if (ms === null) return '—';
     return `${Math.round(ms)}ms`;
   }
+
+  const TOOLTIP_W = 200; // approximate max width including padding
+  const TOOLTIP_MARGIN = 8;
+  const tipLeft: number = $derived.by(() => {
+    if (hoverX === null) return 0;
+    const preferred = hoverX + 16;
+    const maxLeft = (typeof window !== 'undefined' ? window.innerWidth : 1920) - TOOLTIP_W - TOOLTIP_MARGIN;
+    return Math.min(preferred, maxLeft);
+  });
 </script>
 
 <div
@@ -63,7 +72,7 @@
   <div
     class="hover-tip"
     class:active={isActive}
-    style:left="{hoverX + 16}px"
+    style:left="{tipLeft}px"
     style:top="74px"
     style:--tooltip-bg={tokens.color.tooltip.bg}
     style:--glass-border={tokens.color.glass.border}
