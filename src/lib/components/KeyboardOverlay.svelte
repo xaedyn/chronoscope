@@ -9,17 +9,64 @@
     { keys: 'Space / Enter', description: 'Start or stop the test' },
     { keys: '?', description: 'Show / hide this overlay' },
     { keys: 'Escape', description: 'Close overlay / clear selection' },
-    { keys: '1 – 9', description: 'Toggle endpoint 1–9 visibility' },
+    { keys: '1 \u2013 9', description: 'Toggle endpoint 1\u20139 visibility' },
     { keys: '0', description: 'Toggle endpoint 10 visibility' },
   ];
 
+  let dialogEl: HTMLDivElement | undefined = $state();
+  let previouslyFocused: HTMLElement | null = null;
+
+  const FOCUSABLE_SELECTORS =
+    'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+  function getFocusableElements(): HTMLElement[] {
+    if (!dialogEl) return [];
+    return Array.from(dialogEl.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS));
+  }
+
+  function trapFocus(e: KeyboardEvent): void {
+    if (e.key !== 'Tab') return;
+    const focusable = getFocusableElements();
+    if (focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  }
+
+  $effect(() => {
+    if (!dialogEl) return;
+    previouslyFocused = document.activeElement as HTMLElement | null;
+    const focusable = getFocusableElements();
+    if (focusable.length > 0) {
+      focusable[0].focus();
+    } else {
+      dialogEl.focus();
+    }
+  });
+
   function close(): void {
+    const toRestore = previouslyFocused;
     uiStore.toggleKeyboardHelp();
+    requestAnimationFrame(() => {
+      toRestore?.focus();
+    });
   }
 
   function handleKeydown(e: KeyboardEvent): void {
     if (e.key === 'Escape') {
       close();
+    } else {
+      trapFocus(e);
     }
   }
 
@@ -50,6 +97,7 @@
   style:--radius-md="{tokens.radius.md}px"
 >
   <div
+    bind:this={dialogEl}
     class="dialog"
     role="dialog"
     aria-modal="true"
@@ -64,7 +112,7 @@
         aria-label="Close keyboard shortcuts"
         onclick={close}
       >
-        ✕
+        &#x2715;
       </button>
     </header>
 
