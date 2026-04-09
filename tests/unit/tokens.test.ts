@@ -80,8 +80,8 @@ describe('Glass token additions', () => {
   it('exports text opacity tokens (t1–t5)', () => {
     expect(tokens.color.text.t1).toBe('rgba(255,255,255,.94)');
     expect(tokens.color.text.t2).toBe('rgba(255,255,255,.58)');
-    expect(tokens.color.text.t3).toBe('rgba(255,255,255,.3)');
-    expect(tokens.color.text.t4).toBe('rgba(255,255,255,.14)');
+    expect(tokens.color.text.t3).toBe('rgba(255,255,255,.5)');
+    expect(tokens.color.text.t4).toBe('rgba(255,255,255,.32)');
     expect(tokens.color.text.t5).toBe('rgba(255,255,255,.07)');
   });
 });
