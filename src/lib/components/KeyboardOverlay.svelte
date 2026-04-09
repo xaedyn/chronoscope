@@ -1,0 +1,206 @@
+<!-- src/lib/components/KeyboardOverlay.svelte -->
+<!-- Modal showing all keyboard shortcuts. Triggered by '?' key.               -->
+<!-- Close via Escape, click outside, or dedicated close button.                -->
+<script lang="ts">
+  import { uiStore } from '$lib/stores/ui';
+  import { tokens } from '$lib/tokens';
+
+  const shortcuts: { keys: string; description: string }[] = [
+    { keys: 'Space / Enter', description: 'Start or stop the test' },
+    { keys: '?', description: 'Show / hide this overlay' },
+    { keys: 'Escape', description: 'Close overlay / clear selection' },
+    { keys: '1 – 9', description: 'Toggle endpoint 1–9 visibility' },
+    { keys: '0', description: 'Toggle endpoint 10 visibility' },
+  ];
+
+  function close(): void {
+    uiStore.toggleKeyboardHelp();
+  }
+
+  function handleKeydown(e: KeyboardEvent): void {
+    if (e.key === 'Escape') {
+      close();
+    }
+  }
+
+  function handleBackdropClick(e: MouseEvent): void {
+    if (e.target === e.currentTarget) close();
+  }
+</script>
+
+<svelte:window onkeydown={handleKeydown} />
+
+<!-- svelte-ignore a11y-click-events-have-key-events -->
+<div
+  class="backdrop"
+  role="presentation"
+  onclick={handleBackdropClick}
+  style:--surface-overlay={tokens.color.surface.overlay}
+  style:--surface-elevated={tokens.color.surface.elevated}
+  style:--border={tokens.color.chrome.border}
+  style:--text-primary={tokens.color.text.primary}
+  style:--text-secondary={tokens.color.text.secondary}
+  style:--text-muted={tokens.color.text.muted}
+  style:--accent={tokens.color.chrome.accent}
+  style:--spacing-xs="{tokens.spacing.xs}px"
+  style:--spacing-sm="{tokens.spacing.sm}px"
+  style:--spacing-md="{tokens.spacing.md}px"
+  style:--spacing-lg="{tokens.spacing.lg}px"
+  style:--spacing-xl="{tokens.spacing.xl}px"
+  style:--radius-md="{tokens.radius.md}px"
+>
+  <div
+    class="dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-label="Keyboard shortcuts"
+    tabindex="-1"
+  >
+    <header class="dialog-header">
+      <h2 class="dialog-title">Keyboard Shortcuts</h2>
+      <button
+        class="close-btn"
+        type="button"
+        aria-label="Close keyboard shortcuts"
+        onclick={close}
+      >
+        ✕
+      </button>
+    </header>
+
+    <table class="shortcut-table" aria-label="Keyboard shortcut reference">
+      <thead>
+        <tr>
+          <th scope="col">Key</th>
+          <th scope="col">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each shortcuts as { keys, description } (keys)}
+          <tr>
+            <td><kbd>{keys}</kbd></td>
+            <td>{description}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+
+    <p class="hint">Press <kbd>Escape</kbd> or click outside to close.</p>
+  </div>
+</div>
+
+<style>
+  .backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--spacing-md);
+  }
+
+  .dialog {
+    background: var(--surface-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-xl);
+    min-width: 360px;
+    max-width: 480px;
+    width: 100%;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    outline: none;
+  }
+
+  .dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .dialog-title {
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  .close-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    padding: var(--spacing-xs);
+    border-radius: 4px;
+    line-height: 1;
+    transition: color 150ms ease;
+  }
+
+  .close-btn:hover {
+    color: var(--text-primary);
+  }
+
+  .close-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .shortcut-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+  }
+
+  .shortcut-table th {
+    text-align: left;
+    color: var(--text-muted);
+    font-weight: 500;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: var(--spacing-xs) var(--spacing-sm);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .shortcut-table td {
+    padding: var(--spacing-sm) var(--spacing-sm);
+    color: var(--text-secondary);
+    vertical-align: middle;
+  }
+
+  .shortcut-table tr:not(:last-child) td {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  }
+
+  kbd {
+    display: inline-block;
+    padding: 2px var(--spacing-xs);
+    background: var(--surface-overlay);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .hint {
+    margin: var(--spacing-md) 0 0;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  /* Responsive */
+  @media (max-width: 480px) {
+    .dialog {
+      min-width: unset;
+    }
+  }
+</style>
