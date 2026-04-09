@@ -71,7 +71,7 @@
   style:--dot-color={dotColor}
   style:--border={tokens.color.chrome.border}
   style:--border-focus={tokens.color.chrome.borderFocus}
-  style:--surface-raised={tokens.color.surface.raised}
+  style:--surface-raised={tokens.color.surface.mid}
   style:--text-primary={tokens.color.text.primary}
   style:--text-secondary={tokens.color.text.secondary}
   style:--text-muted={tokens.color.text.muted}

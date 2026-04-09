@@ -4,6 +4,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { uiStore } from '$lib/stores/ui';
+  import { tokens } from '$lib/tokens';
   import EndpointPanel from './EndpointPanel.svelte';
 
   let dialogEl: HTMLDialogElement;
@@ -47,6 +48,20 @@
   bind:this={dialogEl}
   id="endpoint-drawer"
   class="endpoint-dialog"
+  style:--surface-raised={tokens.color.surface.mid}
+  style:--surface-elevated={tokens.color.surface.deep}
+  style:--border={tokens.color.chrome.border}
+  style:--accent={tokens.color.chrome.accent}
+  style:--text-primary={tokens.color.text.t1}
+  style:--text-secondary={tokens.color.text.t2}
+  style:--text-muted={tokens.color.text.t3}
+  style:--radius-sm="{tokens.radius.sm}px"
+  style:--spacing-xs="{tokens.spacing.xs}px"
+  style:--spacing-sm="{tokens.spacing.sm}px"
+  style:--spacing-md="{tokens.spacing.md}px"
+  style:--spacing-lg="{tokens.spacing.lg}px"
+  style:--sans={tokens.typography.sans.fontFamily}
+  style:--mono={tokens.typography.mono.fontFamily}
   aria-label="Endpoints"
   onclick={handleBackdropClick}
 >

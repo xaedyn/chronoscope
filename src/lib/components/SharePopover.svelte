@@ -145,9 +145,9 @@
   role="presentation"
   onclick={handleOverlayClick}
   onkeydown={handleKeydown}
-  style:--surface-overlay={tokens.color.surface.overlay}
-  style:--surface-elevated={tokens.color.surface.elevated}
-  style:--surface-raised={tokens.color.surface.raised}
+  style:--surface-overlay={tokens.color.surface.deep}
+  style:--surface-elevated={tokens.color.surface.deep}
+  style:--surface-raised={tokens.color.surface.mid}
   style:--border={tokens.color.chrome.border}
   style:--accent={tokens.color.chrome.accent}
   style:--text-primary={tokens.color.text.primary}

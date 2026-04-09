@@ -28,8 +28,8 @@
   class="endpoint-panel"
   style:--border={tokens.color.chrome.border}
   style:--accent={tokens.color.chrome.accent}
-  style:--surface-raised={tokens.color.surface.raised}
-  style:--surface-canvas={tokens.color.surface.canvas}
+  style:--surface-raised={tokens.color.surface.mid}
+  style:--surface-canvas={tokens.color.surface.mid}
   style:--text-secondary={tokens.color.text.secondary}
   style:--text-muted={tokens.color.text.muted}
   style:--text-primary={tokens.color.text.primary}

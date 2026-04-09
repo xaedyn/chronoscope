@@ -109,8 +109,8 @@
   id="settings-drawer"
   class="settings-dialog"
   style:--surface-base={tokens.color.surface.base}
-  style:--surface-raised={tokens.color.surface.raised}
-  style:--surface-elevated={tokens.color.surface.elevated}
+  style:--surface-raised={tokens.color.surface.mid}
+  style:--surface-elevated={tokens.color.surface.deep}
   style:--border={tokens.color.chrome.border}
   style:--accent={tokens.color.chrome.accent}
   style:--accent-hover={tokens.color.chrome.accentHover}
