@@ -271,6 +271,7 @@ export const tokens = {
     nowDotRadius:    4,
     ringInitialR:    7,
     ringFinalR:     14,
+    chartWindow:    60,   // max visible rounds in SVG chart (sliding window)
     topbarHeight:   54,
     xAxisHeight:    30,
     footerHeight:   38,

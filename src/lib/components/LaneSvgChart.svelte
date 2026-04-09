@@ -6,7 +6,8 @@
   let {
     color,
     colorRgba06,
-    totalRounds,
+    visibleStart = 1,
+    visibleEnd = 60,
     currentRound = 0,
     points = [],
     ribbon = undefined,
@@ -16,7 +17,8 @@
   }: {
     color: string;
     colorRgba06: string;
-    totalRounds: number;
+    visibleStart?: number;
+    visibleEnd?: number;
     currentRound?: number;
     points: readonly ScatterPoint[];
     ribbon: RibbonData | undefined;
@@ -32,11 +34,11 @@
   const PLOT_H = VB_H - PAD_Y_TOP - PAD_Y_BOT;
 
   const hasData: boolean = $derived(points.length > 0);
-  const effectiveMaxRound: number = $derived(Math.max(totalRounds, maxRound, 1));
 
   function toX(round: number): number {
-    if (effectiveMaxRound <= 1) return VB_W;
-    return ((round - 1) / (effectiveMaxRound - 1)) * VB_W;
+    const span = visibleEnd - visibleStart;
+    if (span <= 0) return VB_W;
+    return ((round - visibleStart) / span) * VB_W;
   }
 
   function toY(normalizedY: number): number {

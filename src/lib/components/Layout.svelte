@@ -27,8 +27,14 @@
     setTimeout(() => { announcer.textContent = msg; }, 50);
   }
 
-  const totalRounds = $derived($settingsStore.cap > 0 ? $settingsStore.cap : 30);
+  const CHART_WINDOW = tokens.lane.chartWindow; // 60
+  const configuredCap = $derived($settingsStore.cap > 0 ? $settingsStore.cap : Infinity);
   const currentRound = $derived($measurementStore.roundCounter);
+
+  // Sliding window: show at most CHART_WINDOW rounds
+  const visibleSpan = $derived(Math.min(CHART_WINDOW, configuredCap || CHART_WINDOW));
+  const visibleStart = $derived(Math.max(1, currentRound - visibleSpan + 1));
+  const visibleEnd = $derived(Math.max(visibleSpan, currentRound));
 
   onMount(() => {
     unsubLifecycle = measurementStore.subscribe((state) => {
@@ -65,12 +71,12 @@
   style:--t1={tokens.color.text.t1}
 >
   <Topbar {onStart} {onStop} />
-  <LanesView />
-  <XAxisBar {totalRounds} {currentRound} />
+  <LanesView {visibleStart} {visibleEnd} />
+  <XAxisBar startRound={visibleStart} endRound={visibleEnd} {currentRound} />
   <FooterBar />
 </div>
 
-<CrossLaneHover {totalRounds} />
+<CrossLaneHover {visibleStart} {visibleEnd} />
 
 <div
   bind:this={announcer}
