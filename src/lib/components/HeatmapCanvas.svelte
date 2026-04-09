@@ -263,15 +263,22 @@
     resizeObserver.observe(container);
     resizeCanvas();
 
+    // Debounce live-region updates to avoid spamming screen readers during active runs
+    let a11yTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedA11ySummary = () => {
+      if (a11yTimer) clearTimeout(a11yTimer);
+      a11yTimer = setTimeout(() => buildA11ySummary(), 2000);
+    };
+
     unsubscribeMeasurements = measurementStore.subscribe((state) => {
       buildCells(state);
-      buildA11ySummary();
+      debouncedA11ySummary();
     });
 
     // Redraw and update summary when endpoints are added/removed/reordered/renamed
     unsubscribeEndpoints = endpointStore.subscribe(() => {
       buildCells(get(measurementStore));
-      buildA11ySummary();
+      debouncedA11ySummary();
     });
 
     canvas.addEventListener('pointermove', handlePointerMove);

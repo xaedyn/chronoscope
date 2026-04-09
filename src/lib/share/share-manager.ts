@@ -37,11 +37,12 @@ function validateSharePayload(data: unknown): SharePayload | null {
   if (obj['mode'] !== 'config' && obj['mode'] !== 'results') return null;
   if (!Array.isArray(obj['endpoints'])) return null;
 
-  // Validate each endpoint has required string fields
+  // Validate each endpoint has required fields
   for (const ep of obj['endpoints'] as unknown[]) {
     if (ep === null || typeof ep !== 'object') return null;
     const e = ep as Record<string, unknown>;
     if (typeof e['url'] !== 'string') return null;
+    if ('enabled' in e && typeof e['enabled'] !== 'boolean') return null;
   }
 
   const settings = obj['settings'];
@@ -58,6 +59,12 @@ function validateSharePayload(data: unknown): SharePayload | null {
       if (result === null || typeof result !== 'object') return null;
       const r = result as Record<string, unknown>;
       if (!Array.isArray(r['samples'])) return null;
+      // Validate each sample has the required shape
+      for (const sample of r['samples'] as unknown[]) {
+        if (sample === null || typeof sample !== 'object') return null;
+        const s = sample as Record<string, unknown>;
+        if (typeof s['round'] !== 'number' || typeof s['latency'] !== 'number' || typeof s['status'] !== 'string') return null;
+      }
     }
   }
 

@@ -533,7 +533,7 @@ New heatmap cells appear with:
 - Overlapping points: Later points draw on top. Dense clusters show aggregate glow from compositing.
 
 **Axes:**
-- Y-axis: Latency in ms. Adaptive scale (linear when P98/P2 < 50x, log otherwise). Dynamic gridlines computed per frame. Labels in `typography.label`. Scale indicator ("log"/"linear") at bottom-left.
+- Y-axis: Latency in ms. Adaptive scale (linear when P98/P2 ratio <= 50x, log otherwise). Dynamic gridlines computed per frame. Labels in `typography.label`. Scale indicator ("log"/"linear") at bottom-left.
 - X-axis: Round number (0, 10, 20...). Labels in `typography.label`.
 - Gridlines: `color.chrome.border` at 30% opacity, 1px, dashed (4px dash, 8px gap).
 - Axis lines: `color.chrome.border` at 60% opacity, 1px solid.
@@ -1089,7 +1089,7 @@ There is no backend, no API, no database, no server-side processing. The entire 
 ### Very Slow Responses (>10s)
 
 - Plotted at their actual position on the adaptive y-axis (which auto-ranges to accommodate via P2-P98 clamping).
-- Y-axis auto-ranges: if a 15s response arrives, the adaptive range extends with new dynamic gridlines.
+- Y-axis auto-ranges via percentile clamping: extreme outliers may be clamped to the axis edge rather than extending the range, keeping the majority of data legible.
 - These points are valid data, not outliers to be hidden. They are visually prominent (high on the chart, colored red/critical on the latency scale).
 - If the response exceeds the configured timeout, it is recorded as a timeout, not a slow response.
 

@@ -62,7 +62,12 @@ export function applySharePayload(payload: SharePayload): string[] {
     const snapshot: MeasurementState = {
       lifecycle: 'completed',
       epoch: 1,
-      roundCounter: Math.max(...payload.results.map((r) => r.samples.length), 0),
+      roundCounter: Math.max(
+        ...payload.results.map((r) =>
+          r.samples.reduce((max, s) => Math.max(max, s.round), 0)
+        ),
+        0,
+      ),
       endpoints: endpointsRecord,
       startedAt: null,
       stoppedAt: null,
