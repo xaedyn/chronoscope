@@ -2,12 +2,10 @@
 <!-- Lists all endpoints as EndpointRow components. Add-endpoint button.       -->
 <!-- Subscribes to endpointStore and measurementStore.                          -->
 <script lang="ts">
-  import { endpointStore } from '$lib/stores/endpoints';
+  import { endpointStore, MAX_ENDPOINTS } from '$lib/stores/endpoints';
   import { measurementStore } from '$lib/stores/measurements';
   import { tokens } from '$lib/tokens';
   import EndpointRow from './EndpointRow.svelte';
-
-  const MAX_ENDPOINTS = 10;
 
   let isRunning = $derived($measurementStore.lifecycle === 'running' || $measurementStore.lifecycle === 'starting');
 
@@ -68,6 +66,11 @@
       class="add-btn"
       disabled={$endpointStore.length >= MAX_ENDPOINTS || isRunning}
       aria-disabled={$endpointStore.length >= MAX_ENDPOINTS || isRunning}
+      title={$endpointStore.length >= MAX_ENDPOINTS
+        ? `Maximum ${MAX_ENDPOINTS} endpoints reached`
+        : isRunning
+          ? 'Cannot add endpoints while running'
+          : 'Add endpoint'}
       onclick={addEndpoint}
     >
       + Add endpoint

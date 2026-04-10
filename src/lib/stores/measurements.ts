@@ -84,19 +84,66 @@ function createMeasurementStore() {
             ? 2
             : existing.tierLevel;
 
+        // Mutable push — O(1) amortized instead of O(n) spread
+        existing.samples.push(sample);
+
         return {
           ...s,
           endpoints: {
             ...s.endpoints,
             [endpointId]: {
               ...existing,
-              samples: [...existing.samples, sample],
               lastLatency: latency,
               lastStatus: status,
               tierLevel,
             },
           },
         };
+      });
+    },
+
+    addSamples(entries: Array<{
+      endpointId: string;
+      round: number;
+      latency: number;
+      status: SampleStatus;
+      timestamp: number;
+      tier2?: TimingPayload;
+    }>): void {
+      update(s => {
+        // Clone the top-level endpoints map once to trigger reactivity
+        const nextEndpoints = { ...s.endpoints };
+
+        for (const entry of entries) {
+          const existing = nextEndpoints[entry.endpointId];
+          if (!existing) continue;
+
+          const sample: MeasurementSample = {
+            round: entry.round,
+            latency: entry.latency,
+            status: entry.status,
+            timestamp: entry.timestamp,
+            ...(entry.tier2 !== undefined ? { tier2: entry.tier2 } : {}),
+          };
+
+          const tierLevel: 1 | 2 =
+            entry.tier2 !== undefined && (entry.tier2.dnsLookup !== 0 || entry.tier2.tcpConnect !== 0 || entry.tier2.ttfb !== 0)
+              ? 2
+              : existing.tierLevel;
+
+          // Mutable push — O(1) amortized instead of O(n) spread
+          existing.samples.push(sample);
+
+          // New endpoint object reference to trigger per-endpoint reactivity
+          nextEndpoints[entry.endpointId] = {
+            ...existing,
+            lastLatency: entry.latency,
+            lastStatus: entry.status,
+            tierLevel,
+          };
+        }
+
+        return { ...s, endpoints: nextEndpoints };
       });
     },
 
