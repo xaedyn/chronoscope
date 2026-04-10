@@ -34,12 +34,12 @@
 
   // ── ViewBox dimensions ───────────────────────────────────────────────────
   const VB_W = 1000;
-  const VB_H = 216;          // was 200 — 16px added for heatmap strip
-  const PAD_Y_TOP = 10;
-  const PAD_Y_BOT = 10;
-  const HEATMAP_H = 12;      // px in viewBox units
-  const HEATMAP_GAP = 4;     // gap between scatter area and strip
-  const PLOT_H = VB_H - PAD_Y_TOP - PAD_Y_BOT - HEATMAP_H - HEATMAP_GAP; // 180
+  const VB_H = 210;
+  const PAD_Y_TOP = 6;
+  const PAD_Y_BOT = 4;
+  const HEATMAP_H = 8;       // px in viewBox units — slim strip
+  const HEATMAP_GAP = 2;     // tight gap between scatter area and strip
+  const PLOT_H = VB_H - PAD_Y_TOP - PAD_Y_BOT - HEATMAP_H - HEATMAP_GAP; // 190
 
   const HEATMAP_Y = VB_H - PAD_Y_BOT - HEATMAP_H; // y-origin of strip
 

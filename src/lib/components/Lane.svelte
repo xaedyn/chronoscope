@@ -83,10 +83,10 @@
       <span class="ch-url">{url}</span>
       <span class="ch-hero" style:color={color}>{Math.round(p50)}<span class="ch-hero-unit">ms</span></span>
       {#if ready}
-        <span class="ch-stat"><span class="ch-stat-label">P95</span><span class="ch-stat-val">{fmt(p95)}</span></span>
-        <span class="ch-stat"><span class="ch-stat-label">P99</span><span class="ch-stat-val">{fmt(p99)}</span></span>
-        <span class="ch-stat"><span class="ch-stat-label">J</span><span class="ch-stat-val">{fmt(jitter)}</span></span>
-        <span class="ch-stat"><span class="ch-stat-label">L</span><span class="ch-stat-val">{fmtLoss(lossPercent)}</span></span>
+        <span class="ch-stat"><span class="ch-stat-label">P95</span> <span class="ch-stat-val">{fmt(p95)}</span></span>
+        <span class="ch-stat"><span class="ch-stat-label">P99</span> <span class="ch-stat-val">{fmt(p99)}</span></span>
+        <span class="ch-stat"><span class="ch-stat-label">J</span> <span class="ch-stat-val">{fmt(jitter)}</span></span>
+        <span class="ch-stat"><span class="ch-stat-label">L</span> <span class="ch-stat-val">{fmtLoss(lossPercent)}</span></span>
       {/if}
     </div>
   {/if}
@@ -198,39 +198,41 @@
   /* Compact overlay header */
   .lane-compact-header {
     position: absolute; top: 0; left: 0; right: 0; z-index: 3;
-    height: var(--compact-header-height);
-    display: flex; align-items: center; gap: 12px; padding: 0 12px;
-    background: rgba(12, 10, 20, 0.75);
+    height: 28px;
+    display: flex; align-items: center; gap: 10px; padding: 0 10px;
+    background: rgba(12, 10, 20, 0.7);
     backdrop-filter: blur(12px) saturate(1.2);
     -webkit-backdrop-filter: blur(12px) saturate(1.2);
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     pointer-events: none;
   }
-  .ch-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .ch-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
   .ch-url {
     font-family: var(--mono); font-size: 10px; font-weight: 300; color: var(--t3);
-    max-width: 180px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+    max-width: 160px; text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
   }
   .ch-hero {
-    font-family: var(--sans); font-size: 20px; font-weight: 200;
-    line-height: 1; margin-left: 4px; flex-shrink: 0;
+    font-family: var(--sans); font-size: 18px; font-weight: 200;
+    line-height: 1; margin-left: 2px; flex-shrink: 0;
   }
   .ch-hero-unit {
-    font-family: var(--sans); font-size: 11px; font-weight: 300;
+    font-family: var(--sans); font-size: 10px; font-weight: 300;
     color: var(--t3); margin-left: 1px;
   }
-  .ch-stat { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; }
+  .ch-stat {
+    display: inline-flex; align-items: baseline; gap: 3px; flex-shrink: 0;
+  }
   .ch-stat-label {
     font-family: var(--mono); font-size: 8px; font-weight: 400;
-    color: var(--t4); text-transform: uppercase; letter-spacing: 0.07em; line-height: 1;
+    color: var(--t4); text-transform: uppercase; letter-spacing: 0.05em;
   }
   .ch-stat-val {
-    font-family: var(--mono); font-size: 11px; font-weight: 300;
-    color: var(--t2); line-height: 1.2;
+    font-family: var(--mono); font-size: 10px; font-weight: 300;
+    color: var(--t2);
   }
 
-  /* Shift now-label below compact header + gap */
-  .lane.compact .now-label { top: 40px; }
+  /* Shift now-label below compact header */
+  .lane.compact .now-label { top: 34px; }
 
   @media (max-width: 767px) {
     .lane:not(.compact) { flex-direction: column; }
