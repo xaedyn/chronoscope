@@ -13,6 +13,8 @@ const baseProps = {
   yRange: { min: 1, max: 1000, isLog: false, gridlines: [] },
   maxRound: 0,
   xTicks: [],
+  heatmapCells: [],      // default empty
+  timeoutMs: 5000,       // default 5s
 };
 
 describe('LaneSvgChart', () => {
@@ -38,5 +40,59 @@ describe('LaneSvgChart', () => {
     });
     const futureZone = container.querySelector('.future-zone');
     expect(futureZone).not.toBeNull();
+  });
+
+  it('renders heatmap rect elements when heatmapCells are provided (AC1)', () => {
+    const cells = [
+      { startRound: 1, endRound: 1, worstLatency: 30, worstStatus: 'ok' as const, startElapsed: 0, endElapsed: 1000, color: 'rgba(134,239,172,.5)' },
+      { startRound: 2, endRound: 2, worstLatency: 80, worstStatus: 'ok' as const, startElapsed: 1000, endElapsed: 2000, color: 'rgba(255,255,255,.15)' },
+    ];
+    const { container } = render(LaneSvgChart, {
+      props: {
+        ...baseProps,
+        heatmapCells: cells,
+        timeoutMs: 5000,
+      },
+    });
+    const heatmapRects = container.querySelectorAll('.heatmap-cell');
+    expect(heatmapRects.length).toBe(2);
+  });
+
+  it('renders no heatmap rects when heatmapCells is empty (AC1)', () => {
+    const { container } = render(LaneSvgChart, {
+      props: { ...baseProps, heatmapCells: [], timeoutMs: 5000 },
+    });
+    const heatmapRects = container.querySelectorAll('.heatmap-cell');
+    expect(heatmapRects.length).toBe(0);
+  });
+
+  it('renders timeout threshold line when timeoutMs is within y-range (AC5)', () => {
+    const { container } = render(LaneSvgChart, {
+      props: {
+        ...baseProps,
+        // yRange min=1, max=1000 — timeout of 500ms is inside range
+        yRange: { min: 1, max: 1000, isLog: false, gridlines: [] },
+        timeoutMs: 500,
+        heatmapCells: [],
+        currentRound: 10,
+        points: [{ round: 10, y: 0.5, latency: 500, status: 'ok', endpointId: 'ep-1', x: 10, color: '#67e8f9' }],
+        maxRound: 10,
+      },
+    });
+    const thresholdLine = container.querySelector('.timeout-line');
+    expect(thresholdLine).not.toBeNull();
+  });
+
+  it('does not render timeout line when timeoutMs is outside y-range (AC5)', () => {
+    const { container } = render(LaneSvgChart, {
+      props: {
+        ...baseProps,
+        yRange: { min: 1, max: 100, isLog: false, gridlines: [] },
+        timeoutMs: 5000,  // outside range max=100
+        heatmapCells: [],
+      },
+    });
+    const thresholdLine = container.querySelector('.timeout-line');
+    expect(thresholdLine).toBeNull();
   });
 });
