@@ -3,9 +3,11 @@
   import { endpointStore } from '$lib/stores/endpoints';
   import { measurementStore } from '$lib/stores/measurements';
   import { statisticsStore } from '$lib/stores/statistics';
+  import { settingsStore } from '$lib/stores/settings';
   import { uiStore } from '$lib/stores/ui';
-  import { prepareFrame } from '$lib/renderers/timeline-data-pipeline';
+  import { prepareFrame, computeHeatmapCells } from '$lib/renderers/timeline-data-pipeline';
   import { tokens } from '$lib/tokens';
+  import type { HeatmapCellData } from '$lib/types';
   import Lane from './Lane.svelte';
   import LaneSvgChart from './LaneSvgChart.svelte';
 
@@ -21,6 +23,22 @@
 
   // Call prepareFrame() ONCE for all enabled endpoints
   const frameData = $derived(prepareFrame(endpoints, $measurementStore));
+
+  // Compute heatmap cells per endpoint (all samples, not windowed)
+  const heatmapCellsByEndpoint: ReadonlyMap<string, readonly HeatmapCellData[]> = $derived.by(() => {
+    const map = new Map<string, readonly HeatmapCellData[]>();
+    const startedAt = $measurementStore.startedAt;
+    for (const ep of endpoints) {
+      const epState = $measurementStore.endpoints[ep.id];
+      const stats = $statisticsStore[ep.id];
+      if (!epState || !stats) {
+        map.set(ep.id, []);
+        continue;
+      }
+      map.set(ep.id, computeHeatmapCells(epState.samples, stats, startedAt, ep.color));
+    }
+    return map;
+  });
 
   function colorToRgba06(hex: string): string {
     if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
@@ -94,6 +112,8 @@
   {:else}
     {#each endpoints as ep (ep.id)}
       {@const laneProps = getLaneProps(ep.id)}
+      {@const lastLatency = $measurementStore.endpoints[ep.id]?.lastLatency ?? null}
+      {@const isRunning = $measurementStore.lifecycle === 'running'}
       <Lane
         endpointId={ep.id}
         color={ep.color}
@@ -104,6 +124,8 @@
         jitter={laneProps.jitter}
         lossPercent={laneProps.lossPercent}
         ready={laneProps.ready}
+        {lastLatency}
+        {isRunning}
       >
         {#snippet children()}
           {@const allPoints = frameData.pointsByEndpoint.get(ep.id) ?? []}
@@ -119,6 +141,8 @@
             yRange={frameData.yRangesByEndpoint.get(ep.id) ?? frameData.yRange}
             maxRound={frameData.maxRound}
             xTicks={frameData.xTicks}
+            heatmapCells={heatmapCellsByEndpoint.get(ep.id) ?? []}
+            timeoutMs={$settingsStore.timeout}
           />
         {/snippet}
       </Lane>
