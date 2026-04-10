@@ -29,7 +29,7 @@
     const parts: string[] = [`${roundCounter} of ${total} complete`];
     if (errors > 0) parts.push(`${errors} error${errors === 1 ? '' : 's'}`);
     if (timeouts > 0) parts.push(`${timeouts} timeout${timeouts === 1 ? '' : 's'}`);
-    if (elapsed > 0) parts.push(`${formatElapsed(elapsed)} elapsed`);
+    if (startedAt !== null) parts.push(`${formatElapsed(elapsed)} elapsed`);
     return parts.join(' · ');
   });
 
@@ -41,7 +41,8 @@
     return () => clearInterval(id);
   });
 
-  let elapsed = $derived($measurementStore.startedAt ? now - $measurementStore.startedAt : 0);
+  let startedAt = $derived($measurementStore.startedAt);
+  let elapsed = $derived(startedAt !== null ? Math.max(0, now - startedAt) : 0);
 
   let configLabel = $derived(`${delay / 1000}s interval · ${timeout / 1000}s timeout`);
 </script>

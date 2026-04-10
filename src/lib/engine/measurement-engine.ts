@@ -42,13 +42,21 @@ export class MeasurementEngine {
     // Step 1: increment epoch and transition lifecycle — always happens.
     measurementStore.incrementEpoch();
     measurementStore.setLifecycle('starting');
-    measurementStore.setStartedAt(Date.now());
+
+    // Preserve startedAt across stop/start cycles so elapsed time is cumulative.
+    // Only set on first start (idle → running).
+    if (currentState.lifecycle === 'idle') {
+      measurementStore.setStartedAt(Date.now());
+    }
 
     const endpoints = get(endpointStore).filter(ep => ep.enabled && ep.url.trim().length > 0);
 
-    // Initialize measurement state for each endpoint.
+    // Only initialize endpoints that don't already have data — preserves
+    // samples across stop/start cycles.
     for (const ep of endpoints) {
-      measurementStore.initEndpoint(ep.id);
+      if (!currentState.endpoints[ep.id]) {
+        measurementStore.initEndpoint(ep.id);
+      }
     }
 
     // Step 2: attempt Worker creation — may fail in jsdom.

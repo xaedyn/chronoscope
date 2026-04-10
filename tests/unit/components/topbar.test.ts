@@ -22,7 +22,7 @@ function getStartStopLabel(lifecycle: TestLifecycleState): string {
   if (lifecycle === 'running') return 'Stop';
   if (lifecycle === 'starting') return 'Starting…';
   if (lifecycle === 'stopping') return 'Stopping…';
-  return 'Start Test';
+  return 'Start';
 }
 
 function isTransitioning(lifecycle: TestLifecycleState): boolean {
@@ -46,7 +46,7 @@ describe('Topbar', () => {
 
   it('renders Start Test button when lifecycle is idle', () => {
     const { lifecycle } = get(measurementStore);
-    expect(getStartStopLabel(lifecycle)).toBe('Start Test');
+    expect(getStartStopLabel(lifecycle)).toBe('Start');
   });
 
   it('shows "Stop" when running', () => {
@@ -70,7 +70,7 @@ describe('Topbar', () => {
   it('shows "Start Test" after completed', () => {
     measurementStore.setLifecycle('completed');
     const { lifecycle } = get(measurementStore);
-    expect(getStartStopLabel(lifecycle)).toBe('Start Test');
+    expect(getStartStopLabel(lifecycle)).toBe('Start');
   });
 
   // ── Run status label ────────────────────────────────────────────────────────

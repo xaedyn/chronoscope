@@ -254,7 +254,7 @@
   {#if heatmapTooltip}
     <rect
       class="heatmap-tooltip-bg"
-      x={Math.min(heatmapTooltip.x - 100, VB_W - 205)}
+      x={Math.max(0, Math.min(heatmapTooltip.x - 100, VB_W - 205))}
       y={heatmapTooltip.y - 18}
       width="210"
       height="20"
@@ -262,7 +262,7 @@
     />
     <text
       class="heatmap-tooltip-text"
-      x={Math.min(heatmapTooltip.x, VB_W - 100)}
+      x={Math.max(105, Math.min(heatmapTooltip.x, VB_W - 105))}
       y={heatmapTooltip.y - 5}
       text-anchor="middle"
     >{heatmapTooltip.text}</text>

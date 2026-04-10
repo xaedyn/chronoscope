@@ -28,7 +28,7 @@
     if (lifecycle === 'running') return 'Stop';
     if (lifecycle === 'starting') return 'Starting…';
     if (lifecycle === 'stopping') return 'Stopping…';
-    return 'Start Test';
+    return 'Start';
   });
 
   function handleStartStop(): void {

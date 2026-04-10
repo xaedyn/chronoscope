@@ -20,7 +20,7 @@
       case 'starting':  return 'Starting…';
       case 'running':   return 'Stop';
       case 'stopping':  return 'Stopping…';
-      default:          return 'Start Test';
+      default:          return 'Start';
     }
   });
 
