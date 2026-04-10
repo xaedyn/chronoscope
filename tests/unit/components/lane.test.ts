@@ -29,4 +29,25 @@ describe('Lane', () => {
     const { getByText } = render(Lane, { props });
     expect(getByText(/P50 Median Latency/i)).toBeTruthy();
   });
+
+  it('renders live latency label when isRunning and lastLatency are set', () => {
+    const { getByText } = render(Lane, {
+      props: { ...props, isRunning: true, lastLatency: 42.7 },
+    });
+    expect(getByText('43ms')).toBeTruthy();
+  });
+
+  it('does not render live latency label when isRunning is false', () => {
+    const { queryByText } = render(Lane, {
+      props: { ...props, isRunning: false, lastLatency: 42.7 },
+    });
+    expect(queryByText('43ms')).toBeNull();
+  });
+
+  it('does not render live latency label when lastLatency is null', () => {
+    const { container } = render(Lane, {
+      props: { ...props, isRunning: true, lastLatency: null },
+    });
+    expect(container.querySelector('.now-label')).toBeNull();
+  });
 });

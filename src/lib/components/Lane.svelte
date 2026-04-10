@@ -12,6 +12,8 @@
     jitter,
     lossPercent,
     ready,
+    lastLatency = null,
+    isRunning = false,
     children,
   }: {
     endpointId: string;
@@ -23,6 +25,8 @@
     jitter: number;
     lossPercent: number;
     ready: boolean;
+    lastLatency?: number | null;
+    isRunning?: boolean;
     children?: import('svelte').Snippet;
   } = $props();
 
@@ -74,6 +78,11 @@
   <div class="lane-chart" aria-label="Latency chart for {url}">
     {#if children}
       {@render children()}
+    {/if}
+    {#if isRunning && lastLatency !== null}
+      <span class="now-label" aria-live="polite" aria-label="Current latency {Math.round(lastLatency)} milliseconds">
+        {Math.round(lastLatency)}ms
+      </span>
     {/if}
   </div>
 </article>
@@ -153,6 +162,14 @@
   }
   .lane-chart {
     flex: 1; position: relative; overflow: hidden; min-width: 0;
+  }
+  .now-label {
+    position: absolute; top: 8px; right: 12px;
+    font-family: var(--mono); font-size: 12px; font-weight: 400;
+    color: var(--ep-color);
+    text-shadow: 0 0 8px var(--ep-color), 0 0 16px color-mix(in srgb, var(--ep-color) 50%, transparent);
+    pointer-events: none; z-index: 10;
+    line-height: 1;
   }
   @media (max-width: 767px) {
     .lane { flex-direction: column; }
