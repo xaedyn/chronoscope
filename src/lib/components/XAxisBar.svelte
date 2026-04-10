@@ -3,22 +3,25 @@
   import { tokens } from '$lib/tokens';
 
   let {
-    totalRounds,
+    startRound,
+    endRound,
     currentRound,
   }: {
-    totalRounds: number;
+    startRound: number;
+    endRound: number;
     currentRound: number;
   } = $props();
 
   const ticks: Array<{ label: string; isFuture: boolean }> = $derived.by(() => {
-    if (totalRounds <= 0) return [];
-    const step = Math.max(1, Math.ceil(totalRounds / 6));
+    const span = endRound - startRound;
+    if (span <= 0) return [];
+    const step = Math.max(1, Math.ceil(span / 6));
     const result: Array<{ label: string; isFuture: boolean }> = [];
-    for (let r = step; r <= totalRounds; r += step) {
+    for (let r = startRound + step; r <= endRound; r += step) {
       result.push({ label: String(r), isFuture: r > currentRound });
     }
-    if (result.length === 0 || result[result.length - 1]?.label !== String(totalRounds)) {
-      result.push({ label: String(totalRounds), isFuture: totalRounds > currentRound });
+    if (result.length === 0 || result[result.length - 1]?.label !== String(endRound)) {
+      result.push({ label: String(endRound), isFuture: endRound > currentRound });
     }
     return result;
   });

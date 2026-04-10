@@ -3,15 +3,21 @@
   import { endpointStore } from '$lib/stores/endpoints';
   import { measurementStore } from '$lib/stores/measurements';
   import { statisticsStore } from '$lib/stores/statistics';
-  import { settingsStore } from '$lib/stores/settings';
   import { uiStore } from '$lib/stores/ui';
   import { prepareFrame } from '$lib/renderers/timeline-data-pipeline';
   import { tokens } from '$lib/tokens';
   import Lane from './Lane.svelte';
   import LaneSvgChart from './LaneSvgChart.svelte';
 
+  let {
+    visibleStart = 1,
+    visibleEnd = 60,
+  }: {
+    visibleStart?: number;
+    visibleEnd?: number;
+  } = $props();
+
   const endpoints = $derived($endpointStore.filter(ep => ep.enabled));
-  const totalRounds = $derived($settingsStore.cap > 0 ? $settingsStore.cap : 30);
 
   // Call prepareFrame() ONCE for all enabled endpoints
   const frameData = $derived(prepareFrame(endpoints, $measurementStore));
@@ -40,9 +46,9 @@
     const chartW = rect.width - panelW;
     if (chartW <= 0) return;
     const pct = (x - panelW) / chartW;
-    const round = Math.round(pct * (totalRounds - 1)) + 1;
-    const clamped = Math.max(1, Math.min($measurementStore.roundCounter, round));
-    if (clamped < 1 || clamped > $measurementStore.roundCounter) {
+    const round = Math.round(pct * (visibleEnd - visibleStart)) + visibleStart;
+    const clamped = Math.max(visibleStart, Math.min($measurementStore.roundCounter, round));
+    if (clamped < visibleStart || clamped > $measurementStore.roundCounter) {
       uiStore.clearLaneHover();
       return;
     }
@@ -100,14 +106,17 @@
         ready={laneProps.ready}
       >
         {#snippet children()}
+          {@const allPoints = frameData.pointsByEndpoint.get(ep.id) ?? []}
+          {@const windowedPoints = allPoints.filter(p => p.round >= visibleStart && p.round <= visibleEnd)}
           <LaneSvgChart
             color={ep.color}
             colorRgba06={colorToRgba06(ep.color)}
-            {totalRounds}
+            {visibleStart}
+            {visibleEnd}
             currentRound={$measurementStore.roundCounter}
-            points={frameData.pointsByEndpoint.get(ep.id) ?? []}
+            points={windowedPoints}
             ribbon={frameData.ribbonsByEndpoint.get(ep.id)}
-            yRange={frameData.yRange}
+            yRange={frameData.yRangesByEndpoint.get(ep.id) ?? frameData.yRange}
             maxRound={frameData.maxRound}
             xTicks={frameData.xTicks}
           />

@@ -255,6 +255,86 @@ export function computeRibbons(
   return result;
 }
 
+/** Per-lane ribbon computation — each endpoint uses its own yRange for normalization. */
+function computeRibbonsPerLane(
+  measureState: MeasurementState,
+  yRangesByEndpoint: ReadonlyMap<string, YRange>,
+): Map<string, RibbonData> {
+  const result = new Map<string, RibbonData>();
+  const sortBuf = new Float64Array(WINDOW_SIZE);
+
+  for (const [endpointId, epState] of Object.entries(measureState.endpoints)) {
+    const { samples } = epState;
+    if (samples.length < WINDOW_SIZE) continue;
+
+    const yRange = yRangesByEndpoint.get(endpointId);
+    if (!yRange) continue;
+
+    const yMin = yRange.min;
+    const ySpan = yRange.max - yRange.min;
+    const isLog = yRange.isLog;
+    const logMin = isLog ? Math.log10(Math.max(yMin, 0.1)) : 0;
+    const logSpan = isLog ? Math.log10(yRange.max) - logMin : 0;
+
+    const norm = (ms: number) => {
+      if (isLog) {
+        const logVal = Math.log10(Math.max(ms, 0.1));
+        const v = (logVal - logMin) / logSpan;
+        return v < 0 ? 0 : v > 1 ? 1 : v;
+      }
+      const v = (ms - yMin) / ySpan;
+      return v < 0 ? 0 : v > 1 ? 1 : v;
+    };
+
+    const p25Points: [number, number][] = [];
+    const p50Points: [number, number][] = [];
+    const p75Points: [number, number][] = [];
+
+    for (let i = WINDOW_SIZE - 1; i < samples.length; i++) {
+      let okCount = 0;
+      for (let j = i - WINDOW_SIZE + 1; j <= i; j++) {
+        const s = samples[j];
+        if (s && s.status === 'ok') {
+          sortBuf[okCount++] = s.latency;
+        }
+      }
+      if (okCount < 3) continue;
+
+      for (let a = 1; a < okCount; a++) {
+        const key = sortBuf[a] ?? 0;
+        let b = a - 1;
+        while (b >= 0 && (sortBuf[b] ?? 0) > key) {
+          sortBuf[b + 1] = sortBuf[b] ?? 0;
+          b--;
+        }
+        sortBuf[b + 1] = key;
+      }
+
+      const i25 = Math.max(0, Math.ceil((25 / 100) * okCount) - 1);
+      const i50 = Math.max(0, Math.ceil((50 / 100) * okCount) - 1);
+      const i75 = Math.max(0, Math.ceil((75 / 100) * okCount) - 1);
+
+      const sample = samples[i];
+      if (!sample) continue;
+      const x = sample.round;
+
+      p25Points.push([x, norm(sortBuf[i25] ?? 0)]);
+      p50Points.push([x, norm(sortBuf[i50] ?? 0)]);
+      p75Points.push([x, norm(sortBuf[i75] ?? 0)]);
+    }
+
+    if (p25Points.length > 0) {
+      result.set(endpointId, {
+        p25Path: p25Points,
+        p50Path: p50Points,
+        p75Path: p75Points,
+      });
+    }
+  }
+
+  return result;
+}
+
 // ── Main entry point ───────────────────────────────────────────────────────
 
 export function prepareFrame(
@@ -270,6 +350,7 @@ export function prepareFrame(
       pointsByEndpoint: new Map(),
       ribbonsByEndpoint: new Map(),
       yRange: DEFAULT_YRANGE,
+      yRangesByEndpoint: new Map(),
       xTicks: [],
       maxRound: 0,
       freezeEvents: measureState.freezeEvents,
@@ -277,46 +358,38 @@ export function prepareFrame(
     };
   }
 
-  // Collect latencies for yRange computation. To keep prepareFrame under 2ms
-  // even for large datasets (AC7: 10 endpoints × 1000 samples), we downsample
-  // to ≤500 values for the sort. Stride sampling preserves the distribution
-  // well enough for P2/P98 visual range estimation.
-  const epStates = Object.values(measureState.endpoints);
-  let totalSamples = 0;
-  for (const epState of epStates) totalSamples += epState.samples.length;
-
-  // Stride: aim for ~500 samples max; fall back to 1 (all) for small datasets
-  const SORT_CAP = 500;
-  const stride = totalSamples > SORT_CAP ? Math.ceil(totalSamples / SORT_CAP) : 1;
-  const sampledCount = Math.ceil(totalSamples / stride);
-  const latBuf = new Float64Array(sampledCount);
-  let latIdx = 0;
-  let globalIdx = 0;
-  outer: for (const epState of epStates) {
-    for (const s of epState.samples) {
-      if (globalIdx % stride === 0) {
-        latBuf[latIdx++] = s.latency;
-        if (latIdx >= sampledCount) break outer;
-      }
-      globalIdx++;
-    }
-  }
-  const sortedSample = latBuf.subarray(0, latIdx);
-  sortedSample.sort(); // numeric sort, no comparator — fastest path
-
-  const yRange = computeYRangeFromSorted(sortedSample);
-
+  // Per-endpoint y-ranges for independent lane scaling
+  const yRangesByEndpoint = new Map<string, YRange>();
   const pointsByEndpoint = new Map<string, readonly ScatterPoint[]>();
   let maxRound = 0;
+
+  // Shared yRange (union of all endpoints — kept for backward compat)
+  const allLatencies: number[] = [];
 
   for (const ep of endpoints) {
     const epState = measureState.endpoints[ep.id];
     if (!epState || epState.samples.length === 0) {
       pointsByEndpoint.set(ep.id, []);
+      yRangesByEndpoint.set(ep.id, DEFAULT_YRANGE);
       continue;
     }
 
+    // Compute per-endpoint yRange from this endpoint's latencies only
     const { samples } = epState;
+    const epLatencies = new Float64Array(samples.length);
+    for (let i = 0; i < samples.length; i++) {
+      epLatencies[i] = samples[i]?.latency ?? 0;
+    }
+    epLatencies.sort();
+    const epYRange = computeYRangeFromSorted(epLatencies);
+    yRangesByEndpoint.set(ep.id, epYRange);
+
+    // Collect for shared range
+    for (let i = 0; i < epLatencies.length; i++) {
+      allLatencies.push(epLatencies[i] ?? 0);
+    }
+
+    // Normalize points against this endpoint's own yRange
     const n = samples.length;
     const points: ScatterPoint[] = new Array(n);
     const epId = ep.id;
@@ -328,7 +401,7 @@ export function prepareFrame(
       if (round > maxRound) maxRound = round;
       points[i] = {
         x: round,
-        y: normalizeLatency(s.latency, yRange),
+        y: normalizeLatency(s.latency, epYRange),
         latency: s.latency,
         status: s.status,
         endpointId: epId,
@@ -342,13 +415,21 @@ export function prepareFrame(
 
   maxRound = Math.max(maxRound, 1);
 
-  const ribbonsByEndpoint = computeRibbons(measureState, yRange);
+  // Shared yRange for backward compat
+  allLatencies.sort((a, b) => a - b);
+  const yRange = allLatencies.length > 0
+    ? computeYRangeFromSorted(new Float64Array(allLatencies))
+    : DEFAULT_YRANGE;
+
+  // Ribbons use per-endpoint yRanges
+  const ribbonsByEndpoint = computeRibbonsPerLane(measureState, yRangesByEndpoint);
   const xTicks = computeXTicks(maxRound, 800);
 
   return {
     pointsByEndpoint,
     ribbonsByEndpoint,
     yRange,
+    yRangesByEndpoint,
     xTicks,
     maxRound,
     freezeEvents: measureState.freezeEvents,
