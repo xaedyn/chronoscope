@@ -76,10 +76,9 @@ Add a new `describe` block to **`tests/unit/tokens.test.ts`** (append after the 
 
 ```typescript
 describe('heatmap tokens', () => {
-  it('exports color.heatmap group with all 5 keys (AC10)', () => {
+  it('exports color.heatmap group with all 4 keys (AC10)', () => {
     expect(tokens.color.heatmap).toBeDefined();
     expect(tokens.color.heatmap.fast).toBeDefined();
-    expect(tokens.color.heatmap.normal).toBeDefined();
     expect(tokens.color.heatmap.elevated).toBeDefined();
     expect(tokens.color.heatmap.slow).toBeDefined();
     expect(tokens.color.heatmap.timeout).toBeDefined();
@@ -138,7 +137,6 @@ In the `tokens.color` object, after the `svg` group closing `},`, add:
 ```typescript
     heatmap: {
       fast:     primitive.greenGlow,           // rgba(134,239,172,.5) — green at 50%
-      normal:   'rgba(255,255,255,.15)',        // neutral (endpoint color applied per-lane via CSS var)
       elevated: primitive.amber,               // #fbbf24
       slow:     primitive.pink40,              // rgba(249,168,212,.4) at 70% — use pink40 as closest primitive
       timeout:  primitive.pinkBright,          // #fbcfe8
@@ -164,7 +162,6 @@ Full heatmap group in `tokens.color`:
 ```typescript
     heatmap: {
       fast:     primitive.greenGlow,   // rgba(134,239,172,.5)
-      normal:   'rgba(255,255,255,.15)',
       elevated: primitive.amber,       // #fbbf24
       slow:     primitive.pink70,      // rgba(249,168,212,.7)
       timeout:  primitive.pinkBright,  // #fbcfe8
@@ -226,7 +223,7 @@ describe('formatElapsed (AC7)', () => {
   it('formats sub-10s as S.Xs with one decimal', () => {
     expect(formatElapsed(1200)).toBe('1.2s');
     expect(formatElapsed(3800)).toBe('3.8s');
-    expect(formatElapsed(9999)).toBe('10.0s');
+    expect(formatElapsed(9999)).toBe('9.9s');
   });
 
   it('formats 10s exactly as "0:10"', () => {
@@ -271,8 +268,8 @@ Add to `src/lib/renderers/timeline-data-pipeline.ts` (append before the `prepare
  * - 1h+:             "H:MM:SS" (e.g. "1:23:45")
  */
 export function formatElapsed(ms: number): string {
-  if (ms < 0) return '0:00';
-  const totalSec = ms / 1000;
+  if (ms <= 0) return '0:00';
+  const totalSec = Math.floor((ms / 1000) * 10) / 10;
   if (totalSec < 10) {
     return `${totalSec.toFixed(1)}s`;
   }
@@ -355,25 +352,25 @@ function makeStats(overrides: Partial<EndpointStatistics> = {}): EndpointStatist
 
 describe('computeHeatmapCells (AC2, AC4)', () => {
   it('returns empty array when samples is empty', () => {
-    const cells = computeHeatmapCells([], makeStats(), null);
+    const cells = computeHeatmapCells([], makeStats(), null, '#67e8f9');
     expect(cells).toHaveLength(0);
   });
 
   it('returns one cell per round when totalRounds <= 200 (AC2)', () => {
     const samples = makeSamples(100);
-    const cells = computeHeatmapCells(samples, makeStats(), null);
+    const cells = computeHeatmapCells(samples, makeStats(), null, '#67e8f9');
     expect(cells).toHaveLength(100);
   });
 
   it('caps to 200 cells for 201+ rounds (AC2)', () => {
     const samples = makeSamples(300);
-    const cells = computeHeatmapCells(samples, makeStats(), null);
+    const cells = computeHeatmapCells(samples, makeStats(), null, '#67e8f9');
     expect(cells.length).toBeLessThanOrEqual(200);
   });
 
   it('caps to 200 cells for 1001+ rounds (AC2)', () => {
     const samples = makeSamples(1001);
-    const cells = computeHeatmapCells(samples, makeStats(), null);
+    const cells = computeHeatmapCells(samples, makeStats(), null, '#67e8f9');
     expect(cells.length).toBeLessThanOrEqual(200);
   });
 
@@ -385,7 +382,7 @@ describe('computeHeatmapCells (AC2, AC4)', () => {
       { round: 3, latency: 5000, status: 'timeout', timestamp: 3000 },
       ...samples.slice(3),
     ];
-    const cells = computeHeatmapCells(withTimeout, makeStats(), null);
+    const cells = computeHeatmapCells(withTimeout, makeStats(), null, '#67e8f9');
     // With 5 rounds <= 200, each round is its own cell
     const timeoutCell = cells.find(c => c.startRound === 3);
     expect(timeoutCell?.worstStatus).toBe('timeout');
@@ -393,7 +390,7 @@ describe('computeHeatmapCells (AC2, AC4)', () => {
 
   it('cell startRound and endRound are inclusive round numbers', () => {
     const samples = makeSamples(5);
-    const cells = computeHeatmapCells(samples, makeStats(), null);
+    const cells = computeHeatmapCells(samples, makeStats(), null, '#67e8f9');
     expect(cells[0]?.startRound).toBe(1);
     expect(cells[0]?.endRound).toBe(1);
     expect(cells[4]?.startRound).toBe(5);
@@ -403,7 +400,7 @@ describe('computeHeatmapCells (AC2, AC4)', () => {
   it('startElapsed and endElapsed are ms since startedAt (AC3)', () => {
     const startedAt = 1000;
     const samples = makeSamples(3);
-    const cells = computeHeatmapCells(samples, makeStats(), startedAt);
+    const cells = computeHeatmapCells(samples, makeStats(), startedAt, '#67e8f9');
     // sample[0].timestamp = 1000, startedAt = 1000 → 0ms elapsed
     expect(cells[0]?.startElapsed).toBe(0);
     // sample[2].timestamp = 3000 → 2000ms elapsed
@@ -412,7 +409,7 @@ describe('computeHeatmapCells (AC2, AC4)', () => {
 
   it('elapsed is 0 when startedAt is null', () => {
     const samples = makeSamples(3);
-    const cells = computeHeatmapCells(samples, makeStats(), null);
+    const cells = computeHeatmapCells(samples, makeStats(), null, '#67e8f9');
     expect(cells[0]?.startElapsed).toBe(0);
     expect(cells[0]?.endElapsed).toBe(0);
   });
@@ -420,7 +417,7 @@ describe('computeHeatmapCells (AC2, AC4)', () => {
   it('color assignment: fast latency (< p25) uses heatmap.fast token (AC4)', () => {
     // p25 = 30; latency 10 is < p25
     const samples = [{ round: 1, latency: 10, status: 'ok' as const, timestamp: 1000 }];
-    const cells = computeHeatmapCells(samples, makeStats({ p25: 30, p75: 80, p95: 120 }), null);
+    const cells = computeHeatmapCells(samples, makeStats({ p25: 30, p75: 80, p95: 120 }), null, '#67e8f9');
     // The cell color string must be a non-empty CSS value from tokens (not raw hex in component)
     expect(typeof cells[0]?.color).toBe('string');
     expect(cells[0]?.color.length).toBeGreaterThan(0);
@@ -428,7 +425,7 @@ describe('computeHeatmapCells (AC2, AC4)', () => {
 
   it('color assignment: timeout status forces timeout color (AC4)', () => {
     const samples = [{ round: 1, latency: 5000, status: 'timeout' as const, timestamp: 1000 }];
-    const cells = computeHeatmapCells(samples, makeStats(), null);
+    const cells = computeHeatmapCells(samples, makeStats(), null, '#67e8f9');
     expect(cells[0]?.worstStatus).toBe('timeout');
   });
 
@@ -440,7 +437,7 @@ describe('computeHeatmapCells (AC2, AC4)', () => {
       status: 'ok',
       timestamp: 1000 + i * 1000,
     }));
-    const cells = computeHeatmapCells(samples, makeStats({ p95: 200 }), null);
+    const cells = computeHeatmapCells(samples, makeStats({ p95: 200 }), null, '#67e8f9');
     // First bucket should cover rounds 1-5; worstLatency should be 999
     expect(cells[0]?.worstLatency).toBe(999);
   });
@@ -485,6 +482,7 @@ export function computeHeatmapCells(
   samples: readonly MeasurementSample[],
   stats: EndpointStatistics,
   startedAt: number | null,
+  endpointColor: string,
 ): readonly HeatmapCellData[] {
   if (samples.length === 0) return [];
 
@@ -525,7 +523,7 @@ export function computeHeatmapCells(
     const startElapsed = base > 0 ? Math.max(0, startTs - base) : 0;
     const endElapsed = base > 0 ? Math.max(0, endTs - base) : 0;
 
-    const color = heatmapColor(worstLatency, worstStatus, stats);
+    const color = heatmapColor(worstLatency, worstStatus, stats, endpointColor);
 
     result.push({ startRound, endRound, worstLatency, worstStatus, startElapsed, endElapsed, color });
   }
@@ -537,12 +535,23 @@ function heatmapColor(
   latency: number,
   status: SampleStatus,
   stats: EndpointStatistics,
+  endpointColor: string,
 ): string {
   if (status === 'timeout' || status === 'error') {
     return tokens.color.heatmap.timeout;
   }
   if (latency < stats.p25) return tokens.color.heatmap.fast;
-  if (latency <= stats.p75) return tokens.color.heatmap.normal;
+  if (latency <= stats.p75) {
+    // Normal band: endpoint color at 40% opacity using colorToRgba pattern
+    const hexMatch = /^#([0-9a-fA-F]{6})$/.test(endpointColor) ? endpointColor : null;
+    if (hexMatch) {
+      const r = parseInt(hexMatch.slice(1, 3), 16);
+      const g = parseInt(hexMatch.slice(3, 5), 16);
+      const b = parseInt(hexMatch.slice(5, 7), 16);
+      return `rgba(${r},${g},${b},.4)`;
+    }
+    return `rgba(103,232,249,.4)`;  // fallback cyan
+  }
   if (latency <= stats.p95) return tokens.color.heatmap.elevated;
   return tokens.color.heatmap.slow;
 }
@@ -702,7 +711,7 @@ Replace the entire file content:
 <script lang="ts">
   import { tokens } from '$lib/tokens';
   import type { ScatterPoint, RibbonData, YRange, XTick, HeatmapCellData } from '$lib/types';
-  import { normalizeLatency } from '$lib/renderers/timeline-data-pipeline';
+  import { normalizeLatency, formatElapsed } from '$lib/renderers/timeline-data-pipeline';
 
   let {
     color,
@@ -850,20 +859,13 @@ Replace the entire file content:
     const { cell } = rect;
     const isSingle = cell.startRound === cell.endRound;
     const latencyStr = `${Math.round(cell.worstLatency)}ms`;
-    const startEl = formatElapsedShort(cell.startElapsed);
-    const endEl = formatElapsedShort(cell.endElapsed);
+    const startEl = formatElapsed(cell.startElapsed);
+    const endEl = formatElapsed(cell.endElapsed);
     const text = isSingle
       ? `Round ${cell.startRound} · ${latencyStr} · ${startEl}`
       : `Rounds ${cell.startRound}–${cell.endRound} · worst: ${latencyStr} · ${startEl}–${endEl}`;
     return { text, x: rect.x + rect.w / 2, y: HEATMAP_Y - 4 };
   });
-
-  function formatElapsedShort(ms: number): string {
-    const s = Math.floor(ms / 1000);
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${String(sec).padStart(2, '0')}`;
-  }
 </script>
 
 <svg
@@ -1048,7 +1050,7 @@ Replace the existing `LanesView.svelte` content:
         map.set(ep.id, []);
         continue;
       }
-      map.set(ep.id, computeHeatmapCells(epState.samples, stats, startedAt));
+      map.set(ep.id, computeHeatmapCells(epState.samples, stats, startedAt, ep.color));
     }
     return map;
   });
@@ -1669,12 +1671,12 @@ After the existing `visibleEnd` derivation, add:
     const maxR = ms.roundCounter;
     if (maxR === 0) return [];
     // Build array indexed [0] = round 1 timestamp, etc.
-    // Use first endpoint that has a sample for that round.
+    // Use the EARLIEST timestamp across all endpoints for each round (= when the round started).
     const result: number[] = new Array(maxR).fill(0);
     for (const epState of Object.values(ms.endpoints)) {
       for (const s of epState.samples) {
         const idx = s.round - 1;
-        if (idx >= 0 && idx < maxR && result[idx] === 0) {
+        if (idx >= 0 && idx < maxR && (result[idx] === 0 || s.timestamp < result[idx])) {
           result[idx] = s.timestamp;
         }
       }
@@ -1919,7 +1921,7 @@ git commit -m "chore: s80 feature parity — all 4 features implemented and veri
 `normalizeLatency` is exported from `timeline-data-pipeline.ts`. Importing it in a Svelte component is fine — it is a pure function with no side effects.
 
 ### `formatElapsed` boundary case: 9.999... seconds
-`9999ms / 1000 = 9.999s` — `toFixed(1)` gives `"10.0s"` which is correct per the spec's format rule (under 10 seconds → S.Xs). The test for `formatElapsed(9999)` expects `"10.0s"`.
+`9999ms / 1000 = 9.999s` — use `Math.floor(totalSec * 10) / 10` before the `< 10` check so `9.999 → 9.9`, then `toFixed(1)` gives `"9.9s"`. The test for `formatElapsed(9999)` expects `"9.9s"`.
 
 ### `$effect` in `FooterBar` for the live clock
 The `setInterval` in `FooterBar` fires every 1s. The cleanup function returned from `$effect` will clear the interval when the component is destroyed or when `lifecycle` changes from `running`. This avoids memory leaks.
