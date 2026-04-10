@@ -252,11 +252,11 @@
   }
 
   .settings-dialog::backdrop {
-    background: rgba(0,0,0,.5);
-    animation: backdropFade 300ms cubic-bezier(0.0, 0.0, 0.2, 1) forwards;
+    background: rgba(0,0,0,.4);
+    animation: panelFadeIn 280ms ease-out forwards;
   }
 
-  @keyframes backdropFade {
+  @keyframes panelFadeIn {
     from { opacity: 0; }
     to   { opacity: 1; }
   }
@@ -276,13 +276,13 @@
     border-radius: var(--radius-lg) 0 0 var(--radius-lg);
     overflow-y: auto;
     overflow-x: hidden;
-    animation: drawerSlideIn 300ms cubic-bezier(0.0, 0.0, 0.2, 1) forwards;
+    animation: panelAppear 280ms ease-out forwards;
     box-shadow: -8px 0 40px rgba(0,0,0,.3);
   }
 
-  @keyframes drawerSlideIn {
-    from { transform: translateX(100%); }
-    to   { transform: translateX(0); }
+  @keyframes panelAppear {
+    from { opacity: 0; transform: scale(0.98); }
+    to   { opacity: 1; transform: scale(1); }
   }
 
   /* Top-edge gradient highlight */
@@ -312,15 +312,11 @@
       top: auto;
       height: 80vh;
       border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-      animation: drawerSlideUp 300ms cubic-bezier(0.0, 0.0, 0.2, 1) forwards;
+      animation: panelAppear 280ms ease-out forwards;
       box-shadow: 0 -8px 40px rgba(0,0,0,.3);
     }
     .drawer-content::after {
       display: none;
-    }
-    @keyframes drawerSlideUp {
-      from { transform: translateY(100%); }
-      to   { transform: translateY(0); }
     }
   }
 
