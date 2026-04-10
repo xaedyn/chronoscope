@@ -23,7 +23,7 @@
     const endpoints = $endpointStore.filter(ep => ep.enabled);
     return endpoints.map(ep => {
       const epState = $measurementStore.endpoints[ep.id];
-      const sample = epState?.samples[hoverRound - 1] ?? null;
+      const sample = epState?.samples.find(s => s.round === hoverRound) ?? null;
       return {
         id: ep.id,
         label: ep.label || ep.url,
