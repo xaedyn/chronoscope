@@ -84,13 +84,15 @@ function createMeasurementStore() {
             ? 2
             : existing.tierLevel;
 
+        // Mutable push — O(1) amortized instead of O(n) spread
+        existing.samples.push(sample);
+
         return {
           ...s,
           endpoints: {
             ...s.endpoints,
             [endpointId]: {
               ...existing,
-              samples: [...existing.samples, sample],
               lastLatency: latency,
               lastStatus: status,
               tierLevel,
@@ -109,9 +111,11 @@ function createMeasurementStore() {
       tier2?: TimingPayload;
     }>): void {
       update(s => {
-        let next = s;
+        // Clone the top-level endpoints map once to trigger reactivity
+        const nextEndpoints = { ...s.endpoints };
+
         for (const entry of entries) {
-          const existing = next.endpoints[entry.endpointId];
+          const existing = nextEndpoints[entry.endpointId];
           if (!existing) continue;
 
           const sample: MeasurementSample = {
@@ -127,21 +131,19 @@ function createMeasurementStore() {
               ? 2
               : existing.tierLevel;
 
-          next = {
-            ...next,
-            endpoints: {
-              ...next.endpoints,
-              [entry.endpointId]: {
-                ...existing,
-                samples: [...existing.samples, sample],
-                lastLatency: entry.latency,
-                lastStatus: entry.status,
-                tierLevel,
-              },
-            },
+          // Mutable push — O(1) amortized instead of O(n) spread
+          existing.samples.push(sample);
+
+          // New endpoint object reference to trigger per-endpoint reactivity
+          nextEndpoints[entry.endpointId] = {
+            ...existing,
+            lastLatency: entry.latency,
+            lastStatus: entry.status,
+            tierLevel,
           };
         }
-        return next;
+
+        return { ...s, endpoints: nextEndpoints };
       });
     },
 
