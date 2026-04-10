@@ -27,6 +27,8 @@ function buildDefaultEndpoints(): Endpoint[] {
   }));
 }
 
+export const MAX_ENDPOINTS = 10;
+
 function createEndpointStore() {
   const { subscribe, set, update } = writable<Endpoint[]>(buildDefaultEndpoints());
 
@@ -36,6 +38,7 @@ function createEndpointStore() {
     addEndpoint(url: string, label?: string): string {
       let newId = '';
       update(endpoints => {
+        if (endpoints.length >= MAX_ENDPOINTS) return endpoints; // no-op at cap
         const id = generateId();
         newId = id;
         const color = pickColor(endpoints.length);
