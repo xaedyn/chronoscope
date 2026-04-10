@@ -3,6 +3,7 @@
   import { measurementStore } from '$lib/stores/measurements';
   import { settingsStore } from '$lib/stores/settings';
   import { tokens } from '$lib/tokens';
+  import { formatElapsed } from '$lib/renderers/timeline-data-pipeline';
 
   let lifecycle = $derived($measurementStore.lifecycle);
   let roundCounter = $derived($measurementStore.roundCounter);
@@ -28,8 +29,19 @@
     const parts: string[] = [`${roundCounter} of ${total} complete`];
     if (errors > 0) parts.push(`${errors} error${errors === 1 ? '' : 's'}`);
     if (timeouts > 0) parts.push(`${timeouts} timeout${timeouts === 1 ? '' : 's'}`);
+    if (elapsed > 0) parts.push(`${formatElapsed(elapsed)} elapsed`);
     return parts.join(' · ');
   });
+
+  let now = $state(Date.now());
+
+  $effect(() => {
+    if (lifecycle !== 'running') return;
+    const id = setInterval(() => { now = Date.now(); }, 1000);
+    return () => clearInterval(id);
+  });
+
+  let elapsed = $derived($measurementStore.startedAt ? now - $measurementStore.startedAt : 0);
 
   let configLabel = $derived(`${delay / 1000}s interval · ${timeout / 1000}s timeout`);
 </script>
