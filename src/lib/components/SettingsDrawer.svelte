@@ -161,64 +161,29 @@
     </div>
 
     <div class="drawer-body">
-      <!-- Timeout -->
+      <!-- Timing fields -->
       <div class="field">
         <label class="field-label" for="setting-timeout">
           Timeout
-          <span class="field-hint">(ms, 1000–30000)</span>
+          <span class="field-hint">ms</span>
         </label>
-        <input
-          id="setting-timeout"
-          type="number"
-          class="field-input"
-          min="1000"
-          max="30000"
-          step="500"
-          bind:value={timeout}
-          onchange={applyTimeout}
-          aria-describedby="timeout-desc"
-        />
-        <p id="timeout-desc" class="field-description">Maximum time to wait for a response before marking it as a timeout.</p>
+        <input id="setting-timeout" type="number" class="field-input" min="1000" max="30000" step="500" bind:value={timeout} onchange={applyTimeout} />
       </div>
 
-      <!-- Delay -->
       <div class="field">
         <label class="field-label" for="setting-delay">
-          Delay between rounds
-          <span class="field-hint">(ms, 0–10000)</span>
+          Interval
+          <span class="field-hint">ms between rounds</span>
         </label>
-        <input
-          id="setting-delay"
-          type="number"
-          class="field-input"
-          min="0"
-          max="10000"
-          step="100"
-          bind:value={delay}
-          onchange={applyDelay}
-          aria-describedby="delay-desc"
-        />
-        <p id="delay-desc" class="field-description">Wait time between measurement rounds for all endpoints.</p>
+        <input id="setting-delay" type="number" class="field-input" min="0" max="10000" step="100" bind:value={delay} onchange={applyDelay} />
       </div>
 
-      <!-- Request cap -->
       <div class="field">
         <label class="field-label" for="setting-cap">
-          Request cap
-          <span class="field-hint">(0 = unlimited)</span>
+          Round cap
+          <span class="field-hint">0 = unlimited</span>
         </label>
-        <input
-          id="setting-cap"
-          type="number"
-          class="field-input"
-          min="0"
-          max="10000"
-          step="1"
-          bind:value={cap}
-          onchange={applyCap}
-          aria-describedby="cap-desc"
-        />
-        <p id="cap-desc" class="field-description">Stop the test after this many rounds. Set to 0 to run indefinitely.</p>
+        <input id="setting-cap" type="number" class="field-input" min="0" max="10000" step="1" bind:value={cap} onchange={applyCap} />
       </div>
 
       <!-- CORS mode -->
@@ -230,33 +195,18 @@
               <span class="running-note" aria-live="polite">Requires stop</span>
             {/if}
           </legend>
-          <div class="cors-options" aria-describedby="cors-desc">
+          <div class="cors-options">
             <label class="radio-label" class:radio-disabled={isRunning}>
-              <input
-                type="radio"
-                name="cors-mode"
-                value="no-cors"
-                checked={corsMode === 'no-cors'}
-                disabled={isRunning}
-                onchange={() => applyCorsMode('no-cors')}
-              />
+              <input type="radio" name="cors-mode" value="no-cors" checked={corsMode === 'no-cors'} disabled={isRunning} onchange={() => applyCorsMode('no-cors')} />
               <span class="radio-text">no-cors</span>
-              <span class="radio-hint">Opaque requests — timing data limited</span>
+              <span class="radio-hint">Opaque — limited timing</span>
             </label>
             <label class="radio-label" class:radio-disabled={isRunning}>
-              <input
-                type="radio"
-                name="cors-mode"
-                value="cors"
-                checked={corsMode === 'cors'}
-                disabled={isRunning}
-                onchange={() => applyCorsMode('cors')}
-              />
+              <input type="radio" name="cors-mode" value="cors" checked={corsMode === 'cors'} disabled={isRunning} onchange={() => applyCorsMode('cors')} />
               <span class="radio-text">cors</span>
-              <span class="radio-hint">Full CORS — requires server headers</span>
+              <span class="radio-hint">Full — needs server headers</span>
             </label>
           </div>
-          <p id="cors-desc" class="field-description">CORS mode affects which timing data is available. Changing this requires stopping the test.</p>
         </fieldset>
       </div>
 
@@ -264,23 +214,14 @@
       <div class="divider" aria-hidden="true"></div>
 
       <!-- Clear results -->
-      <div class="field">
-        <span class="field-label">Danger zone</span>
+      <div class="field danger-field">
         {#if !showClearConfirm}
-          <button
-            type="button"
-            class="btn-danger"
-            disabled={isRunning}
-            aria-disabled={isRunning}
-            onclick={requestClear}
-          >
-            Clear results
-          </button>
+          <button type="button" class="btn-danger" disabled={isRunning} aria-disabled={isRunning} onclick={requestClear}>Clear all results</button>
         {:else}
           <div class="confirm-group" role="alert" aria-live="assertive">
-            <p class="confirm-text">This will reset all measurements. Are you sure?</p>
+            <p class="confirm-text">Reset all measurements?</p>
             <div class="confirm-actions">
-              <button type="button" class="btn-danger" disabled={isRunning} onclick={confirmClear}>Yes, clear all</button>
+              <button type="button" class="btn-danger" disabled={isRunning} onclick={confirmClear}>Yes, clear</button>
               <button type="button" class="btn-secondary" onclick={cancelClear}>Cancel</button>
             </div>
           </div>
@@ -384,7 +325,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg);
+    padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
     position: sticky;
     top: 0;
     z-index: 3;
@@ -436,10 +377,10 @@
 
   /* ── Body ────────────────────────────────────────────────────────────────── */
   .drawer-body {
-    padding: var(--spacing-xl);
+    padding: var(--spacing-lg);
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-xl);
+    gap: var(--spacing-md);
     position: relative;
     z-index: 2;
   }
@@ -448,10 +389,15 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-md);
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm) var(--spacing-md);
     background: var(--glass-bg);
     border-radius: var(--btn-radius);
+  }
+
+  .danger-field {
+    background: none;
+    padding: 0;
   }
 
   .field-label {
@@ -529,7 +475,7 @@
     align-items: center;
     gap: 0 var(--spacing-sm);
     cursor: pointer;
-    padding: var(--spacing-sm) var(--spacing-md);
+    padding: var(--spacing-xs) var(--spacing-sm);
     border: 1px solid var(--glass-border);
     border-radius: var(--btn-radius);
     background: rgba(0,0,0,.15);
