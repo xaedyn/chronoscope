@@ -5,11 +5,11 @@
   import { statisticsStore } from '$lib/stores/statistics';
   import { settingsStore } from '$lib/stores/settings';
   import { uiStore } from '$lib/stores/ui';
-  import { prepareFrame, computeHeatmapCells } from '$lib/renderers/timeline-data-pipeline';
+  import { prepareFrame, computeRibbonsPerLane, computeHeatmapCells } from '$lib/renderers/timeline-data-pipeline';
   import { tokens } from '$lib/tokens';
   import { deriveLayoutMode } from '$lib/layout';
   import type { LayoutMode } from '$lib/layout';
-  import type { HeatmapCellData } from '$lib/types';
+  import type { HeatmapCellData, RibbonData } from '$lib/types';
   import Lane from './Lane.svelte';
   import LaneSvgChart from './LaneSvgChart.svelte';
 
@@ -50,8 +50,33 @@
 
   const isCompact: boolean = $derived(layoutMode !== 'full');
 
-  // Call prepareFrame() ONCE for all enabled endpoints
-  const frameData = $derived(prepareFrame(endpoints, $measurementStore));
+  // Call prepareFrame() with skipRibbons=true for fast per-frame updates
+  // Ribbons are throttled separately below (once every other round ≈ 1Hz)
+  const baseFrame = $derived(prepareFrame(endpoints, $measurementStore, true));
+
+  // Throttled ribbon computation — recompute every N new samples instead of every frame
+  let lastRibbonSampleCount = 0;
+  let cachedRibbons: ReadonlyMap<string, RibbonData> = new Map();
+
+  const frameData = $derived.by(() => {
+    const base = baseFrame;
+    if (!base.hasData) return { ...base, ribbonsByEndpoint: new Map() as ReadonlyMap<string, RibbonData> };
+
+    // Count total samples across all endpoints
+    const totalSamples = Object.values($measurementStore.endpoints)
+      .reduce((sum, ep) => sum + ep.samples.length, 0);
+
+    // Recompute ribbons every other round (≈ endpoints.length * 2 new samples)
+    // or immediately when not running (final state accuracy)
+    const threshold = Math.max(endpoints.length * 2, 1);
+    const isRunning = $measurementStore.lifecycle === 'running';
+    if (!isRunning || totalSamples - lastRibbonSampleCount >= threshold) {
+      cachedRibbons = computeRibbonsPerLane($measurementStore, base.yRangesByEndpoint);
+      lastRibbonSampleCount = totalSamples;
+    }
+
+    return { ...base, ribbonsByEndpoint: cachedRibbons };
+  });
 
   // Compute heatmap cells per endpoint (all samples, not windowed)
   const heatmapCellsByEndpoint: ReadonlyMap<string, readonly HeatmapCellData[]> = $derived.by(() => {
