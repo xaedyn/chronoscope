@@ -254,7 +254,7 @@
   .share-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,.6);
+    background: rgba(0,0,0,.3);
     display: flex;
     align-items: flex-start;
     justify-content: flex-end;
@@ -264,7 +264,7 @@
 
   .share-popover {
     position: relative;
-    background: rgba(12,10,20,.92);
+    background: rgba(12,10,20,.7);
     backdrop-filter: blur(40px) saturate(1.4);
     -webkit-backdrop-filter: blur(40px) saturate(1.4);
     border: 1px solid var(--glass-border);
@@ -272,7 +272,7 @@
     padding: var(--spacing-lg);
     width: 320px;
     max-width: calc(100vw - 32px);
-    box-shadow: 0 8px 32px rgba(0,0,0,.6);
+    box-shadow: 0 8px 32px rgba(0,0,0,.3);
     display: flex;
     flex-direction: column;
     gap: var(--spacing-md);
@@ -405,7 +405,7 @@
 
   .btn-copy:hover:not(:disabled) {
     background: var(--accent-cyan);
-    color: rgba(12,10,20,.92);
+    color: rgba(12,10,20,.7);
     transform: translateY(-1px);
     box-shadow: 0 2px 12px rgba(0,0,0,.2);
   }
@@ -420,7 +420,7 @@
   .btn-copy.copied {
     background: var(--accent-green);
     border-color: var(--accent-green);
-    color: rgba(12,10,20,.92);
+    color: rgba(12,10,20,.7);
   }
 
   /* ── Clipboard fallback ─────────────────────────────────────────────────── */

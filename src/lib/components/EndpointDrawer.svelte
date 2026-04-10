@@ -107,7 +107,7 @@
   }
 
   .endpoint-dialog::backdrop {
-    background: rgba(0,0,0,.6);
+    background: rgba(0,0,0,.3);
   }
 
   /* ── Drawer content — glass panel ────────────────────────────────────────── */
@@ -118,7 +118,7 @@
     bottom: 0;
     width: 360px;
     max-width: 100vw;
-    background: rgba(12,10,20,.92);
+    background: rgba(12,10,20,.7);
     backdrop-filter: blur(40px) saturate(1.4);
     -webkit-backdrop-filter: blur(40px) saturate(1.4);
     border-left: 1px solid var(--glass-border);

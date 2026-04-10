@@ -247,7 +247,7 @@
 
   .toggle-input:checked + .toggle-track::after {
     transform: translateX(14px);
-    background: rgba(12,10,20,.92);
+    background: rgba(12,10,20,.7);
   }
 
   .toggle-input:focus-visible + .toggle-track {
