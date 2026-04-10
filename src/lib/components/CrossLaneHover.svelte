@@ -5,7 +5,7 @@
   import { endpointStore } from '$lib/stores/endpoints';
   import { tokens } from '$lib/tokens';
 
-  let { totalRounds }: { totalRounds: number } = $props();
+  let { visibleStart = 1, visibleEnd = 60 }: { visibleStart?: number; visibleEnd?: number } = $props();
 
   let hoverX: number | null = $derived($uiStore.laneHoverX);
   let hoverRound: number | null = $derived($uiStore.laneHoverRound);
@@ -19,7 +19,7 @@
   }
 
   const hoverRows: EndpointHoverRow[] = $derived.by(() => {
-    if (hoverRound === null || hoverRound < 1 || hoverRound > totalRounds) return [];
+    if (hoverRound === null || hoverRound < visibleStart || hoverRound > visibleEnd) return [];
     const endpoints = $endpointStore.filter(ep => ep.enabled);
     return endpoints.map(ep => {
       const epState = $measurementStore.endpoints[ep.id];

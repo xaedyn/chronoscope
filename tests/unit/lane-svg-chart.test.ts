@@ -5,7 +5,8 @@ import LaneSvgChart from '../../src/lib/components/LaneSvgChart.svelte';
 const baseProps = {
   color: '#67e8f9',
   colorRgba06: 'rgba(103,232,249,.06)',
-  totalRounds: 30,
+  visibleStart: 1,
+  visibleEnd: 30,
   currentRound: 0,
   points: [],
   ribbon: undefined,

@@ -14,8 +14,8 @@ const primitive = {
   // Text opacity layers (rgba white)
   t1: 'rgba(255,255,255,.94)',
   t2: 'rgba(255,255,255,.58)',
-  t3: 'rgba(255,255,255,.3)',
-  t4: 'rgba(255,255,255,.14)',
+  t3: 'rgba(255,255,255,.5)',
+  t4: 'rgba(255,255,255,.32)',
   t5: 'rgba(255,255,255,.07)',
 
   // Accent
@@ -271,6 +271,7 @@ export const tokens = {
     nowDotRadius:    4,
     ringInitialR:    7,
     ringFinalR:     14,
+    chartWindow:    60,   // max visible rounds in SVG chart (sliding window)
     topbarHeight:   54,
     xAxisHeight:    30,
     footerHeight:   38,
