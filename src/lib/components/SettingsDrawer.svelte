@@ -214,9 +214,11 @@
       <div class="divider" aria-hidden="true"></div>
 
       <!-- Danger zone -->
-      <div class="field danger-field">
-        <span class="field-label danger-label">Danger zone</span>
-        <span class="danger-desc">Permanently clears all measurement data, statistics, and round history.</span>
+      <div class="danger-zone">
+        <div class="danger-header">
+          <span class="danger-label">Danger zone</span>
+          <span class="danger-desc">Clears all data, stats, and history</span>
+        </div>
         {#if !showClearConfirm}
           <button type="button" class="btn-danger" disabled={isRunning} aria-disabled={isRunning} onclick={requestClear}>Clear all results</button>
         {:else}
@@ -397,22 +399,45 @@
     border-radius: var(--btn-radius);
   }
 
-  .danger-field {
-    background: none;
-    padding: 0;
-    gap: var(--spacing-xs);
+  .danger-zone {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+    background: var(--pink06);
+    border: 1px solid var(--pink12);
+    border-radius: var(--btn-radius);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .danger-zone::after {
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0; width: 3px;
+    background: var(--accent-pink);
+    border-radius: 3px 0 0 3px;
+  }
+
+  .danger-header {
+    display: flex;
+    align-items: baseline;
+    gap: var(--spacing-sm);
   }
 
   .danger-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 400;
     color: var(--accent-pink);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
 
   .danger-desc {
     font-family: var(--sans);
     font-size: 11px;
     color: var(--t3);
-    line-height: 1.4;
-    margin-bottom: var(--spacing-xs);
   }
 
   .field-label {
