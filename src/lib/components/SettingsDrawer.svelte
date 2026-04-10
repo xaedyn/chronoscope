@@ -49,11 +49,18 @@
     dialogEl.addEventListener('close', () => {
       if ($uiStore.showSettings) uiStore.toggleSettings();
     });
+    // Wheel handler must be non-passive to allow preventDefault
+    dialogEl.addEventListener('wheel', (e: WheelEvent) => {
+      e.preventDefault();
+      if (drawerContentEl) drawerContentEl.scrollTop += e.deltaY;
+    }, { passive: false });
   });
 
   function close(): void {
     uiStore.toggleSettings();
   }
+
+  let drawerContentEl: HTMLDivElement;
 
   function handleBackdropClick(event: MouseEvent): void {
     // Click on the dialog backdrop (not the content)
@@ -137,7 +144,7 @@
   aria-label="Settings"
   onclick={handleBackdropClick}
 >
-  <div class="drawer-content" role="document">
+  <div class="drawer-content" role="document" bind:this={drawerContentEl}>
     <!-- Header -->
     <div class="drawer-header">
       <h2 class="drawer-title">Settings</h2>
@@ -322,9 +329,8 @@
     -webkit-backdrop-filter: blur(40px) saturate(1.4);
     border-left: 1px solid var(--glass-border);
     border-radius: var(--radius-lg) 0 0 var(--radius-lg);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     animation: drawerSlideIn 300ms cubic-bezier(0.0, 0.0, 0.2, 1) forwards;
     box-shadow: -8px 0 40px rgba(0,0,0,.3);
   }
@@ -379,8 +385,12 @@
     align-items: center;
     justify-content: space-between;
     padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg);
-    flex-shrink: 0;
-    position: relative;
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: rgba(12,10,20,.95);
+    backdrop-filter: blur(40px);
+    -webkit-backdrop-filter: blur(40px);
   }
 
   .drawer-header::after {
@@ -426,8 +436,6 @@
 
   /* ── Body ────────────────────────────────────────────────────────────────── */
   .drawer-body {
-    flex: 1;
-    overflow-y: auto;
     padding: var(--spacing-xl);
     display: flex;
     flex-direction: column;
