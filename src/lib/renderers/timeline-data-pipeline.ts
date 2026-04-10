@@ -260,7 +260,7 @@ export function computeRibbons(
 }
 
 /** Per-lane ribbon computation — each endpoint uses its own yRange for normalization. */
-function computeRibbonsPerLane(
+export function computeRibbonsPerLane(
   measureState: MeasurementState,
   yRangesByEndpoint: ReadonlyMap<string, YRange>,
 ): Map<string, RibbonData> {
@@ -433,6 +433,7 @@ function heatmapColor(
 export function prepareFrame(
   endpoints: Endpoint[],
   measureState: MeasurementState,
+  skipRibbons = false,
 ): FrameData {
   const hasData = Object.values(measureState.endpoints).some(
     ep => ep.samples.length > 0,
@@ -515,7 +516,9 @@ export function prepareFrame(
     : DEFAULT_YRANGE;
 
   // Ribbons use per-endpoint yRanges
-  const ribbonsByEndpoint = computeRibbonsPerLane(measureState, yRangesByEndpoint);
+  const ribbonsByEndpoint = skipRibbons
+    ? new Map<string, RibbonData>()
+    : computeRibbonsPerLane(measureState, yRangesByEndpoint);
   const xTicks = computeXTicks(maxRound, 800);
 
   return {
