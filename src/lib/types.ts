@@ -196,6 +196,7 @@ export interface HeatmapCellData {
   readonly worstStatus: SampleStatus;
   readonly startElapsed: number;
   readonly endElapsed: number;
+  readonly color: string;
 }
 
 // ── Share payload ──────────────────────────────────────────────────────────

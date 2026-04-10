@@ -6,12 +6,16 @@ import { tokens } from '$lib/tokens';
 import type {
   Endpoint,
   MeasurementState,
+  MeasurementSample,
+  SampleStatus,
   FrameData,
   ScatterPoint,
   RibbonData,
   YRange,
   XTick,
   Gridline,
+  HeatmapCellData,
+  EndpointStatistics,
 } from '$lib/types';
 
 // ── Constants (all from tokens) ────────────────────────────────────────────
@@ -354,6 +358,74 @@ export function formatElapsed(ms: number): string {
   }
   const ss = String(seconds).padStart(2, '0');
   return `${minutes}:${ss}`;
+}
+
+// ── Heatmap cell computation ───────────────────────────────────────────────
+
+const HEATMAP_MAX_CELLS = 200;
+
+export function computeHeatmapCells(
+  samples: readonly MeasurementSample[],
+  stats: EndpointStatistics,
+  startedAt: number | null,
+  endpointColor: string,
+): readonly HeatmapCellData[] {
+  if (samples.length === 0) return [];
+
+  const totalRounds = samples.length;
+  const bucketSize =
+    totalRounds <= HEATMAP_MAX_CELLS ? 1
+    : totalRounds <= 1000 ? 5
+    : Math.ceil(totalRounds / HEATMAP_MAX_CELLS);
+
+  const cellCount = Math.ceil(totalRounds / bucketSize);
+  const result: HeatmapCellData[] = [];
+
+  for (let cellIdx = 0; cellIdx < cellCount; cellIdx++) {
+    const startIdx = cellIdx * bucketSize;
+    const endIdx = Math.min(startIdx + bucketSize - 1, totalRounds - 1);
+
+    let worstLatency = 0;
+    let worstStatus: SampleStatus = 'ok';
+
+    for (let i = startIdx; i <= endIdx; i++) {
+      const s = samples[i];
+      if (!s) continue;
+      if (s.latency > worstLatency) worstLatency = s.latency;
+      if (s.status === 'timeout' || s.status === 'error') worstStatus = s.status;
+    }
+
+    const startSample = samples[startIdx];
+    const endSample = samples[endIdx];
+    const startRound = startSample?.round ?? startIdx + 1;
+    const endRound = endSample?.round ?? endIdx + 1;
+    const base = startedAt ?? 0;
+    const startElapsed = base > 0 ? Math.max(0, (startSample?.timestamp ?? 0) - base) : 0;
+    const endElapsed = base > 0 ? Math.max(0, (endSample?.timestamp ?? 0) - base) : 0;
+
+    const color = heatmapColor(worstLatency, worstStatus, stats, endpointColor);
+    result.push({ startRound, endRound, worstLatency, worstStatus, startElapsed, endElapsed, color });
+  }
+
+  return result;
+}
+
+function heatmapColor(
+  latency: number, status: SampleStatus, stats: EndpointStatistics, endpointColor: string,
+): string {
+  if (status === 'timeout' || status === 'error') return tokens.color.heatmap.timeout;
+  if (latency < stats.p25) return tokens.color.heatmap.fast;
+  if (latency <= stats.p75) {
+    if (/^#[0-9a-fA-F]{6}$/.test(endpointColor)) {
+      const r = parseInt(endpointColor.slice(1, 3), 16);
+      const g = parseInt(endpointColor.slice(3, 5), 16);
+      const b = parseInt(endpointColor.slice(5, 7), 16);
+      return `rgba(${r},${g},${b},.4)`;
+    }
+    return 'rgba(103,232,249,.4)';
+  }
+  if (latency <= stats.p95) return tokens.color.heatmap.elevated;
+  return tokens.color.heatmap.slow;
 }
 
 // ── Main entry point ───────────────────────────────────────────────────────

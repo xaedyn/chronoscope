@@ -128,7 +128,7 @@ describe('HeatmapCellData type', () => {
   it('HeatmapCellData interface has all required fields', () => {
     const cell: HeatmapCellData = {
       startRound: 1, endRound: 5, worstLatency: 142, worstStatus: 'ok',
-      startElapsed: 1000, endElapsed: 5000,
+      startElapsed: 1000, endElapsed: 5000, color: '#67e8f9',
     };
     expect(cell.startRound).toBe(1);
     expect(cell.endRound).toBe(5);
