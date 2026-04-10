@@ -13,7 +13,7 @@ function getStartStopLabel(lifecycle: TestLifecycleState): string {
     case 'starting':  return 'Starting…';
     case 'running':   return 'Stop';
     case 'stopping':  return 'Stopping…';
-    default:          return 'Start Test';
+    default:          return 'Start';
   }
 }
 
@@ -47,7 +47,7 @@ describe('Controls component store logic', () => {
   // ── Label derivation ────────────────────────────────────────────────────────
 
   it('shows "Start Test" in idle state', () => {
-    expect(getStartStopLabel('idle')).toBe('Start Test');
+    expect(getStartStopLabel('idle')).toBe('Start');
   });
 
   it('shows "Starting…" while starting', () => {
@@ -63,11 +63,11 @@ describe('Controls component store logic', () => {
   });
 
   it('shows "Start Test" in stopped state', () => {
-    expect(getStartStopLabel('stopped')).toBe('Start Test');
+    expect(getStartStopLabel('stopped')).toBe('Start');
   });
 
   it('shows "Start Test" in completed state', () => {
-    expect(getStartStopLabel('completed')).toBe('Start Test');
+    expect(getStartStopLabel('completed')).toBe('Start');
   });
 
   // ── Disabled states ─────────────────────────────────────────────────────────

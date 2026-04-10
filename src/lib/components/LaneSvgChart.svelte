@@ -34,12 +34,12 @@
 
   // ── ViewBox dimensions ───────────────────────────────────────────────────
   const VB_W = 1000;
-  const VB_H = 216;          // was 200 — 16px added for heatmap strip
-  const PAD_Y_TOP = 10;
-  const PAD_Y_BOT = 10;
-  const HEATMAP_H = 12;      // px in viewBox units
-  const HEATMAP_GAP = 4;     // gap between scatter area and strip
-  const PLOT_H = VB_H - PAD_Y_TOP - PAD_Y_BOT - HEATMAP_H - HEATMAP_GAP; // 180
+  const VB_H = 210;
+  const PAD_Y_TOP = 6;
+  const PAD_Y_BOT = 4;
+  const HEATMAP_H = 8;       // px in viewBox units — slim strip
+  const HEATMAP_GAP = 2;     // tight gap between scatter area and strip
+  const PLOT_H = VB_H - PAD_Y_TOP - PAD_Y_BOT - HEATMAP_H - HEATMAP_GAP; // 190
 
   const HEATMAP_Y = VB_H - PAD_Y_BOT - HEATMAP_H; // y-origin of strip
 
@@ -254,7 +254,7 @@
   {#if heatmapTooltip}
     <rect
       class="heatmap-tooltip-bg"
-      x={Math.min(heatmapTooltip.x - 100, VB_W - 205)}
+      x={Math.max(0, Math.min(heatmapTooltip.x - 100, VB_W - 205))}
       y={heatmapTooltip.y - 18}
       width="210"
       height="20"
@@ -262,7 +262,7 @@
     />
     <text
       class="heatmap-tooltip-text"
-      x={Math.min(heatmapTooltip.x, VB_W - 100)}
+      x={Math.max(105, Math.min(heatmapTooltip.x, VB_W - 105))}
       y={heatmapTooltip.y - 5}
       text-anchor="middle"
     >{heatmapTooltip.text}</text>
