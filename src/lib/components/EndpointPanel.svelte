@@ -66,7 +66,11 @@
       class="add-btn"
       disabled={$endpointStore.length >= MAX_ENDPOINTS || isRunning}
       aria-disabled={$endpointStore.length >= MAX_ENDPOINTS || isRunning}
-      title={$endpointStore.length >= MAX_ENDPOINTS ? `Maximum ${MAX_ENDPOINTS} endpoints reached` : 'Add endpoint'}
+      title={$endpointStore.length >= MAX_ENDPOINTS
+        ? `Maximum ${MAX_ENDPOINTS} endpoints reached`
+        : isRunning
+          ? 'Cannot add endpoints while running'
+          : 'Add endpoint'}
       onclick={addEndpoint}
     >
       + Add endpoint
