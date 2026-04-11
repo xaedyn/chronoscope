@@ -64,6 +64,24 @@ function createEndpointStore() {
       );
     },
 
+    reorderEndpoint(fromIndex: number, toIndex: number): void {
+      update(endpoints => {
+        if (
+          fromIndex === toIndex ||
+          fromIndex < 0 ||
+          toIndex < 0 ||
+          fromIndex >= endpoints.length ||
+          toIndex >= endpoints.length
+        ) {
+          return endpoints;
+        }
+        const next = [...endpoints];
+        const [moved] = next.splice(fromIndex, 1);
+        next.splice(toIndex, 0, moved!);
+        return next;
+      });
+    },
+
     setEndpoints(endpoints: Endpoint[]): void {
       set(endpoints);
     },
