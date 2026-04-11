@@ -188,13 +188,47 @@
   function handleGripPointerUp(e: PointerEvent): void {
     if (!dragState || e.pointerId !== dragState.pointerId) return;
 
-    const { fromIndex, toIndex } = dragState;
-    dragState = null;
-    dragOffsets = {};
+    const { fromIndex, toIndex, cardHeight } = dragState;
 
-    if (fromIndex !== toIndex) {
-      endpointStore.reorderEndpoint(fromIndex, toIndex);
+    if (fromIndex === toIndex) {
+      // No move — just clean up
+      dragState = null;
+      dragOffsets = {};
+      return;
     }
+
+    // Animate the dragged card to its final resting position
+    // so there's no snap-back flash on drop.
+    const targetOffset = (toIndex - fromIndex) * cardHeight;
+    const finalOffsets: Record<number, number> = {};
+    finalOffsets[fromIndex] = targetOffset;
+
+    // Neighbors stay where they are (already shifted)
+    const count = endpoints.length;
+    const sign = toIndex > fromIndex ? 1 : -1;
+    for (let i = 0; i < count; i++) {
+      if (i === fromIndex) continue;
+      const isInRange =
+        sign > 0
+          ? i > fromIndex && i <= toIndex
+          : i < fromIndex && i >= toIndex;
+      if (isInRange) {
+        finalOffsets[i] = -sign * cardHeight;
+      }
+    }
+
+    // Remove is-dragging so the card gets the neighbor transition
+    dragState = null;
+    dragOffsets = finalOffsets;
+
+    // Wait for the CSS transition to finish, then commit the reorder
+    // and clear transforms in the same frame
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        dragOffsets = {};
+        endpointStore.reorderEndpoint(fromIndex, toIndex);
+      }, 200); // matches the 200ms CSS transition duration
+    });
   }
 
   function handleMouseMove(e: MouseEvent): void {
