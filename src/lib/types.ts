@@ -185,6 +185,7 @@ export interface UIState {
   sharedResultsTimestamp: number | null;
   laneHoverRound: number | null;
   laneHoverX: number | null;
+  laneHoverY: number | null;
   showEndpoints: boolean;
 }
 

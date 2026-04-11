@@ -18,6 +18,7 @@ const initialState = (): UIState => ({
   sharedResultsTimestamp: null,
   laneHoverRound: null,
   laneHoverX: null,
+  laneHoverY: null,
   showEndpoints: false,
 });
 
@@ -64,11 +65,11 @@ function createUiStore() {
         sharedResultsTimestamp: null,
       }));
     },
-    setLaneHover(round: number, x: number): void {
-      update((s) => ({ ...s, laneHoverRound: round, laneHoverX: x }));
+    setLaneHover(round: number, x: number, y: number): void {
+      update((s) => ({ ...s, laneHoverRound: round, laneHoverX: x, laneHoverY: y }));
     },
     clearLaneHover(): void {
-      update((s) => ({ ...s, laneHoverRound: null, laneHoverX: null }));
+      update((s) => ({ ...s, laneHoverRound: null, laneHoverX: null, laneHoverY: null }));
     },
     toggleEndpoints(): void {
       update((s) => ({ ...s, showEndpoints: !s.showEndpoints }));
