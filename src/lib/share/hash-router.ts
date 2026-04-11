@@ -13,7 +13,7 @@ import { tokens } from '../tokens';
 
 function pickColor(index: number): string {
   const palette = tokens.color.endpoint;
-  return palette[index % palette.length] ?? '#4a90d9';
+  return palette[index % palette.length] ?? (tokens.color.endpoint[0] as string);
 }
 
 /**
@@ -43,11 +43,12 @@ export function applySharePayload(payload: SharePayload): string[] {
   const ids = endpoints.map((ep) => ep.id);
 
   if (payload.mode === 'results' && payload.results) {
+    const results = payload.results;
     // Build a MeasurementState snapshot from the payload results
     const endpointsRecord: MeasurementState['endpoints'] = {};
 
     ids.forEach((id, i) => {
-      const epResults = payload.results![i];
+      const epResults = results[i];
       const samples = (epResults?.samples ?? []).map((s) => ({
         round: s.round,
         latency: s.latency,

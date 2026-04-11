@@ -13,7 +13,6 @@
 
 type RendererFn = () => void;
 
-const DATA_BUDGET_MS = 8;          // skip effects when data takes this long or more
 const OVERLOAD_THRESHOLD_MS = 12;  // frames above this count toward the streak
 const OVERLOAD_STREAK_LIMIT = 10;  // consecutive frames before effects are disabled
 

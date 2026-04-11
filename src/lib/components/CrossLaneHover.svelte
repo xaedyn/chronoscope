@@ -25,7 +25,7 @@
     let lo = 0, hi = samples.length - 1;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (samples[mid]!.round < targetRound) lo = mid + 1;
+      if ((samples[mid]?.round ?? 0) < targetRound) lo = mid + 1;
       else hi = mid;
     }
     const a = samples[lo];

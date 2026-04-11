@@ -77,7 +77,6 @@
 
 <svelte:window onkeydown={handleKeydown} />
 
-<!-- svelte-ignore a11y-click-events-have-key-events -->
 <div
   class="backdrop"
   role="presentation"

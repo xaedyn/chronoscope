@@ -116,7 +116,9 @@ export class MeasurementEngine {
   removeEndpoint(id: string): void {
     const idx = this.workers.findIndex(m => m.endpointId === id);
     if (idx !== -1) {
-      const { worker } = this.workers[idx]!;
+      const managed = this.workers[idx];
+      if (!managed) return;
+      const { worker } = managed;
       try {
         worker.postMessage({ type: 'stop' } satisfies MainToWorkerMessage);
         worker.terminate();
@@ -145,11 +147,13 @@ export class MeasurementEngine {
     if (!this.roundBuffer.has(roundId)) {
       this.roundBuffer.set(roundId, []);
     }
-    this.roundBuffer.get(roundId)!.push(msg);
+    const buffer = this.roundBuffer.get(roundId);
+    if (buffer) buffer.push(msg);
 
     // Flush when all expected responses arrive, or immediately if no dispatch
     // is tracking (e.g., direct _handleWorkerMessage calls in tests)
-    if (this.expectedResponses === 0 || this.roundBuffer.get(roundId)!.length >= this.expectedResponses) {
+    const roundMessages = this.roundBuffer.get(roundId);
+    if (this.expectedResponses === 0 || (roundMessages && roundMessages.length >= this.expectedResponses)) {
       this._flushRound(roundId);
     }
   }
@@ -163,7 +167,8 @@ export class MeasurementEngine {
 
     // Clear any pending flush timeout for this round
     if (this.flushTimers.has(roundId)) {
-      clearTimeout(this.flushTimers.get(roundId)!);
+      const timer = this.flushTimers.get(roundId);
+      if (timer !== undefined) clearTimeout(timer);
       this.flushTimers.delete(roundId);
     }
 

@@ -3,7 +3,6 @@
 <!-- seeing someone else's data and offers a "Run Again" button to start fresh.  -->
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui';
-  import { endpointStore } from '$lib/stores/endpoints';
   import { measurementStore } from '$lib/stores/measurements';
   import { tokens } from '$lib/tokens';
 
