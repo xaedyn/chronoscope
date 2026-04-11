@@ -124,4 +124,170 @@ describe('share-manager', () => {
     expect(url.startsWith('https://sonde.example.com')).toBe(true);
     expect(url).toContain('#s=');
   });
+
+  describe('validateSharePayload — hardened validation', () => {
+    async function manualEncode(data: unknown): Promise<string> {
+      const { default: LZString } = await import('lz-string');
+      return LZString.compressToEncodedURIComponent(JSON.stringify(data));
+    }
+
+    const validSettings = { timeout: 5000, delay: 0, cap: 0, corsMode: 'no-cors' };
+
+    // AC #1 — URL scheme enforcement
+    it('rejects javascript: URLs', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: 'javascript:alert(1)', enabled: true }],
+        settings: validSettings,
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    it('rejects data: URLs', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: 'data:text/html,<h1>x</h1>', enabled: true }],
+        settings: validSettings,
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    it('rejects empty string URLs', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: '', enabled: true }],
+        settings: validSettings,
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    it('rejects relative path URLs', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: '/api/measure', enabled: true }],
+        settings: validSettings,
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    it('accepts http:// URLs', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: 'http://example.com', enabled: true }],
+        settings: validSettings,
+      });
+      expect(decodeSharePayload(encoded)).not.toBeNull();
+    });
+
+    // AC #2 — Non-negative finite numbers
+    it('rejects Infinity timeout', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: 'https://example.com', enabled: true }],
+        settings: { timeout: Infinity, delay: 0, cap: 0, corsMode: 'no-cors' },
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    it('rejects negative delay', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: 'https://example.com', enabled: true }],
+        settings: { timeout: 5000, delay: -1, cap: 0, corsMode: 'no-cors' },
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    it('rejects negative cap', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: 'https://example.com', enabled: true }],
+        settings: { timeout: 5000, delay: 0, cap: -5, corsMode: 'no-cors' },
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    // AC #3 — Array size limits
+    it('rejects >50 endpoints', async () => {
+      const endpoints = Array.from({ length: 51 }, (_, i) => ({
+        url: `https://ep${i}.example.com`, enabled: true,
+      }));
+      const encoded = await manualEncode({
+        v: 1, mode: 'config', endpoints, settings: validSettings,
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    it('accepts exactly 50 endpoints', async () => {
+      const endpoints = Array.from({ length: 50 }, (_, i) => ({
+        url: `https://ep${i}.example.com`, enabled: true,
+      }));
+      const encoded = await manualEncode({
+        v: 1, mode: 'config', endpoints, settings: validSettings,
+      });
+      expect(decodeSharePayload(encoded)).not.toBeNull();
+    });
+
+    it('rejects >50 results', async () => {
+      const results = Array.from({ length: 51 }, () => ({ samples: [] }));
+      const encoded = await manualEncode({
+        v: 1, mode: 'results',
+        endpoints: [{ url: 'https://example.com', enabled: true }],
+        settings: validSettings, results,
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    it('rejects >10,000 samples per result', async () => {
+      const samples = Array.from({ length: 10001 }, (_, i) => ({
+        round: i, latency: 50, status: 'ok',
+      }));
+      const encoded = await manualEncode({
+        v: 1, mode: 'results',
+        endpoints: [{ url: 'https://example.com', enabled: true }],
+        settings: validSettings, results: [{ samples }],
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    // AC #4 — corsMode strict validation
+    it('rejects invalid corsMode', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: 'https://example.com', enabled: true }],
+        settings: { timeout: 5000, delay: 0, cap: 0, corsMode: 'same-origin' },
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    it('rejects missing corsMode', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: 'https://example.com', enabled: true }],
+        settings: { timeout: 5000, delay: 0, cap: 0 },
+      });
+      expect(decodeSharePayload(encoded)).toBeNull();
+    });
+
+    it('accepts corsMode: cors', async () => {
+      const encoded = await manualEncode({
+        v: 1, mode: 'config',
+        endpoints: [{ url: 'https://example.com', enabled: true }],
+        settings: { timeout: 5000, delay: 0, cap: 0, corsMode: 'cors' },
+      });
+      expect(decodeSharePayload(encoded)).not.toBeNull();
+    });
+
+    // Regression: keepRounds=0 still works
+    it('truncatePayload with tiny limit produces empty samples', () => {
+      const payload: SharePayload = {
+        v: 1, mode: 'results',
+        endpoints: [{ url: 'https://example.com', enabled: true }],
+        settings: { timeout: 5000, delay: 0, cap: 0, corsMode: 'no-cors' },
+        results: [{ samples: [{ round: 1, latency: 50, status: 'ok' as const }] }],
+      };
+      const truncated = truncatePayload(payload, 1);
+      expect(truncated.results?.[0]?.samples).toHaveLength(0);
+    });
+  });
 });
