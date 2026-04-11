@@ -115,6 +115,9 @@ if (typeof (globalThis as any).WorkerGlobalScope !== 'undefined' && self instanc
         // Wait a tick for the Resource Timing entry to be committed.
         await new Promise<void>(resolve => setTimeout(resolve, 0));
 
+        // A stop or new measure may have aborted us during the yield.
+        if (signal.aborted) return;
+
         const entries = performance.getEntriesByType(
           'resource'
         ) as PerformanceResourceTiming[];

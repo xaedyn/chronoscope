@@ -148,15 +148,15 @@ export class MeasurementEngine {
   }
 
   private _flushRound(roundId: number): void {
-    const messages = this.roundBuffer.get(roundId);
-    if (!messages || messages.length === 0) return;
-    this.roundBuffer.delete(roundId);
-
     // Clear any pending flush timeout for this round
     if (this.flushTimers.has(roundId)) {
       clearTimeout(this.flushTimers.get(roundId)!);
       this.flushTimers.delete(roundId);
     }
+
+    const messages = this.roundBuffer.get(roundId);
+    if (!messages || messages.length === 0) return;
+    this.roundBuffer.delete(roundId);
 
     const timestamp = Date.now();
     const entries = messages.map(msg => {
@@ -230,6 +230,13 @@ export class MeasurementEngine {
     // Count active workers for this round to know when the batch is complete
     const activeWorkers = this.workers.filter(m => endpoints.some(e => e.id === m.endpointId));
     this.expectedResponses = activeWorkers.length;
+
+    // No workers to dispatch — skip this round entirely.
+    if (activeWorkers.length === 0) {
+      measurementStore.incrementRound();
+      this._scheduleNextRound();
+      return;
+    }
 
     for (const managed of activeWorkers) {
       const ep = endpoints.find(e => e.id === managed.endpointId);
