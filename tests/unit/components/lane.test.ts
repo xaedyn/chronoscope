@@ -86,4 +86,37 @@ describe('Lane', () => {
     const { container } = render(Lane, { props: { ...props, compact: true } });
     expect(container.querySelector('.lane.compact')).not.toBeNull();
   });
+
+  // ── Grip handle (drag-to-reorder) ───────────────────────────────────────────
+
+  it('renders a grip handle button in full mode', () => {
+    const { container } = render(Lane, { props });
+    const grip = container.querySelector('.lane-grip');
+    expect(grip).not.toBeNull();
+    expect(grip?.tagName.toLowerCase()).toBe('button');
+  });
+
+  it('grip handle has aria-label="Reorder lane"', () => {
+    const { container } = render(Lane, { props });
+    const grip = container.querySelector('.lane-grip');
+    expect(grip?.getAttribute('aria-label')).toBe('Reorder lane');
+  });
+
+  it('renders grip handle in compact mode', () => {
+    const { container } = render(Lane, { props: { ...props, compact: true } });
+    const grip = container.querySelector('.lane-grip');
+    expect(grip).not.toBeNull();
+  });
+
+  it('grip handle has data-endpoint-id matching endpointId', () => {
+    const { container } = render(Lane, { props });
+    const grip = container.querySelector('.lane-grip');
+    expect(grip?.getAttribute('data-endpoint-id')).toBe('ep-test-1');
+  });
+
+  it('hides grip when showGrip is false', () => {
+    const { container } = render(Lane, { props: { ...props, showGrip: false } });
+    const grip = container.querySelector('.lane-grip');
+    expect(grip).toBeNull();
+  });
 });
