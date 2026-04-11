@@ -34,8 +34,10 @@ export function applySharePayload(payload: SharePayload): string[] {
   settingsStore.set({
     ...DEFAULT_SETTINGS,
     ...payload.settings,
+    delay: DEFAULT_SETTINGS.delay,
     burstRounds: payload.settings.burstRounds ?? DEFAULT_SETTINGS.burstRounds,
-    monitorDelay: payload.settings.monitorDelay ?? DEFAULT_SETTINGS.monitorDelay,
+    monitorDelay:
+      payload.settings.monitorDelay ?? payload.settings.delay ?? DEFAULT_SETTINGS.monitorDelay,
   });
 
   const ids = endpoints.map((ep) => ep.id);

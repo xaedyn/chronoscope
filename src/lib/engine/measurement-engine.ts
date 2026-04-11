@@ -25,7 +25,7 @@ export class MeasurementEngine {
   private roundBuffer: Map<number, WorkerToMainMessage[]> = new Map();
   private expectedResponses: number = 0;
   private flushTimers: Map<number, ReturnType<typeof setTimeout>> = new Map();
-  private flushedRounds: Set<number> = new Set();
+  private lastFlushedRound = -1;
 
   constructor(workerFactory?: WorkerFactory) {
     this.workerFactory = workerFactory ?? defaultWorkerFactory;
@@ -105,7 +105,7 @@ export class MeasurementEngine {
     }
     this.flushTimers.clear();
     this.roundBuffer.clear();
-    this.flushedRounds.clear();
+    this.lastFlushedRound = -1;
     this.expectedResponses = 0;
 
     this.freezeDetector.stop();
@@ -140,7 +140,7 @@ export class MeasurementEngine {
     const roundId = msg.roundId;
 
     // Discard orphaned responses for already-flushed rounds
-    if (this.flushedRounds.has(roundId)) return;
+    if (roundId <= this.lastFlushedRound) return;
 
     if (!this.roundBuffer.has(roundId)) {
       this.roundBuffer.set(roundId, []);
@@ -160,7 +160,7 @@ export class MeasurementEngine {
     this.roundBuffer.delete(roundId);
 
     // Mark this round as flushed to discard late-arriving orphaned responses
-    this.flushedRounds.add(roundId);
+    this.lastFlushedRound = roundId;
 
     // Clear any pending flush timeout for this round
     if (this.flushTimers.has(roundId)) {
@@ -276,11 +276,13 @@ export class MeasurementEngine {
       }
     }
 
-    // Flush timeout for stragglers — ensures the round doesn't hang forever
-    // if a worker dies or takes excessively long
+    // Flush timeout for stragglers — derived from configured timeout plus margin.
+    // Ensures the round doesn't hang forever if a worker dies, while not
+    // dropping valid responses from slow endpoints.
+    const flushDeadline = timeout + 500;
     this.flushTimers.set(roundCounter, setTimeout(() => {
       this._flushRound(roundCounter);
-    }, 200));
+    }, flushDeadline));
 
     measurementStore.incrementRound();
     // NOTE: _scheduleNextRound() is NOT called here — it's called from

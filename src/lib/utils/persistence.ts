@@ -48,7 +48,7 @@ export function migrateSettings(data: unknown): PersistedSettings | null {
         ...v2.settings,
         delay: DEFAULT_SETTINGS.delay,
         burstRounds: DEFAULT_SETTINGS.burstRounds,
-        monitorDelay: oldDelay > 0 ? oldDelay : DEFAULT_SETTINGS.monitorDelay,
+        monitorDelay: oldDelay >= 0 ? oldDelay : DEFAULT_SETTINGS.monitorDelay,
       },
     };
   }
