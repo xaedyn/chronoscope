@@ -6,6 +6,7 @@ import type {
   MeasurementSample,
   EndpointStatistics,
   ConfidenceInterval,
+  TimingPayload,
 } from '../types';
 
 // ── Percentile (nearest-rank method) ──────────────────────────────────────
@@ -98,26 +99,30 @@ export function computeEndpointStatistics(
   // ── Connection reuse delta ────────────────────────────────────────────
   // Compare first sample (likely cold/DNS+TCP) against subsequent warm connections.
   // Requires tier2 data. Delta = cold_latency - warm_avg_latency.
-  const tier2Samples = okSamples.filter(s => s.tier2 !== undefined);
+  const tier2Samples = okSamples.filter(
+    (s): s is MeasurementSample & { tier2: TimingPayload } => s.tier2 !== undefined
+  );
   let connectionReuseDelta: number | null = null;
 
   if (tier2Samples.length >= 2) {
     const first = tier2Samples[0];
     const rest = tier2Samples.slice(1);
 
-    // Cold: has TCP or TLS overhead
-    const firstHasColdOverhead =
-      (first.tier2!.tcpConnect > 0 || first.tier2!.tlsHandshake > 0);
+    if (first) {
+      // Cold: has TCP or TLS overhead
+      const firstHasColdOverhead =
+        (first.tier2.tcpConnect > 0 || first.tier2.tlsHandshake > 0);
 
-    // Warm: rest with no TCP reconnect
-    const warmSamples = rest.filter(
-      s => s.tier2!.tcpConnect === 0 && s.tier2!.tlsHandshake === 0
-    );
+      // Warm: rest with no TCP reconnect
+      const warmSamples = rest.filter(
+        s => s.tier2.tcpConnect === 0 && s.tier2.tlsHandshake === 0
+      );
 
-    if (firstHasColdOverhead && warmSamples.length > 0) {
-      const warmAvg =
-        warmSamples.reduce((sum, s) => sum + s.latency, 0) / warmSamples.length;
-      connectionReuseDelta = first.latency - warmAvg;
+      if (firstHasColdOverhead && warmSamples.length > 0) {
+        const warmAvg =
+          warmSamples.reduce((sum, s) => sum + s.latency, 0) / warmSamples.length;
+        connectionReuseDelta = first.latency - warmAvg;
+      }
     }
   }
 
@@ -125,7 +130,7 @@ export function computeEndpointStatistics(
   let tier2Averages: EndpointStatistics['tier2Averages'];
   if (tier2Samples.length > 0) {
     const avg = (field: 'dnsLookup' | 'tcpConnect' | 'tlsHandshake' | 'ttfb' | 'contentTransfer') =>
-      tier2Samples.reduce((sum, s) => sum + s.tier2![field], 0) / tier2Samples.length;
+      tier2Samples.reduce((sum, s) => sum + s.tier2[field], 0) / tier2Samples.length;
 
     tier2Averages = {
       dnsLookup: avg('dnsLookup'),

@@ -27,7 +27,6 @@
 
   let configPayload = $derived(buildConfigPayload());
   let resultsPayload = $derived(hasResults ? buildResultsPayload() : null);
-  let configSize = $derived(estimateShareSize(configPayload));
   let resultsSize = $derived(resultsPayload ? estimateShareSize(resultsPayload) : 0);
   let resultsTruncated = $derived(resultsSize > MAX_URL_CHARS);
 
@@ -139,7 +138,6 @@
   });
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <div
   class="share-overlay"
   role="presentation"

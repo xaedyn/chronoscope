@@ -18,9 +18,6 @@
     uiStore.setActiveView(view);
   }
 
-  function toggleMobileSplit(): void {
-    mobileSplitTab = mobileSplitTab === 'timeline' ? 'heatmap' : 'timeline';
-  }
 </script>
 
 <div

@@ -17,14 +17,13 @@
     onStop?: () => void;
   } = $props();
 
-  let announcer: HTMLDivElement;
+  let announcerText = $state('');
   let prevLifecycle = get(measurementStore).lifecycle;
   let unsubLifecycle: (() => void) | null = null;
 
   function announce(msg: string): void {
-    if (!announcer) return;
-    announcer.textContent = '';
-    setTimeout(() => { announcer.textContent = msg; }, 50);
+    announcerText = '';
+    setTimeout(() => { announcerText = msg; }, 50);
   }
 
   const CHART_WINDOW = tokens.lane.chartWindow; // 60
@@ -39,6 +38,7 @@
   // Earliest timestamp per round across all endpoints (index i = round i)
   const sampleTimestamps = $derived.by((): readonly number[] => {
     const endpoints = Object.values($measurementStore.endpoints);
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const byRound = new Map<number, number>();
     for (const ep of endpoints) {
       for (const sample of ep.samples) {
@@ -99,13 +99,12 @@
 <CrossLaneHover {visibleStart} {visibleEnd} />
 
 <div
-  bind:this={announcer}
   id="sonde-announcer"
   role="status"
   aria-live="polite"
   aria-atomic="true"
   class="sr-only"
-></div>
+>{announcerText}</div>
 
 <style>
   .skip-link {

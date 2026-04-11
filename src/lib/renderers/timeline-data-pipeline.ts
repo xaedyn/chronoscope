@@ -368,7 +368,6 @@ export function computeHeatmapCells(
   samples: readonly MeasurementSample[],
   stats: EndpointStatistics,
   startedAt: number | null,
-  endpointColor: string,
 ): readonly HeatmapCellData[] {
   if (samples.length === 0) return [];
 
@@ -403,7 +402,7 @@ export function computeHeatmapCells(
     const startElapsed = base > 0 ? Math.max(0, (startSample?.timestamp ?? 0) - base) : 0;
     const endElapsed = base > 0 ? Math.max(0, (endSample?.timestamp ?? 0) - base) : 0;
 
-    const color = heatmapColor(worstLatency, worstStatus, stats, endpointColor);
+    const color = heatmapColor(worstLatency, worstStatus, stats);
     result.push({ startRound, endRound, worstLatency, worstStatus, startElapsed, endElapsed, color });
   }
 
@@ -411,7 +410,7 @@ export function computeHeatmapCells(
 }
 
 function heatmapColor(
-  latency: number, status: SampleStatus, stats: EndpointStatistics, _endpointColor: string,
+  latency: number, status: SampleStatus, stats: EndpointStatistics,
 ): string {
   if (status === 'timeout' || status === 'error') return tokens.color.heatmap.timeout;
   if (latency < stats.p25) return tokens.color.heatmap.fast;

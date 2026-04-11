@@ -54,6 +54,7 @@ function createMeasurementStore() {
 
     removeEndpoint(endpointId: string): void {
       update(s => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { [endpointId]: _removed, ...rest } = s.endpoints;
         return { ...s, endpoints: rest };
       });
@@ -134,12 +135,13 @@ function createMeasurementStore() {
           // Insert in round order — almost always appends (O(1) typical),
           // but handles stragglers arriving after the next round flushed.
           const samples = existing.samples;
-          if (samples.length === 0 || sample.round >= samples[samples.length - 1]!.round) {
+          const lastSample = samples[samples.length - 1];
+          if (samples.length === 0 || sample.round >= (lastSample?.round ?? 0)) {
             samples.push(sample);
           } else {
             // Walk backward to find insertion point (usually 1-2 steps)
             let i = samples.length - 1;
-            while (i > 0 && samples[i - 1]!.round > sample.round) i--;
+            while (i > 0 && (samples[i - 1]?.round ?? 0) > sample.round) i--;
             samples.splice(i, 0, sample);
           }
 

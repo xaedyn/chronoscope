@@ -129,7 +129,6 @@
   }
 </script>
 
-<!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
 <dialog
   bind:this={dialogEl}
   id="settings-drawer"

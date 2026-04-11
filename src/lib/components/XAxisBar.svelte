@@ -54,7 +54,7 @@
     <span class="x-spacer-label">Elapsed</span>
   </div>
   <div class="x-labels" role="list" aria-label="Elapsed time markers">
-    {#each ticks as tick}
+    {#each ticks as tick, i (i)}
       <span class="x-tick" class:future={tick.isFuture} role="listitem" aria-label="{tick.label}{tick.isFuture ? ' (future)' : ''}">{tick.label}</span>
     {/each}
   </div>

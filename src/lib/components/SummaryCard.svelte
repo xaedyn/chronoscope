@@ -17,7 +17,7 @@
   let ready = $derived(stats?.ready ?? false);
   let sampleCount = $derived(stats?.sampleCount ?? epState?.samples.length ?? 0);
   let tierLevel = $derived(epState?.tierLevel ?? 1);
-  let color = $derived(endpoint?.color ?? tokens.color.endpoint[0] ?? '#4a90d9');
+  let color = $derived(endpoint?.color ?? (tokens.color.endpoint[0] as string));
 
   // Connection reuse delta threshold
   const REUSE_DELTA_THRESHOLD = 0.2;

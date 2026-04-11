@@ -7,7 +7,6 @@
   import { tokens } from '$lib/tokens';
   import { settingsStore } from '$lib/stores/settings';
   import { endpointStore } from '$lib/stores/endpoints';
-  import { measurementStore } from '$lib/stores/measurements';
   import { uiStore } from '$lib/stores/ui';
   import { MeasurementEngine } from '$lib/engine/measurement-engine';
   import { loadPersistedSettings, saveSettings } from '$lib/utils/persistence';
@@ -98,8 +97,6 @@
 
     // Endpoints: replace defaults with persisted ones
     if (persisted.endpoints.length > 0) {
-      const currentEndpoints = get(endpointStore);
-      // Clear existing and add persisted ones using stored URLs
       endpointStore.setEndpoints([]);
       for (const ep of persisted.endpoints) {
         if (ep.url.trim()) {

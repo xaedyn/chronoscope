@@ -57,8 +57,7 @@ describe('computeHeatmapCells (AC2, AC4)', () => {
   it('color is a non-empty string', () => {
     const cells = computeHeatmapCells(
       [{ round: 1, latency: 10, status: 'ok', timestamp: 1000 }],
-      makeStats({ p25: 30 }), null, '#67e8f9'
-    );
+      makeStats({ p25: 30 }), null    );
     expect(typeof cells[0]?.color).toBe('string');
     expect(cells[0]?.color.length).toBeGreaterThan(0);
   });

@@ -126,8 +126,9 @@ export const tokens = {
       bgHover:     'rgba(255,255,255,.07)',
       border:      primitive.glassBorder,
       borderHover: primitive.glassHighlight,
-      highlight:   primitive.glassHighlight,
-      shadow:      'rgba(0,0,0,.15)',
+      highlight:      primitive.glassHighlight,
+      highlightStrong: 'rgba(255,255,255,.9)',
+      shadow:         'rgba(0,0,0,.15)',
       shadowStrong: 'rgba(0,0,0,.5)',
     },
 

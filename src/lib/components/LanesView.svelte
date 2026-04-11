@@ -1,5 +1,6 @@
 <!-- src/lib/components/LanesView.svelte -->
 <script lang="ts">
+  import { SvelteMap } from 'svelte/reactivity';
   import { endpointStore } from '$lib/stores/endpoints';
   import { measurementStore } from '$lib/stores/measurements';
   import { statisticsStore } from '$lib/stores/statistics';
@@ -56,7 +57,7 @@
 
   // Throttled ribbon computation — recompute every N new samples instead of every frame
   let lastRibbonSampleCount = 0;
-  let cachedRibbons: ReadonlyMap<string, RibbonData> = new Map();
+  let cachedRibbons: ReadonlyMap<string, RibbonData> = new SvelteMap();
 
   const frameData = $derived.by(() => {
     const base = baseFrame;
@@ -80,6 +81,7 @@
 
   // Compute heatmap cells per endpoint (all samples, not windowed)
   const heatmapCellsByEndpoint: ReadonlyMap<string, readonly HeatmapCellData[]> = $derived.by(() => {
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity
     const map = new Map<string, readonly HeatmapCellData[]>();
     const startedAt = $measurementStore.startedAt;
     for (const ep of endpoints) {
@@ -89,14 +91,14 @@
         map.set(ep.id, []);
         continue;
       }
-      map.set(ep.id, computeHeatmapCells(epState.samples, stats, startedAt, ep.color));
+      map.set(ep.id, computeHeatmapCells(epState.samples, stats, startedAt));
     }
     return map;
   });
 
   function colorToRgba06(hex: string): string {
     if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
-      return 'rgba(103,232,249,.06)';
+      return tokens.color.accent.cyan06;
     }
     const r = parseInt(hex.slice(1, 3), 16);
     const g = parseInt(hex.slice(3, 5), 16);
@@ -150,7 +152,6 @@
   }
 </script>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="lanes"
   id="lanes"
@@ -185,7 +186,6 @@
         {lastLatency}
         compact={isCompact}
       >
-        {#snippet children()}
           {@const allPoints = frameData.pointsByEndpoint.get(ep.id) ?? []}
           {@const windowedPoints = allPoints.filter(p => p.round >= visibleStart && p.round <= visibleEnd)}
           <LaneSvgChart
@@ -193,16 +193,12 @@
             colorRgba06={colorToRgba06(ep.color)}
             {visibleStart}
             {visibleEnd}
-            currentRound={$measurementStore.roundCounter}
             points={windowedPoints}
             ribbon={frameData.ribbonsByEndpoint.get(ep.id)}
             yRange={frameData.yRangesByEndpoint.get(ep.id) ?? frameData.yRange}
-            maxRound={frameData.maxRound}
-            xTicks={frameData.xTicks}
             heatmapCells={heatmapCellsByEndpoint.get(ep.id) ?? []}
             timeoutMs={$settingsStore.timeout}
           />
-        {/snippet}
       </Lane>
     {/each}
   {/if}

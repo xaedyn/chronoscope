@@ -14,7 +14,7 @@ function generateId(): string {
 
 function pickColor(index: number): string {
   const palette = tokens.color.endpoint;
-  return palette[index % palette.length] ?? '#4a90d9';
+  return palette[index % palette.length] ?? (tokens.color.endpoint[0] as string);
 }
 
 function buildDefaultEndpoints(): Endpoint[] {

@@ -78,7 +78,7 @@
     const cx = colToX(hoveredCell.col);
     const cy = rowToY(hoveredCell.row);
     ctx.save();
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.strokeStyle = tokens.color.glass.highlightStrong;
     ctx.lineWidth = 1;
     ctx.strokeRect(cx + 0.5, cy + 0.5, CELL_SIZE - 1, CELL_SIZE - 1);
     ctx.restore();
@@ -235,8 +235,8 @@
     }
 
     const sorted = [...stats].sort((a, b) => a.avg - b.avg);
-    const fastest = sorted[0]!;
-    const slowest = sorted[sorted.length - 1]!;
+    const fastest = sorted[0];
+    const slowest = sorted[sorted.length - 1];
 
     // Trend uses all samples across all endpoints
     const allSamples = stats.flatMap(s => s.samples);

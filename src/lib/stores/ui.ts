@@ -33,7 +33,11 @@ function createUiStore() {
     toggleCard(endpointId: string): void {
       update((s) => {
         const next = new Set(s.expandedCards);
-        next.has(endpointId) ? next.delete(endpointId) : next.add(endpointId);
+        if (next.has(endpointId)) {
+          next.delete(endpointId);
+        } else {
+          next.add(endpointId);
+        }
         return { ...s, expandedCards: next };
       });
     },

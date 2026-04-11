@@ -2,7 +2,7 @@
 <script lang="ts">
   import { tokens } from '$lib/tokens';
   import { uiStore } from '$lib/stores/ui';
-  import type { ScatterPoint, RibbonData, YRange, XTick, HeatmapCellData } from '$lib/types';
+  import type { ScatterPoint, RibbonData, YRange, HeatmapCellData } from '$lib/types';
   import { normalizeLatency, formatElapsed } from '$lib/renderers/timeline-data-pipeline';
 
   let {
@@ -10,12 +10,9 @@
     colorRgba06,
     visibleStart = 1,
     visibleEnd = 60,
-    currentRound = 0,
     points = [],
     ribbon = undefined,
     yRange,
-    maxRound = 0,
-    xTicks = [],
     heatmapCells = [],
     timeoutMs = 5000,
   }: {
@@ -23,12 +20,9 @@
     colorRgba06: string;
     visibleStart?: number;
     visibleEnd?: number;
-    currentRound?: number;
     points: readonly ScatterPoint[];
     ribbon: RibbonData | undefined;
     yRange: YRange;
-    maxRound: number;
-    xTicks: readonly XTick[];
     heatmapCells?: readonly HeatmapCellData[];
     timeoutMs?: number;
   } = $props();
@@ -176,7 +170,7 @@
   style:--tooltip-bg={tokens.color.tooltip.bg}
 >
   <!-- Grid lines -->
-  {#each gridlineYs as gy}
+  {#each gridlineYs as gy (gy)}
     <line class="grid-line" x1="0" y1={gy} x2={VB_W} y2={gy} />
   {/each}
 
@@ -247,7 +241,7 @@
   {/if}
 
   <!-- Heatmap strip -->
-  {#each cellRects as rect, i}
+  {#each cellRects as rect (rect.x)}
     <rect
       class="heatmap-cell"
       x={rect.x}
