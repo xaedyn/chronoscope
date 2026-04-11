@@ -67,6 +67,7 @@
   let hasData = false;
 
   // Track known sample counts to detect new samples for sonar pings
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const sampleCounts = new Map<string, number>();
 
   // ── Helpers ─────────────────────────────────────────────────────────────────

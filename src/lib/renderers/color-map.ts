@@ -5,9 +5,11 @@
 
 export const COLOR_MAP_SIZE = 1501;
 
+import { tokens } from '$lib/tokens';
+
 export const STATUS_COLORS = {
-  timeout: '#9b5de5',
-  error: '#c77dff',
+  timeout: tokens.color.status.timeout,
+  error: tokens.color.status.error,
 } as const;
 
 // ── Anchor points ──────────────────────────────────────────────────────────
