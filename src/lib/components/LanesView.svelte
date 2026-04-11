@@ -120,6 +120,7 @@
   let dragState = $state<DragState | null>(null);
   let dragOffsets = $state<Record<number, number>>({});
   let settlingIndex = $state<number | null>(null);
+  let suppressTransition = $state(false);
 
   function indexOfEndpoint(id: string): number {
     return endpoints.findIndex(ep => ep.id === id);
@@ -226,9 +227,15 @@
     // Wait for the spring transition to finish, then commit the reorder
     requestAnimationFrame(() => {
       setTimeout(() => {
+        // Suppress transitions so neighbors don't twitch during DOM reorder
+        suppressTransition = true;
         settlingIndex = null;
         dragOffsets = {};
         endpointStore.reorderEndpoint(fromIndex, toIndex);
+        // Re-enable transitions after the DOM settles
+        requestAnimationFrame(() => {
+          suppressTransition = false;
+        });
       }, 280); // matches the 280ms settling transition duration
     });
   }
@@ -318,6 +325,7 @@
         showGrip={endpoints.length > 1}
         dragging={isDragging}
         settling={isSettling}
+        noTransition={suppressTransition}
         translateY={offset}
         onGripPointerDown={handleGripPointerDown}
       >

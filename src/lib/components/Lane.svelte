@@ -17,6 +17,7 @@
     showGrip = true,
     dragging = false,
     settling = false,
+    noTransition = false,
     translateY = 0,
     onGripPointerDown = undefined,
     children,
@@ -35,6 +36,7 @@
     showGrip?: boolean;
     dragging?: boolean;
     settling?: boolean;
+    noTransition?: boolean;
     translateY?: number;
     onGripPointerDown?: (e: PointerEvent) => void;
     children?: import('svelte').Snippet;
@@ -61,6 +63,7 @@
   class:compact={compact}
   class:is-dragging={dragging}
   class:is-settling={settling}
+  class:no-transition={noTransition}
   aria-label="Endpoint {url}"
   data-dragging={dragging ? 'true' : undefined}
   style:--drag-translate="{translateY}px"
@@ -184,6 +187,11 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
     z-index: 10;
     animation: drag-lift 180ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* Suppress transitions during DOM reorder to prevent neighbor twitch */
+  .lane.no-transition {
+    transition: none !important;
   }
 
   /* Drop settle: spring back to resting state */
