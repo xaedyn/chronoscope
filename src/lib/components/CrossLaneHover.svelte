@@ -135,6 +135,18 @@
   </div>
 {/if}
 
+{#if $uiStore.heatmapTooltip}
+  <div
+    class="heatmap-tip"
+    style:left="{$uiStore.heatmapTooltip.x}px"
+    style:top="{$uiStore.heatmapTooltip.y}px"
+    style:--tooltip-bg={tokens.color.tooltip.bg}
+    style:--glass-border={tokens.color.glass.border}
+    style:--mono={tokens.typography.mono.fontFamily}
+    role="tooltip"
+  >{$uiStore.heatmapTooltip.text}</div>
+{/if}
+
 <style>
   .hover-line {
     position: fixed; top: 0; bottom: 0;
@@ -170,5 +182,17 @@
     font-family: var(--mono); font-size: 9px; color: var(--t4);
     text-align: right; margin-top: 6px; padding-top: 5px;
     border-top: 1px solid var(--t5);
+  }
+  .heatmap-tip {
+    position: fixed; z-index: 20; pointer-events: none;
+    transform: translate(-50%, -100%) translateY(-10px);
+    background: var(--tooltip-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: 6px; padding: 5px 10px;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+    font-family: var(--mono, 'Martian Mono', monospace);
+    font-size: 11px; font-weight: 400;
+    color: rgba(255,255,255,.85);
+    white-space: nowrap;
   }
 </style>

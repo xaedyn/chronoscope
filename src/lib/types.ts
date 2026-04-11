@@ -186,6 +186,7 @@ export interface UIState {
   laneHoverRound: number | null;
   laneHoverX: number | null;
   laneHoverY: number | null;
+  heatmapTooltip: { text: string; x: number; y: number } | null;
   showEndpoints: boolean;
 }
 
