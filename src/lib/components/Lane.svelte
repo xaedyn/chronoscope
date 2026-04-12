@@ -14,6 +14,13 @@
     ready,
     lastLatency = null,
     compact = false,
+    showGrip = true,
+    dragging = false,
+    settling = false,
+    noTransition = false,
+    translateY = 0,
+    onGripPointerDown = undefined,
+    onGripKeyDown = undefined,
     children,
   }: {
     endpointId: string;
@@ -27,8 +34,21 @@
     ready: boolean;
     lastLatency?: number | null;
     compact?: boolean;
+    showGrip?: boolean;
+    dragging?: boolean;
+    settling?: boolean;
+    noTransition?: boolean;
+    translateY?: number;
+    onGripPointerDown?: (e: PointerEvent) => void;
+    onGripKeyDown?: (e: KeyboardEvent) => void;
     children?: import('svelte').Snippet;
   } = $props();
+
+  const GRIP_DOTS = [
+    [2, 2], [8, 2],
+    [2, 7], [8, 7],
+    [2, 12], [8, 12],
+  ] as const;
 
   function fmt(ms: number): string {
     return `${Math.round(ms)}ms`;
@@ -43,7 +63,12 @@
   id="lane-{endpointId}"
   class="lane"
   class:compact={compact}
+  class:is-dragging={dragging}
+  class:is-settling={settling}
+  class:no-transition={noTransition}
   aria-label="Endpoint {url}"
+  data-dragging={dragging ? 'true' : undefined}
+  style:--drag-translate="{translateY}px"
   style:--ep-color={color}
   style:--t1={tokens.color.text.t1}
   style:--t2={tokens.color.text.t2}
@@ -60,6 +85,22 @@
   style:--timing-hover="{tokens.timing.btnHover}ms"
 >
   <div class="lane-panel" class:sr-only={compact}>
+    {#if showGrip && !compact}
+      <button
+        class="lane-grip"
+        aria-label="Reorder lane"
+        data-endpoint-id={endpointId}
+        type="button"
+        onpointerdown={onGripPointerDown}
+        onkeydown={onGripKeyDown}
+      >
+        <svg width="10" height="14" viewBox="0 0 10 14" aria-hidden="true">
+          {#each GRIP_DOTS as [cx, cy], i (i)}
+            <circle {cx} {cy} r="1.5" fill="currentColor" />
+          {/each}
+        </svg>
+      </button>
+    {/if}
     <div class="lane-url">{url}</div>
     <div class="lane-hero" aria-label="P50 latency {fmt(p50)}">
       <span class="hero-value">{Math.round(p50)}</span>
@@ -78,7 +119,23 @@
     {/if}
   </div>
   {#if compact}
-    <div class="lane-compact-header" aria-hidden="true">
+    <div class="lane-compact-header">
+      {#if showGrip}
+        <button
+          class="lane-grip lane-grip--compact"
+          aria-label="Reorder lane"
+          data-endpoint-id={endpointId}
+          type="button"
+          onpointerdown={onGripPointerDown}
+          onkeydown={onGripKeyDown}
+        >
+          <svg width="10" height="14" viewBox="0 0 10 14" aria-hidden="true">
+            {#each GRIP_DOTS as [cx, cy], i (i)}
+              <circle {cx} {cy} r="1.5" fill="currentColor" />
+            {/each}
+          </svg>
+        </button>
+      {/if}
       <span class="ch-dot" style:background={color}></span>
       <span class="ch-url">{url}</span>
       <span class="ch-hero" style:color={color}>{Math.round(p50)}<span class="ch-hero-unit">ms</span></span>
@@ -111,7 +168,43 @@
     border: 1px solid var(--lane-border);
     backdrop-filter: blur(20px) saturate(1.2);
     -webkit-backdrop-filter: blur(20px) saturate(1.2);
+    transform: translateY(var(--drag-translate, 0px));
     transition: border-color var(--timing-hover) ease, box-shadow var(--timing-hover) ease;
+  }
+  /* Neighbors shift with spring easing */
+  .lane:not(.is-dragging):not(.is-settling) {
+    transition:
+      transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      border-color var(--timing-hover) ease,
+      box-shadow var(--timing-hover) ease;
+  }
+
+  /* Pickup: pop-lift keyframe — overshoot scale then settle */
+  @keyframes drag-lift {
+    0%   { transform: translateY(var(--drag-translate, 0px)) scale(1); opacity: 1; }
+    40%  { transform: translateY(var(--drag-translate, 0px)) scale(1.03); opacity: 0.92; }
+    100% { transform: translateY(var(--drag-translate, 0px)) scale(1.01); opacity: 0.92; }
+  }
+  .lane.is-dragging {
+    opacity: 0.92;
+    transform: translateY(var(--drag-translate, 0px)) scale(1.01);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    z-index: 10;
+    animation: drag-lift 180ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  /* Suppress transitions during DOM reorder to prevent neighbor twitch */
+  .lane.no-transition {
+    transition: none !important;
+  }
+
+  /* Drop settle: spring back to resting state */
+  .lane.is-settling {
+    z-index: 10;
+    transition:
+      transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 280ms ease-out,
+      box-shadow 280ms ease-out;
   }
   .lane:hover {
     border-color: var(--glass-highlight);
@@ -230,6 +323,34 @@
     font-family: var(--mono); font-size: 10px; font-weight: 300;
     color: var(--t2);
   }
+
+  /* Grip handle */
+  .lane-grip {
+    display: flex; align-items: center; justify-content: center;
+    width: 20px; height: 32px; flex-shrink: 0;
+    background: none; border: none; padding: 0;
+    color: var(--t4);
+    cursor: grab;
+    touch-action: none;
+    border-radius: 4px;
+    transition: color var(--timing-hover) ease, background var(--timing-hover) ease;
+  }
+  .lane-grip:hover {
+    color: var(--t2);
+    background: rgba(255, 255, 255, 0.05);
+  }
+  .lane-grip:active { cursor: grabbing; }
+  .lane-panel .lane-grip {
+    position: absolute;
+    left: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+  .lane-compact-header .lane-grip {
+    pointer-events: auto;
+    flex-shrink: 0;
+  }
+  .lane-grip--compact { height: 22px; }
 
   /* Shift now-label below compact header */
   .lane.compact .now-label { top: 34px; }
