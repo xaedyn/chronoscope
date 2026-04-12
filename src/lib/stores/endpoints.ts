@@ -64,6 +64,25 @@ function createEndpointStore() {
       );
     },
 
+    reorderEndpoint(fromId: string, toId: string): void {
+      update(endpoints => {
+        const fromIndex = endpoints.findIndex(ep => ep.id === fromId);
+        const toIndex = endpoints.findIndex(ep => ep.id === toId);
+        if (
+          fromIndex === -1 ||
+          toIndex === -1 ||
+          fromIndex === toIndex
+        ) {
+          return endpoints;
+        }
+        const next = [...endpoints];
+        const moved = next.splice(fromIndex, 1)[0];
+        if (moved === undefined) return endpoints;
+        next.splice(toIndex, 0, moved);
+        return next;
+      });
+    },
+
     setEndpoints(endpoints: Endpoint[]): void {
       set(endpoints);
     },

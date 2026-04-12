@@ -108,6 +108,177 @@
 
   let lanesEl: HTMLDivElement;
 
+  // ── Drag-to-reorder state ──────────────────────────────────────────────────
+  interface DragState {
+    pointerId: number;
+    fromIndex: number;
+    startY: number;
+    cardHeight: number;
+    toIndex: number;
+  }
+
+  let dragState = $state<DragState | null>(null);
+  let dragOffsets = $state<Record<number, number>>({});
+  let settlingIndex = $state<number | null>(null);
+  let suppressTransition = $state(false);
+  let reorderPending = $state(false);
+
+  function indexOfEndpoint(id: string): number {
+    return endpoints.findIndex(ep => ep.id === id);
+  }
+
+  function handleGripKeyDown(e: KeyboardEvent): void {
+    if (reorderPending) return;
+    if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown') return;
+    e.preventDefault();
+
+    const grip = e.currentTarget as HTMLElement;
+    const endpointId = grip.dataset['endpointId'];
+    if (!endpointId) return;
+
+    const fromIndex = indexOfEndpoint(endpointId);
+    if (fromIndex === -1) return;
+
+    const toIndex = e.key === 'ArrowUp' ? fromIndex - 1 : fromIndex + 1;
+    if (toIndex < 0 || toIndex >= endpoints.length) return;
+
+    endpointStore.reorderEndpoint(endpoints[fromIndex].id, endpoints[toIndex].id);
+
+    // Re-focus the grip after DOM reorder
+    requestAnimationFrame(() => {
+      const newGrip = lanesEl.querySelector(`[data-endpoint-id="${endpointId}"]`) as HTMLElement | null;
+      newGrip?.focus();
+    });
+  }
+
+  function handleGripPointerDown(e: PointerEvent): void {
+    if (reorderPending) return;
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+
+    const grip = e.currentTarget as HTMLElement;
+    const endpointId = grip.dataset['endpointId'];
+    if (!endpointId) return;
+
+    const fromIndex = indexOfEndpoint(endpointId);
+    if (fromIndex === -1) return;
+
+    const article = lanesEl.querySelector(`#lane-${endpointId}`) as HTMLElement | null;
+    if (!article) return;
+    const cardHeight = article.getBoundingClientRect().height + tokens.lane.gapPx;
+
+    grip.setPointerCapture(e.pointerId);
+    e.preventDefault();
+
+    dragState = {
+      pointerId: e.pointerId,
+      fromIndex,
+      startY: e.clientY,
+      cardHeight,
+      toIndex: fromIndex,
+    };
+    dragOffsets = {};
+  }
+
+  function handleGripPointerMove(e: PointerEvent): void {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    e.preventDefault();
+
+    const deltaY = e.clientY - dragState.startY;
+    const count = endpoints.length;
+
+    const maxUp = -(dragState.fromIndex * dragState.cardHeight);
+    const maxDown = (count - 1 - dragState.fromIndex) * dragState.cardHeight;
+    const clampedDelta = Math.max(maxUp, Math.min(maxDown, deltaY));
+
+    const sign = clampedDelta >= 0 ? 1 : -1;
+    const newToIndex = Math.max(
+      0,
+      Math.min(count - 1, dragState.fromIndex + Math.round(clampedDelta / dragState.cardHeight)),
+    );
+
+    const offsets: Record<number, number> = {};
+    for (let i = 0; i < count; i++) {
+      if (i === dragState.fromIndex) continue;
+      const isInRange =
+        sign > 0
+          ? i > dragState.fromIndex && i <= newToIndex
+          : i < dragState.fromIndex && i >= newToIndex;
+      if (isInRange) {
+        offsets[i] = -sign * dragState.cardHeight;
+      }
+    }
+    offsets[dragState.fromIndex] = clampedDelta;
+
+    dragOffsets = offsets;
+    dragState = { ...dragState, toIndex: newToIndex };
+  }
+
+  function handleGripPointerUp(e: PointerEvent): void {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+
+    const { fromIndex, toIndex, cardHeight } = dragState;
+
+    if (fromIndex === toIndex) {
+      // No move — just clean up
+      dragState = null;
+      dragOffsets = {};
+      return;
+    }
+
+    // Animate the dragged card to its final resting position
+    // so there's no snap-back flash on drop.
+    const targetOffset = (toIndex - fromIndex) * cardHeight;
+    const finalOffsets: Record<number, number> = {};
+    finalOffsets[fromIndex] = targetOffset;
+
+    // Neighbors stay where they are (already shifted)
+    const count = endpoints.length;
+    const sign = toIndex > fromIndex ? 1 : -1;
+    for (let i = 0; i < count; i++) {
+      if (i === fromIndex) continue;
+      const isInRange =
+        sign > 0
+          ? i > fromIndex && i <= toIndex
+          : i < fromIndex && i >= toIndex;
+      if (isInRange) {
+        finalOffsets[i] = -sign * cardHeight;
+      }
+    }
+
+    // Capture IDs now — the reactive `endpoints` array may change during the delay
+    const fromId = endpoints[fromIndex].id;
+    const toId = endpoints[toIndex].id;
+
+    // Switch from is-dragging to is-settling — spring transition to target
+    dragState = null;
+    settlingIndex = fromIndex;
+    dragOffsets = finalOffsets;
+
+    // Wait for the spring transition to finish, then commit the reorder
+    reorderPending = true;
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        // Suppress transitions so neighbors don't twitch during DOM reorder
+        suppressTransition = true;
+        settlingIndex = null;
+        dragOffsets = {};
+        endpointStore.reorderEndpoint(fromId, toId);
+        // Re-enable transitions after the DOM settles
+        requestAnimationFrame(() => {
+          suppressTransition = false;
+          reorderPending = false;
+        });
+      }, 280); // matches the 280ms settling transition duration
+    });
+  }
+
+  function handleGripPointerCancel(e: PointerEvent): void {
+    if (!dragState || e.pointerId !== dragState.pointerId) return;
+    dragState = null;
+    dragOffsets = {};
+    settlingIndex = null;
+  }
+
   function handleMouseMove(e: MouseEvent): void {
     const lane = (e.target as HTMLElement).closest('.lane');
     const chartEl = lane?.querySelector('.lane-chart') as HTMLElement | null;
@@ -161,6 +332,9 @@
   class:grid-2col={layoutMode === 'compact-2col'}
   onmousemove={handleMouseMove}
   onmouseleave={handleMouseLeave}
+  onpointermove={handleGripPointerMove}
+  onpointerup={handleGripPointerUp}
+  onpointercancel={handleGripPointerCancel}
   style:--lanes-gap="{tokens.lane.gapPx}px"
   style:--lanes-pad-x="{tokens.lane.paddingX}px"
   style:--lanes-pad-y="{tokens.lane.paddingY}px"
@@ -170,9 +344,12 @@
       <span>Add an endpoint to begin</span>
     </div>
   {:else}
-    {#each endpoints as ep (ep.id)}
+    {#each endpoints as ep, i (ep.id)}
       {@const laneProps = getLaneProps(ep.id)}
       {@const lastLatency = $measurementStore.endpoints[ep.id]?.lastLatency ?? null}
+      {@const isDragging = dragState?.fromIndex === i}
+      {@const isSettling = settlingIndex === i}
+      {@const offset = dragOffsets[i] ?? 0}
       <Lane
         endpointId={ep.id}
         color={ep.color}
@@ -185,6 +362,13 @@
         ready={laneProps.ready}
         {lastLatency}
         compact={isCompact}
+        showGrip={endpoints.length > 1 && layoutMode !== 'compact-2col'}
+        dragging={isDragging}
+        settling={isSettling}
+        noTransition={suppressTransition}
+        translateY={offset}
+        onGripPointerDown={handleGripPointerDown}
+        onGripKeyDown={handleGripKeyDown}
       >
           {@const allPoints = frameData.pointsByEndpoint.get(ep.id) ?? []}
           {@const windowedPoints = allPoints.filter(p => p.round >= visibleStart && p.round <= visibleEnd)}
