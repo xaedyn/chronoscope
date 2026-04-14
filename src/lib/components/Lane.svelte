@@ -74,6 +74,8 @@
   style:--t2={tokens.color.text.t2}
   style:--t3={tokens.color.text.t3}
   style:--t4={tokens.color.text.t4}
+  style:--t5={tokens.color.text.t5}
+  style:--stats-border={tokens.color.glass.statsBorder}
   style:--lane-bg={tokens.color.lane.bg}
   style:--lane-border={tokens.color.lane.border}
   style:--glass-highlight={tokens.color.glass.highlight}
@@ -102,11 +104,11 @@
       </button>
     {/if}
     <div class="lane-url">{url}</div>
-    <div class="lane-hero" aria-label="P50 latency {fmt(p50)}">
+    <div class="lane-hero" aria-label="Median latency {fmt(p50)}">
       <span class="hero-value">{Math.round(p50)}</span>
       <span class="hero-unit">ms</span>
     </div>
-    <div class="lane-label">P50 Median Latency</div>
+    <div class="lane-label">Median</div>
     {#if ready}
       <div class="lane-stats" aria-label="Statistics">
         <div class="ls"><div class="ls-label">P95</div><div class="ls-val">{fmt(p95)}</div></div>
@@ -230,8 +232,8 @@
     position: relative; z-index: 2;
   }
   .lane-url {
-    font-family: var(--mono); font-size: 11px; font-weight: 300;
-    color: var(--t3); letter-spacing: 0.02em;
+    font-family: var(--sans); font-size: 12px; font-weight: 500;
+    color: var(--t2); letter-spacing: 0.02em;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .lane-hero {
@@ -248,20 +250,24 @@
   }
   .lane-label {
     font-family: var(--mono); font-size: 9px; font-weight: 300;
-    color: var(--t4); margin-top: 6px;
-    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--t4); margin-top: 4px;
+    text-transform: uppercase; letter-spacing: 0.04em;
   }
   .lane-stats {
     display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 10px; margin-top: 18px; padding-top: 16px;
-    border-top: 1px solid rgba(255,255,255,.04);
+    gap: 12px; margin-top: 18px; padding-top: 16px;
+    border-top: 1px solid var(--stats-border);
+    container-type: inline-size;
+  }
+  @container (max-width: 199px) {
+    .lane-stats { grid-template-columns: 1fr 1fr; }
   }
   .ls-label {
     font-family: var(--mono); font-size: 8px; font-weight: 400;
-    color: var(--t4); text-transform: uppercase; letter-spacing: 0.07em;
+    color: var(--t5); text-transform: uppercase; letter-spacing: 0.07em;
   }
   .ls-val {
-    font-family: var(--mono); font-size: 14px; font-weight: 300;
+    font-family: var(--mono); font-size: 12px; font-weight: 300;
     color: var(--t2); margin-top: 3px;
   }
   .collecting-note {
@@ -363,7 +369,9 @@
       border-bottom: 1px solid rgba(255,255,255,.05);
       flex-direction: row; align-items: center; gap: 20px;
     }
+    .lane-panel { padding: 16px 20px; }
     .lane:not(.compact) .lane-stats { margin-top: 0; padding-top: 0; border-top: none; }
+    .hero-value { font-size: clamp(32px, 10vw, 54px); }
     .ch-url { max-width: 120px; }
   }
 </style>
