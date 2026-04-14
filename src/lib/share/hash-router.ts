@@ -62,9 +62,11 @@ export function applySharePayload(payload: SharePayload): string[] {
 
       endpointsRecord[id] = {
         endpointId: id,
-        samples,
+        // Plain array is converted to RingBuffer by loadSnapshot()
+        samples: samples as unknown as MeasurementState['endpoints'][string]['samples'],
         lastLatency: lastSample?.latency ?? null,
         lastStatus: lastSample?.status ?? null,
+        lastErrorMessage: null,
         tierLevel: 1,
       };
     });

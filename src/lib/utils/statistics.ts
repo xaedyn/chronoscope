@@ -7,7 +7,10 @@ import type {
   EndpointStatistics,
   ConfidenceInterval,
   TimingPayload,
+  SampleBuffer,
 } from '../types';
+import type { SortedInsertionBuffer } from './sorted-insertion-buffer';
+import type { LossCounts } from './incremental-loss-counter';
 
 // ── Percentile (nearest-rank method) ──────────────────────────────────────
 // Returns the value at the given percentile p (0–100) in the provided array.
@@ -144,6 +147,107 @@ export function computeEndpointStatistics(
   return {
     endpointId,
     sampleCount: samples.length,
+    p50, p95, p99, p25, p75, p90,
+    min, max,
+    stddev: sd,
+    ci95,
+    connectionReuseDelta,
+    tier2Averages,
+    ready,
+  };
+}
+
+/**
+ * Zero-allocation statistics from pre-sorted buffer + loss counter.
+ * Reads directly from sortedBuffer.sorted — no intermediate arrays.
+ */
+export function computeEndpointStatisticsFromBuffer(
+  endpointId: string,
+  sortedBuffer: SortedInsertionBuffer,
+  lossCounts: LossCounts,
+  totalSamples: number,
+  samples: SampleBuffer,
+): EndpointStatistics {
+  const sorted = sortedBuffer.sorted;
+  const count = sorted.length;
+  const ready = totalSamples >= READY_SAMPLE_GATE;
+
+  if (count === 0) {
+    return {
+      endpointId,
+      sampleCount: totalSamples,
+      p50: 0, p95: 0, p99: 0, p25: 0, p75: 0, p90: 0,
+      min: 0, max: 0, stddev: 0,
+      ci95: { lower: 0, upper: 0, margin: 0 },
+      connectionReuseDelta: null,
+      tier2Averages: undefined,
+      ready,
+    };
+  }
+
+  const p50 = percentileSorted(sorted as number[], 50);
+  const p95 = percentileSorted(sorted as number[], 95);
+  const p99 = percentileSorted(sorted as number[], 99);
+  const p25 = percentileSorted(sorted as number[], 25);
+  const p75 = percentileSorted(sorted as number[], 75);
+  const p90 = percentileSorted(sorted as number[], 90);
+  const min = sorted[0];
+  const max = sorted[sorted.length - 1];
+
+  // Stddev from sorted values
+  let sumVal = 0;
+  for (let i = 0; i < count; i++) sumVal += sorted[i];
+  const mean = sumVal / count;
+  let varianceSum = 0;
+  for (let i = 0; i < count; i++) varianceSum += (sorted[i] - mean) ** 2;
+  const sd = Math.sqrt(varianceSum / count);
+  const ci95 = confidenceInterval95(p50, sd, count);
+
+  // ── Connection reuse delta ────────────────────────────────────────────
+  type Tier2Sample = MeasurementSample & { tier2: TimingPayload };
+  const tier2Samples = samples.filter(
+    s => s.status === 'ok' && s.tier2 !== undefined
+  ) as Tier2Sample[];
+  let connectionReuseDelta: number | null = null;
+
+  if (tier2Samples.length >= 2) {
+    const first = tier2Samples[0];
+    const rest = tier2Samples.slice(1) as Tier2Sample[];
+
+    if (first?.tier2) {
+      const firstHasColdOverhead =
+        (first.tier2.tcpConnect > 0 || first.tier2.tlsHandshake > 0);
+
+      const warmSamples = rest.filter(
+        s => s.tier2 && s.tier2.tcpConnect === 0 && s.tier2.tlsHandshake === 0
+      );
+
+      if (firstHasColdOverhead && warmSamples.length > 0) {
+        const warmAvg =
+          warmSamples.reduce((accum, s) => accum + s.latency, 0) / warmSamples.length;
+        connectionReuseDelta = first.latency - warmAvg;
+      }
+    }
+  }
+
+  // ── Tier 2 averages ───────────────────────────────────────────────────
+  let tier2Averages: EndpointStatistics['tier2Averages'];
+  if (tier2Samples.length > 0) {
+    const avg = (field: 'dnsLookup' | 'tcpConnect' | 'tlsHandshake' | 'ttfb' | 'contentTransfer') =>
+      tier2Samples.reduce((accum, sample) => accum + (sample.tier2?.[field] ?? 0), 0) / tier2Samples.length;
+
+    tier2Averages = {
+      dnsLookup: avg('dnsLookup'),
+      tcpConnect: avg('tcpConnect'),
+      tlsHandshake: avg('tlsHandshake'),
+      ttfb: avg('ttfb'),
+      contentTransfer: avg('contentTransfer'),
+    };
+  }
+
+  return {
+    endpointId,
+    sampleCount: totalSamples,
     p50, p95, p99, p25, p75, p90,
     min, max,
     stddev: sd,
