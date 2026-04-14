@@ -104,7 +104,6 @@ describe('types', () => {
       showShare: false,
       showKeyboardHelp: false,
       isSharedView: false,
-      sharedResultsTimestamp: null,
     };
     expect(state.showKeyboardHelp).toBe(false);
   });
@@ -120,7 +119,6 @@ describe('types', () => {
       showShare: false,
       showKeyboardHelp: false,
       isSharedView: false,
-      sharedResultsTimestamp: null,
     };
     expect(state.isSharedView).toBe(false);
   });
