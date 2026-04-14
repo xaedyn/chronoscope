@@ -12,8 +12,10 @@
 
   let lifecycle: TestLifecycleState = $derived($measurementStore.lifecycle);
   let roundCounter: number = $derived($measurementStore.roundCounter);
+  let isSharedView: boolean = $derived($uiStore.isSharedView);
 
   let runLabel: string = $derived.by(() => {
+    if (isSharedView) return 'Shared Results';
     if (lifecycle === 'running') return `Running · Round ${roundCounter}`;
     if (lifecycle === 'starting') return 'Starting…';
     if (lifecycle === 'stopping') return 'Stopping…';
@@ -37,6 +39,11 @@
     } else if (lifecycle === 'idle' || lifecycle === 'stopped' || lifecycle === 'completed') {
       onStart?.();
     }
+  }
+
+  function handleRunOwn(): void {
+    uiStore.clearSharedView();
+    measurementStore.reset();
   }
 
   function handleSettings(): void { uiStore.toggleSettings(); }
@@ -79,10 +86,15 @@
   <div class="spacer"></div>
 
   <nav class="actions" aria-label="Test controls">
-    <button type="button" class="btn" aria-label="Add or remove endpoints" aria-expanded={$uiStore.showEndpoints} aria-controls="endpoint-drawer" onclick={handleEndpoints}>+ Endpoint</button>
-    <button type="button" class="btn" aria-label="Open settings" aria-expanded={$uiStore.showSettings} aria-controls="settings-drawer" onclick={handleSettings}>Settings</button>
-    <button type="button" class="btn" aria-label="Share results" aria-expanded={$uiStore.showShare} aria-controls="share-popover" onclick={handleShare}>Share</button>
-    <button type="button" class="btn btn-accent" class:btn-stop={isRunning} disabled={isTransitioning} aria-disabled={isTransitioning} aria-label={startStopLabel} onclick={handleStartStop}>{startStopLabel}</button>
+    {#if isSharedView}
+      <button type="button" class="btn" aria-label="Share results" aria-expanded={$uiStore.showShare} aria-controls="share-popover" onclick={handleShare}>Share</button>
+      <button type="button" class="btn btn-run-own" aria-label="Run your own test" onclick={handleRunOwn}>Run Your Own Test</button>
+    {:else}
+      <button type="button" class="btn" aria-label="Add or remove endpoints" aria-expanded={$uiStore.showEndpoints} aria-controls="endpoint-drawer" onclick={handleEndpoints}>+ Endpoint</button>
+      <button type="button" class="btn" aria-label="Open settings" aria-expanded={$uiStore.showSettings} aria-controls="settings-drawer" onclick={handleSettings}>Settings</button>
+      <button type="button" class="btn" aria-label="Share results" aria-expanded={$uiStore.showShare} aria-controls="share-popover" onclick={handleShare}>Share</button>
+      <button type="button" class="btn btn-accent" class:btn-stop={isRunning} disabled={isTransitioning} aria-disabled={isTransitioning} aria-label={startStopLabel} onclick={handleStartStop}>{startStopLabel}</button>
+    {/if}
   </nav>
 </header>
 
@@ -171,6 +183,16 @@
     box-shadow: 0 2px 16px rgba(249,168,212,.1);
   }
   .btn-stop { border-color: rgba(249,168,212,.2); color: var(--accent-pink); }
+  .btn-run-own {
+    border-color: rgba(103,232,249,.25);
+    color: var(--accent-cyan);
+    background: rgba(103,232,249,.04);
+  }
+  .btn-run-own:hover:not(:disabled) {
+    background: rgba(103,232,249,.1);
+    border-color: rgba(103,232,249,.4);
+    box-shadow: 0 2px 16px rgba(103,232,249,.1);
+  }
   .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
   @media (max-width: 767px) {
     .topbar { padding: 0 12px; gap: 8px; }

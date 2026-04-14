@@ -88,9 +88,9 @@ export function applySharePayload(payload: SharePayload): string[] {
 
     measurementStore.loadSnapshot(snapshot);
 
-    uiStore.setSharedView(true, Date.now());
+    uiStore.setSharedView(true);
   } else {
-    uiStore.setSharedView(false, null);
+    uiStore.setSharedView(false);
   }
 
   return ids;

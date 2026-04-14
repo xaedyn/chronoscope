@@ -15,7 +15,6 @@ const initialState = (): UIState => ({
   showShare: false,
   showKeyboardHelp: false,
   isSharedView: false,
-  sharedResultsTimestamp: null,
   laneHoverRound: null,
   laneHoverX: null,
   laneHoverY: null,
@@ -56,19 +55,11 @@ function createUiStore() {
     toggleKeyboardHelp(): void {
       update((s) => ({ ...s, showKeyboardHelp: !s.showKeyboardHelp }));
     },
-    setSharedView(isShared: boolean, timestamp: number | null = null): void {
-      update((s) => ({
-        ...s,
-        isSharedView: isShared,
-        sharedResultsTimestamp: timestamp,
-      }));
+    setSharedView(isShared: boolean): void {
+      update((s) => ({ ...s, isSharedView: isShared }));
     },
     clearSharedView(): void {
-      update((s) => ({
-        ...s,
-        isSharedView: false,
-        sharedResultsTimestamp: null,
-      }));
+      update((s) => ({ ...s, isSharedView: false }));
     },
     setLaneHover(round: number, x: number, y: number): void {
       update((s) => ({ ...s, laneHoverRound: round, laneHoverX: x, laneHoverY: y }));

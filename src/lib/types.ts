@@ -190,7 +190,6 @@ export interface UIState {
   showShare: boolean;
   showKeyboardHelp: boolean;
   isSharedView: boolean;
-  sharedResultsTimestamp: number | null;
   laneHoverRound: number | null;
   laneHoverX: number | null;
   laneHoverY: number | null;

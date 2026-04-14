@@ -1,28 +1,14 @@
 <!-- src/lib/components/SharedResultsBanner.svelte -->
 <!-- Visible when viewing a shared results link. Informs the user they are       -->
-<!-- seeing someone else's data and offers a "Run Again" button to start fresh.  -->
+<!-- seeing a read-only snapshot and offers a "Run Again" button to start fresh. -->
 <script lang="ts">
   import { uiStore } from '$lib/stores/ui';
   import { measurementStore } from '$lib/stores/measurements';
   import { tokens } from '$lib/tokens';
 
-  let timestamp = $derived($uiStore.sharedResultsTimestamp);
-
-  function formatTimestamp(ts: number | null): string {
-    if (ts === null) return 'an earlier session';
-    return new Date(ts).toLocaleString(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
-  }
-
   function handleRunAgain(): void {
-    // Clear shared state, reset measurements but keep endpoints
     uiStore.clearSharedView();
     measurementStore.reset();
-    // Keep the endpoints from the share so user can run the same test
-    // Kick off fresh test by transitioning to 'starting' via the controls
-    // (We just clear — the user clicks Start themselves)
   }
 </script>
 
@@ -42,17 +28,14 @@
 >
   <div class="banner-content">
     <span class="banner-icon" aria-hidden="true">↗</span>
-    <span class="banner-text">
-      Viewing shared results from {formatTimestamp(timestamp)}.
-      Start a new test to measure from your location.
-    </span>
+    <span class="banner-text">Shared results — read only. Run your own test to measure from your location.</span>
   </div>
   <button
     type="button"
     class="btn-run-again"
     onclick={handleRunAgain}
   >
-    Run Again
+    Run Your Own Test
   </button>
 </div>
 
