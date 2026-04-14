@@ -63,7 +63,9 @@ export function extractTimingPayload(entry: PerformanceResourceTiming): TimingPa
     tlsHandshake,
     ttfb,
     contentTransfer,
-    connectionReused: connectStart === connectEnd,
+    // connectStart === connectEnd means a reused connection (no TCP setup time).
+    // However both are 0 when TAO is absent, so only report reuse when TAO data is valid.
+    connectionReused: hasTao ? connectStart === connectEnd : undefined,
     protocol: (entry as PerformanceResourceTiming).nextHopProtocol || undefined,
   };
 }
@@ -200,6 +202,11 @@ if (typeof (globalThis as any).WorkerGlobalScope !== 'undefined' && self instanc
           signal,
         });
 
+        // Capture duration immediately — before the PerformanceObserver wait.
+        // If the observer times out (e.g. redirect changes the entry URL),
+        // using performance.now() here would inflate by ~100ms.
+        const fetchDuration = performance.now() - startMark;
+
         clearTimeout(timeoutId);
 
         // Use PerformanceObserver to get the Resource Timing entry (push-based).
@@ -208,7 +215,7 @@ if (typeof (globalThis as any).WorkerGlobalScope !== 'undefined' && self instanc
         const timing: TimingPayload = entry
           ? extractTimingPayload(entry)
           : {
-              total: performance.now() - startMark,
+              total: fetchDuration,
               dnsLookup: 0,
               tcpConnect: 0,
               tlsHandshake: 0,

@@ -157,7 +157,7 @@ export const DEFAULT_SETTINGS: Settings = {
   timeout: 5000,
   delay: 0,
   burstRounds: 50,
-  monitorDelay: 3000,
+  monitorDelay: 1000,
   cap: 0,
   corsMode: 'no-cors',
 };
