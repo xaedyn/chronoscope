@@ -24,7 +24,7 @@ describe('persistence', () => {
     const settings: PersistedSettings = {
       version: 3,
       endpoints: [{ url: 'https://example.com', enabled: true }],
-      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 3000, cap: 0, corsMode: 'no-cors' },
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors' },
       ui: { expandedCards: [], activeView: 'timeline' },
     };
     saveSettings(settings);
@@ -32,7 +32,7 @@ describe('persistence', () => {
     expect(loaded?.version).toBe(3);
     expect(loaded?.endpoints[0]?.url).toBe('https://example.com');
     expect(loaded?.settings.burstRounds).toBe(50);
-    expect(loaded?.settings.monitorDelay).toBe(3000);
+    expect(loaded?.settings.monitorDelay).toBe(1000);
   });
 
   it('returns null for corrupt data', () => {
@@ -46,7 +46,7 @@ describe('persistence', () => {
     const migrated = migrateSettings(v1Data);
     expect(migrated?.version).toBe(3);
     expect(migrated?.settings.burstRounds).toBe(50);
-    expect(migrated?.settings.monitorDelay).toBe(3000);
+    expect(migrated?.settings.monitorDelay).toBe(1000);
   });
 
   it('migrates v2 data to v3 with old delay as monitorDelay', () => {
