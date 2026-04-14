@@ -149,7 +149,7 @@
       if (newCount > prevCount) {
         const latestSample = epState.samples.at(epState.samples.length - 1);
         const points = currentFrameData.pointsByEndpoint.get(ep.id);
-        const latestPoint = points?.[newCount - 1];
+        const latestPoint = points?.[points.length - 1];
         if (latestSample && latestPoint && timelineRenderer) {
           const { cx, cy } = timelineRenderer.toCanvasCoords(latestPoint);
           const ping: SonarPing = {
