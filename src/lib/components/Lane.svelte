@@ -110,11 +110,13 @@
     </div>
     <div class="lane-label">Median</div>
     {#if ready}
+      <div class="lane-stats-container">
       <div class="lane-stats" aria-label="Statistics">
         <div class="ls"><div class="ls-label">P95</div><div class="ls-val">{fmt(p95)}</div></div>
         <div class="ls"><div class="ls-label">P99</div><div class="ls-val">{fmt(p99)}</div></div>
         <div class="ls"><div class="ls-label">Jitter</div><div class="ls-val">{fmt(jitter)}</div></div>
         <div class="ls"><div class="ls-label">Loss</div><div class="ls-val">{fmtLoss(lossPercent)}</div></div>
+      </div>
       </div>
     {:else}
       <div class="collecting-note">Collecting data…</div>
@@ -253,11 +255,14 @@
     color: var(--t4); margin-top: 4px;
     text-transform: uppercase; letter-spacing: 0.04em;
   }
+  .lane-stats-container {
+    container-type: inline-size;
+    margin-top: 18px; padding-top: 16px;
+    border-top: 1px solid var(--stats-border);
+  }
   .lane-stats {
     display: grid; grid-template-columns: repeat(4, 1fr);
-    gap: 12px; margin-top: 18px; padding-top: 16px;
-    border-top: 1px solid var(--stats-border);
-    container-type: inline-size;
+    gap: 12px;
   }
   @container (max-width: 199px) {
     .lane-stats { grid-template-columns: 1fr 1fr; }

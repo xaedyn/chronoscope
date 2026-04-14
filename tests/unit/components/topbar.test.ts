@@ -34,10 +34,10 @@ function showRunStatus(lifecycle: TestLifecycleState): boolean {
   return lifecycle === 'running' || lifecycle === 'starting' || lifecycle === 'stopping';
 }
 
-// Replicates button class logic from Topbar.svelte
-function getStartStopClass(lifecycle: TestLifecycleState): string {
+// Replicates button modifier class logic from Topbar.svelte (single node, class toggle)
+function getStartStopModifier(lifecycle: TestLifecycleState): 'start' | 'stop' {
   const isStart = lifecycle === 'idle' || lifecycle === 'stopped' || lifecycle === 'completed';
-  return isStart ? 'btn-start' : 'btn-stop';
+  return isStart ? 'start' : 'stop';
 }
 
 describe('Topbar', () => {
@@ -130,30 +130,30 @@ describe('Topbar', () => {
     expect(isRunning('stopping')).toBe(false);
   });
 
-  // ── Button hierarchy: btn-start / btn-stop / btn-ghost ─────────────────────
+  // ── Button hierarchy: start / stop / btn-ghost ─────────────────────
 
-  it('applies btn-start class when idle', () => {
-    expect(getStartStopClass('idle')).toBe('btn-start');
+  it('applies start class when idle', () => {
+    expect(getStartStopModifier('idle')).toBe('start');
   });
 
-  it('applies btn-start class when stopped', () => {
-    expect(getStartStopClass('stopped')).toBe('btn-start');
+  it('applies start class when stopped', () => {
+    expect(getStartStopModifier('stopped')).toBe('start');
   });
 
-  it('applies btn-start class when completed', () => {
-    expect(getStartStopClass('completed')).toBe('btn-start');
+  it('applies start class when completed', () => {
+    expect(getStartStopModifier('completed')).toBe('start');
   });
 
-  it('applies btn-stop class when running', () => {
-    expect(getStartStopClass('running')).toBe('btn-stop');
+  it('applies stop class when running', () => {
+    expect(getStartStopModifier('running')).toBe('stop');
   });
 
-  it('applies btn-stop class during starting transition', () => {
-    expect(getStartStopClass('starting')).toBe('btn-stop');
+  it('applies stop class during starting transition', () => {
+    expect(getStartStopModifier('starting')).toBe('stop');
   });
 
-  it('applies btn-stop class during stopping transition', () => {
-    expect(getStartStopClass('stopping')).toBe('btn-stop');
+  it('applies stop class during stopping transition', () => {
+    expect(getStartStopModifier('stopping')).toBe('stop');
   });
 
   // Secondary buttons are always btn-ghost (verified by template — class is static)

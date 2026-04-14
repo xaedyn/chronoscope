@@ -76,17 +76,17 @@ for (const vp of VIEWPORTS) {
       await page.waitForSelector('#chronoscope-root');
     });
 
-    test('AC-1: Start button has .btn-start class', async ({ page }) => {
+    test('AC-1: Start button has .btn-start-stop.start class', async ({ page }) => {
       const startBtn = page.getByRole('button', { name: /^start$/i });
       await expect(startBtn).toBeVisible();
-      await expect(startBtn).toHaveClass(/btn-start/);
+      await expect(startBtn).toHaveClass(/btn-start-stop/);
     });
 
-    test('AC-1: Secondary buttons do NOT have btn-start class', async ({ page }) => {
+    test('AC-1: Secondary buttons do NOT have btn-start-stop class', async ({ page }) => {
       const settingsBtn = page.getByRole('button', { name: /settings/i });
       if (await settingsBtn.isVisible()) {
         const cls = await settingsBtn.getAttribute('class') ?? '';
-        expect(cls).not.toContain('btn-start');
+        expect(cls).not.toContain('btn-start-stop');
       }
     });
 

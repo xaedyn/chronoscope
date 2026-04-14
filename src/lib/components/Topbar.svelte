@@ -114,11 +114,11 @@
   </div>
 
   {#if showRunStatus}
-    <div class="run-status" aria-live="polite" aria-atomic="true">
+    <div class="run-status">
       {#if isRunning}
         <div class="pulse-dot" class:dot-enter={isRunning} aria-hidden="true"></div>
       {/if}
-      <span class="run-label">{runLabel}</span>
+      <span class="run-label" aria-hidden="true">{runLabel}</span>
     </div>
   {/if}
 
@@ -136,7 +136,7 @@
           Share
         {/if}
       </button>
-      <button type="button" class="btn btn-start" aria-label="Run your own test" onclick={handleRunOwn}>Run Your Own Test</button>
+      <button type="button" class="btn btn-start-stop start" aria-label="Run your own test" onclick={handleRunOwn}>Run Your Own Test</button>
     {:else}
       <button type="button" class="btn btn-ghost" aria-label="Add or remove endpoints" aria-expanded={$uiStore.showEndpoints} aria-controls="endpoint-drawer" onclick={handleEndpoints}>
         {#if isMobile}
@@ -168,11 +168,16 @@
           Share
         {/if}
       </button>
-      {#if isStartButton}
-        <button type="button" class="btn btn-start" disabled={isTransitioning} aria-disabled={isTransitioning} aria-label={startStopLabel} onclick={handleStartStop}>{startStopLabel}</button>
-      {:else}
-        <button type="button" class="btn btn-stop" disabled={isTransitioning} aria-disabled={isTransitioning} aria-label={startStopLabel} onclick={handleStartStop}>{startStopLabel}</button>
-      {/if}
+      <button
+        type="button"
+        class="btn btn-start-stop"
+        class:start={isStartButton}
+        class:stop={!isStartButton && lifecycle === 'running'}
+        disabled={isTransitioning}
+        aria-disabled={isTransitioning}
+        aria-label={startStopLabel}
+        onclick={handleStartStop}
+      >{startStopLabel}</button>
     {/if}
   </nav>
 </header>
@@ -264,26 +269,24 @@
     color: var(--t2);
   }
 
-  /* Start button — cyan accent */
-  .btn-start {
+  /* Start/Stop — single node, class toggles for CSS crossfade */
+  .btn-start-stop {
     background: var(--cyan-bg-subtle);
     border-color: var(--cyan-border-subtle);
     color: var(--accent-cyan);
   }
-  .btn-start:hover:not(:disabled) {
+  .btn-start-stop.stop {
+    background: var(--pink-bg-subtle);
+    border-color: var(--pink-border-subtle);
+    color: var(--accent-pink);
+  }
+  .btn-start-stop:hover:not(:disabled) {
     background: var(--cyan25);
     border-color: var(--cyan-border-subtle);
     box-shadow: 0 0 12px var(--glow-cyan);
     color: var(--accent-cyan);
   }
-
-  /* Stop button — pink accent */
-  .btn-stop {
-    background: var(--pink-bg-subtle);
-    border-color: var(--pink-border-subtle);
-    color: var(--accent-pink);
-  }
-  .btn-stop:hover:not(:disabled) {
+  .btn-start-stop.stop:hover:not(:disabled) {
     background: var(--pink25);
     border-color: var(--pink-border-subtle);
     box-shadow: 0 0 12px var(--glow-pink);
