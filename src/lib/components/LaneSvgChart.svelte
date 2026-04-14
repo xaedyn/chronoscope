@@ -115,11 +115,15 @@
   // Area fill between total-latency dots and TTFB dots
   const ttfbAreaPath: string = $derived.by(() => {
     if (ttfbDots.length < 2 || dots.length < 2) return '';
-    const ttfbMap = new Map(ttfbDots.map((d, i) => [ttfbPoints![i]!.round, d.cy]));
+    if (!ttfbPoints) return '';
+    const ttfbMap = new Map(ttfbDots.map((d, i) => {
+      const pt = ttfbPoints[i];
+      return [pt ? pt.round : -1, d.cy];
+    }));
     const sharedDots = dots.filter(d => ttfbMap.has(d.round));
     if (sharedDots.length < 2) return '';
     const topEdge = sharedDots.map((d, i) => `${i === 0 ? 'M' : 'L'}${d.cx},${d.cy}`).join(' ');
-    const botEdge = [...sharedDots].reverse().map(d => `L${d.cx},${ttfbMap.get(d.round)!}`).join(' ');
+    const botEdge = [...sharedDots].reverse().map(d => `L${d.cx},${ttfbMap.get(d.round) ?? 0}`).join(' ');
     return `${topEdge} ${botEdge} Z`;
   });
 
