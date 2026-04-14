@@ -3,32 +3,51 @@
 // the measurement store changes. Pure derived state — no side effects.
 
 import { derived } from 'svelte/store';
-import { measurementStore } from './measurements';
-import { computeEndpointStatistics } from '../utils/statistics';
+import { measurementStore, incrementalLossCounter, getSortedBufferForEndpoint } from './measurements';
+import { computeEndpointStatistics, computeEndpointStatisticsFromBuffer } from '../utils/statistics';
 import type { StatisticsState, EndpointStatistics } from '../types';
 
-// Per-endpoint memoization: only recompute when sample count changes
-let cache: Record<string, { sampleCount: number; stats: EndpointStatistics }> = {};
+// Per-endpoint memoization: compound cache key ${epoch}:${tailIndex}
+// tailIndex never stalls at capacity (THE BET), epoch resets after loadSnapshot (B3 fix)
+let cache: Record<string, { cacheKey: string; stats: EndpointStatistics }> = {};
 
 export const statisticsStore = derived<typeof measurementStore, StatisticsState>(
   measurementStore,
   ($measurements) => {
     const result: StatisticsState = {};
     const nextCache: typeof cache = {};
+    const epoch = $measurements.epoch;
 
     for (const [endpointId, endpointState] of Object.entries($measurements.endpoints)) {
-      const sampleCount = endpointState.samples.length;
+      const tailIndex = endpointState.samples.tailIndex;
+      const cacheKey = `${epoch}:${tailIndex}`;
       const cached = cache[endpointId];
 
-      if (cached && cached.sampleCount === sampleCount) {
-        // Sample count unchanged — reuse cached stats
+      if (cached && cached.cacheKey === cacheKey) {
+        // Cache key unchanged — reuse cached stats
         result[endpointId] = cached.stats;
         nextCache[endpointId] = cached;
       } else {
-        // Recompute
-        const stats = computeEndpointStatistics(endpointId, endpointState.samples);
+        // Recompute using buffer-based path when sorted buffer is available
+        const sortedBuffer = getSortedBufferForEndpoint(endpointId);
+        const lossCounts = incrementalLossCounter.getCounts(endpointId);
+        let stats: EndpointStatistics;
+
+        if (sortedBuffer.length > 0 || lossCounts.totalSamples > 0) {
+          stats = computeEndpointStatisticsFromBuffer(
+            endpointId,
+            sortedBuffer,
+            lossCounts,
+            lossCounts.totalSamples,
+            endpointState.samples,
+          );
+        } else {
+          // Fallback for empty state
+          stats = computeEndpointStatistics(endpointId, endpointState.samples.toArray());
+        }
+
         result[endpointId] = stats;
-        nextCache[endpointId] = { sampleCount, stats };
+        nextCache[endpointId] = { cacheKey, stats };
       }
     }
 
