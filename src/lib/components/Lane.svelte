@@ -248,7 +248,7 @@
   }
   .lane-panel {
     width: var(--panel-width); flex-shrink: 0;
-    padding: var(--spacing-xl) var(--spacing-xxl); display: flex; flex-direction: column;
+    padding: var(--spacing-lg2) var(--spacing-xl); display: flex; flex-direction: column;
     justify-content: center;
     border-right: 1px solid rgba(255,255,255,.05);
     position: relative; z-index: 2;
