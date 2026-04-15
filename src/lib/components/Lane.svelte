@@ -242,7 +242,7 @@
   }
   .lane-panel {
     width: var(--panel-width); flex-shrink: 0;
-    padding: 24px 28px; display: flex; flex-direction: column;
+    padding: var(--spacing-xl) var(--spacing-xxl); display: flex; flex-direction: column;
     justify-content: center;
     border-right: 1px solid rgba(255,255,255,.05);
     position: relative; z-index: 2;
@@ -258,7 +258,7 @@
   }
   .hero-value {
     font-family: var(--sans); font-size: 54px; font-weight: 200;
-    letter-spacing: -0.06em;
+    letter-spacing: -0.06em; font-variant-numeric: tabular-nums;
   }
   .hero-unit {
     font-family: var(--sans); font-size: 16px; font-weight: 300;
@@ -271,7 +271,7 @@
   }
   .lane-stats-container {
     container-type: inline-size;
-    margin-top: 18px; padding-top: 16px;
+    margin-top: var(--spacing-lg); padding-top: var(--spacing-lg);
     border-top: 1px solid var(--stats-border);
   }
   .lane-stats {
@@ -282,12 +282,12 @@
     .lane-stats { grid-template-columns: 1fr 1fr; }
   }
   .ls-label {
-    font-family: var(--mono); font-size: 8px; font-weight: 400;
-    color: var(--t5); text-transform: uppercase; letter-spacing: 0.07em;
+    font-family: var(--mono); font-size: 9px; font-weight: 400;
+    color: var(--t5); text-transform: uppercase; letter-spacing: 0.04em;
   }
   .ls-val {
     font-family: var(--mono); font-size: 12px; font-weight: 300;
-    color: var(--t2); margin-top: 3px;
+    color: var(--t2); margin-top: 3px; font-variant-numeric: tabular-nums;
   }
   .collecting-note {
     font-family: var(--mono); font-size: 11px; font-weight: 300;
@@ -318,7 +318,7 @@
   .lane-compact-header {
     position: absolute; top: 0; left: 0; right: 0; z-index: 3;
     height: var(--compact-header-height);
-    display: flex; align-items: center; gap: 10px; padding: 0 10px;
+    display: flex; align-items: center; gap: var(--spacing-sm); padding: 0 var(--spacing-sm);
     background: rgba(12, 10, 20, 0.7);
     backdrop-filter: blur(12px) saturate(1.2);
     -webkit-backdrop-filter: blur(12px) saturate(1.2);
@@ -384,12 +384,12 @@
   @media (max-width: 767px) {
     .lane:not(.compact) { flex-direction: column; }
     .lane:not(.compact) .lane-panel {
-      width: 100%; padding: 16px 20px 12px;
+      width: 100%; padding: var(--spacing-lg) var(--spacing-lg2) var(--spacing-md);
       border-right: none;
       border-bottom: 1px solid rgba(255,255,255,.05);
-      flex-direction: row; align-items: center; gap: 20px;
+      flex-direction: row; align-items: center; gap: var(--spacing-lg2);
     }
-    .lane-panel { padding: 16px 20px; }
+    .lane-panel { padding: var(--spacing-lg) var(--spacing-lg2); }
     .lane:not(.compact) .lane-stats { margin-top: 0; padding-top: 0; border-top: none; }
     .hero-value { font-size: clamp(32px, 10vw, 54px); }
     .ch-url { max-width: 120px; }
