@@ -166,6 +166,17 @@
     return `rgba(${r},${g},${b},.06)`;
   }
 
+  let hasAnimatedEntrance = $state(false);
+  let prevLifecycle = $state($measurementStore.lifecycle);
+
+  $effect(() => {
+    const current = $measurementStore.lifecycle;
+    if (prevLifecycle !== 'running' && current === 'running' && !hasAnimatedEntrance) {
+      hasAnimatedEntrance = true;
+    }
+    prevLifecycle = current;
+  });
+
   let lanesEl: HTMLDivElement;
 
   // ── Drag-to-reorder state ──────────────────────────────────────────────────
@@ -417,6 +428,8 @@
       {@const offset = dragOffsets[i] ?? 0}
       <Lane
         endpointId={ep.id}
+        laneIndex={i}
+        showEntrance={hasAnimatedEntrance}
         color={ep.color}
         url={ep.label || ep.url}
         p50={laneProps.p50}

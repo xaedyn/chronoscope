@@ -20,6 +20,8 @@
     settling = false,
     noTransition = false,
     translateY = 0,
+    laneIndex = 0,
+    showEntrance = false,
     onGripPointerDown = undefined,
     tier2Averages = undefined,
     onGripKeyDown = undefined,
@@ -48,6 +50,8 @@
       ttfb: number;
       contentTransfer: number;
     };
+    laneIndex?: number;
+    showEntrance?: boolean;
     onGripPointerDown?: (e: PointerEvent) => void;
     onGripKeyDown?: (e: KeyboardEvent) => void;
     children?: import('svelte').Snippet;
@@ -73,12 +77,14 @@
   data-endpoint-id={endpointId}
   class="lane"
   class:compact={compact}
+  class:entrance={showEntrance}
   class:is-dragging={dragging}
   class:is-settling={settling}
   class:no-transition={noTransition}
   aria-label="Endpoint {url}"
   data-dragging={dragging ? 'true' : undefined}
   style:--drag-translate="{translateY}px"
+  style:--lane-index={laneIndex}
   style:--ep-color={color}
   style:--t1={tokens.color.text.t1}
   style:--t2={tokens.color.text.t2}
@@ -380,6 +386,29 @@
 
   /* Shift now-label below compact header */
   .lane.compact .now-label { top: 34px; }
+
+  @keyframes laneEntrance {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .lane.entrance {
+    animation: laneEntrance 200ms cubic-bezier(0.0, 0.0, 0.2, 1) both;
+    animation-delay: min(calc(var(--lane-index, 0) * 50ms), 540ms);
+  }
+
+  .lane.is-dragging.entrance,
+  .lane.is-settling.entrance {
+    animation: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .lane.entrance {
+      animation: none;
+      opacity: 1;
+      transform: none;
+    }
+  }
 
   @media (max-width: 767px) {
     .lane:not(.compact) { flex-direction: column; }
