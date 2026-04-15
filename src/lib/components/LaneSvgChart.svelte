@@ -278,18 +278,20 @@
     </g>
     {#if nowDot}
       <circle class="now-dot" cx={nowDot.cx} cy={nowDot.cy} r={tokens.lane.nowDotRadius} />
-      <circle
-        cx={nowDot.cx}
-        cy={nowDot.cy}
-        r={tokens.lane.ringInitialR}
-        fill="none"
-        stroke="var(--ep-color)"
-        stroke-width="0.5"
-        opacity="0.2"
-      >
-        <animate attributeName="r" values="{tokens.lane.ringInitialR};{tokens.lane.ringFinalR}" dur="2s" repeatCount="indefinite"/>
-        <animate attributeName="opacity" values=".2;0" dur="2s" repeatCount="indefinite"/>
-      </circle>
+      {#if !reducedMotion}
+        <circle
+          cx={nowDot.cx}
+          cy={nowDot.cy}
+          r={tokens.lane.ringInitialR}
+          fill="none"
+          stroke="var(--ep-color)"
+          stroke-width="0.5"
+          opacity="0.2"
+        >
+          <animate attributeName="r" values="{tokens.lane.ringInitialR};{tokens.lane.ringFinalR}" dur="2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values=".2;0" dur="2s" repeatCount="indefinite"/>
+        </circle>
+      {/if}
     {/if}
     </g>
   {:else}
