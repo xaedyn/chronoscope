@@ -42,6 +42,19 @@
       ? `Burst · ${roundCounter}/${burstRounds} · ${timeout / 1000}s timeout`
       : `${monitorDelay / 1000}s interval · ${timeout / 1000}s timeout`
   );
+
+  let progressVisible = $state(true);
+  let prevLifecycleForFade = $state($measurementStore.lifecycle);
+
+  $effect(() => {
+    const current = $measurementStore.lifecycle;
+    if (current !== prevLifecycleForFade) {
+      progressVisible = false;
+      const id = setTimeout(() => { progressVisible = true; }, 80);
+      prevLifecycleForFade = current;
+      return () => clearTimeout(id);
+    }
+  });
 </script>
 
 <footer
@@ -57,7 +70,7 @@
   <span class="config">{configLabel}</span>
   <LatencyLegend />
   <div class="spacer"></div>
-  <span class="progress">{progressLabel}</span>
+  <span class="progress" class:fade-out={!progressVisible}>{progressLabel}</span>
 </footer>
 
 <style>
@@ -74,6 +87,17 @@
   .highlight { color: var(--t1); font-weight: 400; }
   .spacer { flex: 1; }
   .config, .progress { color: var(--t3); }
+  .progress {
+    transition: opacity 200ms ease;
+  }
+  .progress.fade-out {
+    opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .progress { transition: none; }
+  }
+
   @media (max-width: 767px) {
     .foot { padding: 0 var(--spacing-md); gap: var(--spacing-sm); }
     .config { display: none; }
