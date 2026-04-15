@@ -230,8 +230,8 @@
       box-shadow 280ms ease-out;
   }
   .lane:hover {
-    border-color: var(--glass-highlight);
-    box-shadow: 0 4px 30px rgba(0,0,0,.15);
+    border-color: rgba(255,255,255,.09);
+    box-shadow: 0 6px 32px rgba(0,0,0,.25);
   }
   .lane::before {
     content: ''; position: absolute;
