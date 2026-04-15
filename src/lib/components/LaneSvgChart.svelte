@@ -194,6 +194,18 @@
     uiStore.clearHeatmapTooltip();
   }
 
+  // ── Color-mix fallback: compute rgba() so Safari <16.2 / Firefox <113 work ──
+  function hexToRgba(hex: string, alpha: number): string {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return `rgba(103,232,249,${alpha})`;
+    return `rgba(${r},${g},${b},${alpha})`;
+  }
+
+  const ttfbStroke: string = $derived(hexToRgba(color, 0.4));
+  const ttfbFill: string = $derived(hexToRgba(color, 0.04));
+
   // ── Reduced-motion preference ──────────────────────────────────────────────
   let reducedMotion = $state(false);
   $effect(() => {
@@ -215,8 +227,8 @@
   aria-label="Latency scatter chart"
   style:--ep-color={color}
   style:--ribbon-fill={colorRgba06}
-  style:--ttfb-stroke="color-mix(in srgb, var(--ep-color) 40%, transparent)"
-  style:--ttfb-fill="color-mix(in srgb, var(--ep-color) 4%, transparent)"
+  style:--ttfb-stroke={ttfbStroke}
+  style:--ttfb-fill={ttfbFill}
   style:--empty-fill={tokens.color.text.emptyFill}
   style:--grid-line={tokens.color.svg.gridLine}
   style:--future-zone={tokens.color.svg.futureZone}
@@ -278,18 +290,20 @@
     </g>
     {#if nowDot}
       <circle class="now-dot" cx={nowDot.cx} cy={nowDot.cy} r={tokens.lane.nowDotRadius} />
-      <circle
-        cx={nowDot.cx}
-        cy={nowDot.cy}
-        r={tokens.lane.ringInitialR}
-        fill="none"
-        stroke="var(--ep-color)"
-        stroke-width="0.5"
-        opacity="0.2"
-      >
-        <animate attributeName="r" values="{tokens.lane.ringInitialR};{tokens.lane.ringFinalR}" dur="2s" repeatCount="indefinite"/>
-        <animate attributeName="opacity" values=".2;0" dur="2s" repeatCount="indefinite"/>
-      </circle>
+      {#if !reducedMotion}
+        <circle
+          cx={nowDot.cx}
+          cy={nowDot.cy}
+          r={tokens.lane.ringInitialR}
+          fill="none"
+          stroke="var(--ep-color)"
+          stroke-width="0.5"
+          opacity="0.2"
+        >
+          <animate attributeName="r" values="{tokens.lane.ringInitialR};{tokens.lane.ringFinalR}" dur="2s" repeatCount="indefinite"/>
+          <animate attributeName="opacity" values=".2;0" dur="2s" repeatCount="indefinite"/>
+        </circle>
+      {/if}
     {/if}
     </g>
   {:else}
