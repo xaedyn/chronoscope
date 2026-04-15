@@ -27,9 +27,7 @@
 
   const tier2Total = $derived(phases.reduce((sum, p) => sum + p.value, 0));
 
-  // When total is 0, distribute equally (20% each) to avoid division by zero
   function flexBasis(value: number): string {
-    if (tier2Total === 0) return '20%';
     return `${(value / tier2Total) * 100}%`;
   }
 
@@ -42,30 +40,40 @@
   class="wf-root"
   style:--wf-label-color={tokens.color.tier2.labelText}
 >
-  <!-- Stacked timing bar -->
-  <div
-    class="waterfall-bar"
-    role="img"
-    aria-label={ariaLabel}
-  >
-    {#each phases as phase (phase.key)}
-      <div
-        class="wf-segment"
-        style:flex-basis={flexBasis(phase.value)}
-        style:min-width="2px"
-        style:background={phase.color}
-      ></div>
-    {/each}
-  </div>
+  {#if tier2Total === 0}
+    <div
+      class="wf-fallback"
+      role="status"
+      aria-label="Timing decomposition unavailable in this browser"
+    >
+      <span class="wf-fallback-text">Timing data limited</span>
+    </div>
+  {:else}
+    <!-- Stacked timing bar -->
+    <div
+      class="waterfall-bar"
+      role="img"
+      aria-label={ariaLabel}
+    >
+      {#each phases as phase (phase.key)}
+        <div
+          class="wf-segment"
+          style:flex-basis={flexBasis(phase.value)}
+          style:min-width="2px"
+          style:background={phase.color}
+        ></div>
+      {/each}
+    </div>
 
-  <!-- Phase labels — only show phases with value > 0 -->
-  <div class="wf-labels" aria-hidden="true">
-    {#each phases as phase (phase.key)}
-      {#if phase.value > 0}
-        <span class="wf-label">{phase.label} {Math.round(phase.value)}ms</span>
-      {/if}
-    {/each}
-  </div>
+    <!-- Phase labels — only show phases with value > 0 -->
+    <div class="wf-labels" aria-hidden="true">
+      {#each phases as phase (phase.key)}
+        {#if phase.value > 0}
+          <span class="wf-label">{phase.label} {Math.round(phase.value)}ms</span>
+        {/if}
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -103,5 +111,19 @@
     font-family: 'Martian Mono', monospace;
     color: var(--wf-label-color);
     white-space: nowrap;
+  }
+
+  .wf-fallback {
+    height: 6px;
+    display: flex;
+    align-items: center;
+    margin-top: 0;
+  }
+
+  .wf-fallback-text {
+    font-size: 7px;
+    font-family: 'Martian Mono', monospace;
+    color: var(--wf-label-color);
+    opacity: 0.6;
   }
 </style>

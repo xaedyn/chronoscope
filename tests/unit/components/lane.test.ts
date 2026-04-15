@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { render } from '@testing-library/svelte';
 import Lane from '../../../src/lib/components/Lane.svelte';
+import LaneSvgChart from '../../../src/lib/components/LaneSvgChart.svelte';
 
 describe('Lane', () => {
   const props = {
@@ -150,5 +151,60 @@ describe('Lane', () => {
       props: { ...props, tier2Averages, ready: true, compact: true },
     });
     expect(container.querySelector('.waterfall-bar')).toBeNull();
+  });
+});
+
+// ── LaneSvgChart: reduced-motion guard for now-dot pulse ring ──────────────────
+
+describe('LaneSvgChart now-dot pulse ring', () => {
+  const baseChartProps = {
+    color: '#67e8f9',
+    colorRgba06: 'rgba(103,232,249,0.6)',
+    visibleStart: 1,
+    visibleEnd: 10,
+    points: [{ round: 5, y: 0.5, latency: 100 }],
+    ribbon: undefined,
+    yRange: { min: 0, max: 500 },
+  };
+
+  let originalMatchMedia: typeof window.matchMedia;
+
+  beforeEach(() => {
+    originalMatchMedia = window.matchMedia;
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: originalMatchMedia,
+    });
+  });
+
+  it('renders <animate> elements inside now-dot ring when reducedMotion is false', () => {
+    // Default stub returns matches: false — standard motion allowed
+    const { container } = render(LaneSvgChart, { props: baseChartProps });
+    expect(container.querySelectorAll('animate').length).toBeGreaterThan(0);
+  });
+
+  it('suppresses <animate> elements inside now-dot ring when prefers-reduced-motion: reduce', () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string): MediaQueryList => ({
+        matches: query === '(prefers-reduced-motion: reduce)',
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      }),
+    });
+
+    const { container } = render(LaneSvgChart, { props: baseChartProps });
+    // The solid now-dot circle must still be present
+    expect(container.querySelector('.now-dot')).not.toBeNull();
+    // No <animate> elements should exist (pulse ring suppressed)
+    expect(container.querySelectorAll('animate').length).toBe(0);
   });
 });

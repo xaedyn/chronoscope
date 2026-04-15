@@ -54,9 +54,6 @@ describe('LaneHeaderWaterfall', () => {
     expect(() =>
       render(LaneHeaderWaterfall, { props: { tier2Averages: allZero } })
     ).not.toThrow();
-    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages: allZero } });
-    const segments = container.querySelectorAll('.wf-segment');
-    expect(segments.length).toBe(5);
   });
 
   it('TTFB segment has highest flex-basis when ttfb dominates (80ms out of 150ms total)', () => {
@@ -84,5 +81,43 @@ describe('LaneHeaderWaterfall', () => {
       const style = (seg as HTMLElement).getAttribute('style') ?? '';
       expect(style).toContain('min-width: 2px');
     });
+  });
+});
+
+describe('LaneHeaderWaterfall — fallback warning badge', () => {
+  it('renders .wf-fallback when all phases are zero', () => {
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages: allZero } });
+    expect(container.querySelector('.wf-fallback')).not.toBeNull();
+  });
+
+  it('does not render .waterfall-bar when all phases are zero', () => {
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages: allZero } });
+    expect(container.querySelector('.waterfall-bar')).toBeNull();
+  });
+
+  it('.wf-fallback has role="status"', () => {
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages: allZero } });
+    const fallback = container.querySelector('.wf-fallback');
+    expect(fallback?.getAttribute('role')).toBe('status');
+  });
+
+  it('.wf-fallback has aria-label', () => {
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages: allZero } });
+    const fallback = container.querySelector('.wf-fallback');
+    const label = fallback?.getAttribute('aria-label') ?? '';
+    expect(label.length).toBeGreaterThan(0);
+  });
+
+  it('renders "Timing data limited" text', () => {
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages: allZero } });
+    const text = container.querySelector('.wf-fallback-text');
+    expect(text).not.toBeNull();
+    expect(text?.textContent).toContain('Timing data limited');
+  });
+
+  it('renders .waterfall-bar (not .wf-fallback) when any phase is non-zero', () => {
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages } });
+    expect(container.querySelector('.waterfall-bar')).not.toBeNull();
+    expect(container.querySelector('.wf-fallback')).toBeNull();
   });
 });

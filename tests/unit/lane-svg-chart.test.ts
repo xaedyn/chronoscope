@@ -194,4 +194,37 @@ describe('LaneSvgChart', () => {
     });
     expect(container.querySelector('.ttfb-area')).not.toBeNull();
   });
+
+  // ── color-mix() fallback tests ──────────────────────────────────────────
+
+  it('SVG --ttfb-stroke style uses rgba() not color-mix() (cross-browser fallback)', () => {
+    const { container } = render(LaneSvgChart, { props: baseProps });
+    const svg = container.querySelector('svg');
+    const stroke = svg?.style.getPropertyValue('--ttfb-stroke') ?? '';
+    expect(stroke).toMatch(/^rgba\(/);
+    expect(stroke).not.toContain('color-mix');
+  });
+
+  it('SVG --ttfb-fill style uses rgba() not color-mix() (cross-browser fallback)', () => {
+    const { container } = render(LaneSvgChart, { props: baseProps });
+    const svg = container.querySelector('svg');
+    const fill = svg?.style.getPropertyValue('--ttfb-fill') ?? '';
+    expect(fill).toMatch(/^rgba\(/);
+    expect(fill).not.toContain('color-mix');
+  });
+
+  it('--ttfb-stroke alpha is 0.4 for the default cyan color', () => {
+    const { container } = render(LaneSvgChart, { props: baseProps });
+    const svg = container.querySelector('svg');
+    const stroke = svg?.style.getPropertyValue('--ttfb-stroke') ?? '';
+    // baseProps color is #67e8f9 = rgb(103,232,249)
+    expect(stroke).toBe('rgba(103,232,249,0.4)');
+  });
+
+  it('--ttfb-fill alpha is 0.04 for the default cyan color', () => {
+    const { container } = render(LaneSvgChart, { props: baseProps });
+    const svg = container.querySelector('svg');
+    const fill = svg?.style.getPropertyValue('--ttfb-fill') ?? '';
+    expect(fill).toBe('rgba(103,232,249,0.04)');
+  });
 });
