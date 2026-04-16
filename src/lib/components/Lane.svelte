@@ -248,11 +248,10 @@
   }
   .lane-panel {
     width: var(--panel-width); flex-shrink: 0;
-    padding: clamp(12px, 8cqh, 24px) 28px; display: flex; flex-direction: column;
+    padding: 24px 28px; display: flex; flex-direction: column;
+    justify-content: center;
     border-right: 1px solid rgba(255,255,255,.05);
     position: relative; z-index: 2;
-    container-type: size;
-    container-name: lane-panel;
   }
 
   .lane-url {
@@ -290,8 +289,8 @@
     .lane-stats { grid-template-columns: 1fr 1fr; }
   }
   .ls-label {
-    font-family: var(--mono); font-size: 9px; font-weight: 400;
-    color: var(--t5); text-transform: uppercase; letter-spacing: 0.04em;
+    font-family: var(--mono); font-size: 8px; font-weight: 400;
+    color: var(--t5); text-transform: uppercase; letter-spacing: 0.07em;
   }
   .ls-val {
     font-family: var(--mono); font-size: 12px; font-weight: 300;
@@ -326,7 +325,7 @@
   .lane-compact-header {
     position: absolute; top: 0; left: 0; right: 0; z-index: 3;
     height: var(--compact-header-height);
-    display: flex; align-items: center; gap: var(--spacing-sm); padding: 0 var(--spacing-sm);
+    display: flex; align-items: center; gap: 10px; padding: 0 10px;
     background: rgba(12, 10, 20, 0.7);
     backdrop-filter: blur(12px) saturate(1.2);
     -webkit-backdrop-filter: blur(12px) saturate(1.2);
@@ -431,27 +430,4 @@
     .ch-url { max-width: 120px; }
   }
 
-  /* ── Responsive panel condensation (must be AFTER base rules to win cascade) ── */
-  /* Condensed: ~3 endpoints. Reduce hero, tighten spacing, reduce padding. */
-  @container lane-panel (max-height: 280px) {
-    .lane-url { font-size: 11px; }
-    .hero-value { font-size: 36px; }
-    .hero-unit { font-size: 12px; }
-    .lane-hero { margin-top: 2px; }
-    .lane-label { margin-top: 2px; font-size: 8px; }
-    .lane-stats-container { margin-top: 6px; padding-top: 6px; }
-    .lane-stats { gap: 8px; }
-    .ls-val { font-size: 11px; }
-  }
-
-  /* Very tight: content must be minimal */
-  @container lane-panel (max-height: 200px) {
-    .hero-value { font-size: 28px; }
-    .hero-unit { font-size: 10px; }
-    .lane-stats-container { margin-top: 4px; padding-top: 4px; }
-    .lane-stats { gap: 4px; }
-    .ls-label { font-size: 7px; }
-    .ls-val { font-size: 10px; margin-top: 1px; }
-    .collecting-note { display: none; }
-  }
 </style>
