@@ -203,8 +203,8 @@ describe('tier2 visualization tokens', () => {
 
 describe('apple-polish-v3 tokens (AC1 + AC2)', () => {
   const parseAlpha = (s: string): number => {
-    const m = s.match(/,\s*([\d.]+)\s*\)/);
-    return m ? parseFloat(m[1]) : 0;
+    const match = s.match(/,\s*([\d.]+)\s*\)/);
+    return match ? parseFloat(match[1]) : 0;
   };
 
   it('color.bg.accent has alpha ≤ .04 (AC1)', () => {
