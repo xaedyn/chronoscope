@@ -248,7 +248,7 @@
   }
   .lane-panel {
     width: var(--panel-width); flex-shrink: 0;
-    padding: var(--spacing-lg2) var(--spacing-xl); display: flex; flex-direction: column;
+    padding: 24px 28px; display: flex; flex-direction: column;
     justify-content: center;
     border-right: 1px solid rgba(255,255,255,.05);
     position: relative; z-index: 2;
@@ -277,7 +277,7 @@
   }
   .lane-stats-container {
     container-type: inline-size;
-    margin-top: var(--spacing-lg); padding-top: var(--spacing-lg);
+    margin-top: 18px; padding-top: 16px;
     border-top: 1px solid var(--stats-border);
   }
   .lane-stats {
@@ -356,7 +356,7 @@
     color: var(--t2);
   }
 
-  /* Grip handle */
+  /* Grip handle — hidden until lane hover, Apple-style progressive disclosure */
   .lane-grip {
     display: flex; align-items: center; justify-content: center;
     width: 20px; height: 32px; flex-shrink: 0;
@@ -365,7 +365,12 @@
     cursor: grab;
     touch-action: none;
     border-radius: 4px;
-    transition: color var(--timing-hover) ease, background var(--timing-hover) ease;
+    opacity: 0;
+    transition: opacity 200ms ease, color 200ms ease, background 200ms ease;
+  }
+  .lane:hover .lane-grip,
+  .lane-grip:focus-visible {
+    opacity: 1;
   }
   .lane-grip:hover {
     color: var(--t2);
@@ -413,12 +418,12 @@
   @media (max-width: 767px) {
     .lane:not(.compact) { flex-direction: column; }
     .lane:not(.compact) .lane-panel {
-      width: 100%; padding: var(--spacing-lg) var(--spacing-lg2) var(--spacing-md);
+      width: 100%; padding: 16px 20px 12px;
       border-right: none;
       border-bottom: 1px solid rgba(255,255,255,.05);
-      flex-direction: row; align-items: center; gap: var(--spacing-lg2);
+      flex-direction: row; align-items: center; gap: 20px;
     }
-    .lane-panel { padding: var(--spacing-lg) var(--spacing-lg2); }
+    .lane-panel { padding: 16px 20px; }
     .lane:not(.compact) .lane-stats { margin-top: 0; padding-top: 0; border-top: none; }
     .hero-value { font-size: clamp(32px, 10vw, 54px); }
     .ch-url { max-width: 120px; }

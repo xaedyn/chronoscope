@@ -76,7 +76,7 @@
 <style>
   .foot {
     height: var(--footer-height); display: flex; align-items: center;
-    padding: 0 var(--spacing-lg2); flex-shrink: 0;
+    padding: 0 20px; flex-shrink: 0;
     background: var(--footer-bg);
     border-top: 1px solid var(--footer-border);
     backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
@@ -99,7 +99,7 @@
   }
 
   @media (max-width: 767px) {
-    .foot { padding: 0 var(--spacing-md); gap: var(--spacing-sm); }
+    .foot { padding: 0 12px; gap: 8px; }
     .config { display: none; }
   }
   @media (max-width: 479px) {

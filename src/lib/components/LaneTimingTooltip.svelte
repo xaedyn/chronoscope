@@ -78,7 +78,14 @@
 
   let clampedY = $derived.by(() => {
     if (!tooltipEl) return y;
-    return clamp(y, tooltipEl.offsetHeight, window.innerHeight);
+    const h = tooltipEl.offsetHeight;
+    const vh = window.innerHeight;
+    // If tooltip would overflow below viewport, flip it above the dot
+    if (y + h > vh - VIEWPORT_MARGIN) {
+      const flipped = y - h - 16; // 16px gap above the dot
+      if (flipped >= VIEWPORT_MARGIN) return flipped;
+    }
+    return clamp(y, h, vh);
   });
 </script>
 
@@ -138,7 +145,7 @@
     border-radius: var(--radius-sm);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    padding: var(--spacing-md) var(--spacing-md);
+    padding: 10px 12px;
     max-width: 220px;
   }
 
@@ -186,9 +193,8 @@
 
   .lt-phase-label {
     font-family: var(--mono);
-    font-size: 9px;
+    font-size: 10px;
     font-weight: 400;
-    letter-spacing: 0.04em;
     color: var(--t4);
     flex: 1;
   }

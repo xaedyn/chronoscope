@@ -190,8 +190,8 @@
     height: var(--topbar-height);
     display: flex;
     align-items: center;
-    padding: 0 var(--spacing-lg2);
-    gap: var(--spacing-md);
+    padding: 0 20px;
+    gap: 14px;
     flex-shrink: 0;
     background: var(--topbar-bg);
     border-bottom: 1px solid var(--topbar-border);
@@ -321,7 +321,7 @@
   }
 
   @media (max-width: 767px) {
-    .topbar { padding: 0 var(--spacing-md); gap: var(--spacing-sm); }
+    .topbar { padding: 0 12px; gap: 8px; }
     .btn-ghost { padding: 7px; min-width: 44px; }
   }
 

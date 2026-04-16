@@ -65,7 +65,7 @@
     height: var(--x-height); display: flex; align-items: center;
     padding: 0 var(--lanes-padding-x); flex-shrink: 0;
   }
-  .x-spacer { width: var(--panel-width); padding: 0 var(--spacing-xxl); flex-shrink: 0; }
+  .x-spacer { width: var(--panel-width); padding: 0 28px; flex-shrink: 0; }
   .x-spacer-label {
     font-family: var(--mono); font-size: 9px; font-weight: 400;
     color: var(--t4); text-transform: uppercase; letter-spacing: 0.04em;
