@@ -92,6 +92,14 @@ const primitive = {
   orbCyan:   'rgba(103,232,249,.045)',
   orbPink:   'rgba(249,168,212,.04)',
   orbViolet: 'rgba(139,92,246,.03)',
+
+  // Ambient background accent (tokenized from Layout.svelte's .bg pink radial)
+  bgAccent: 'rgba(249,168,212,.03)',
+
+  // Elevation-aware surface border hierarchy (dim → mid → bright, ≥ .04 delta per tier)
+  borderDim:    'rgba(255,255,255,.04)',
+  borderMid:    'rgba(255,255,255,.08)',
+  borderBright: 'rgba(255,255,255,.14)',
 } as const;
 
 // ── Semantic tokens ────────────────────────────────────────────────────────
@@ -104,6 +112,15 @@ export const tokens = {
       raised:   primitive.bgMid,
       elevated: primitive.bgDeep,
       overlay:  'rgba(0, 0, 0, 0.6)',
+      border: {
+        dim:    primitive.borderDim,
+        mid:    primitive.borderMid,
+        bright: primitive.borderBright,
+      },
+    },
+
+    bg: {
+      accent: primitive.bgAccent,
     },
 
     text: {
