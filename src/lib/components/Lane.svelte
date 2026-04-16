@@ -257,6 +257,8 @@
   .lane-body {
     flex: 1; display: flex; flex-direction: column;
     min-height: 0; overflow: hidden;
+    container-type: size;
+    container-name: lane-body;
   }
 
   .lane-url {
@@ -433,6 +435,28 @@
     .lane:not(.compact) .lane-stats { margin-top: 0; padding-top: 0; border-top: none; }
     .hero-value { font-size: clamp(32px, 10vw, 54px); }
     .ch-url { max-width: 120px; }
+  }
+
+  /* ── Condensed body: when lane-body is short, adapt content to fit ── */
+  @container lane-body (max-height: 160px) {
+    .lane-hero { margin-top: 2px; }
+    .hero-value { font-size: 36px; }
+    .hero-unit { font-size: 14px; }
+    .lane-label { margin-top: 2px; }
+    .lane-stats-container { margin-top: 6px; padding-top: 6px; }
+    .lane-stats { grid-template-columns: repeat(4, auto); gap: 4px 12px; }
+    .ls-label { display: none; }
+    .ls-val { margin-top: 0; }
+    .ls-val::before { font-size: 7px; color: var(--t5); text-transform: uppercase; letter-spacing: 0.05em; margin-right: 3px; }
+    .collecting-note { display: none; }
+  }
+
+  /* Inline stat labels via ::before pseudo-elements in condensed mode */
+  @container lane-body (max-height: 160px) {
+    .ls:nth-child(1) .ls-val::before { content: 'P95 '; }
+    .ls:nth-child(2) .ls-val::before { content: 'P99 '; }
+    .ls:nth-child(3) .ls-val::before { content: 'J '; }
+    .ls:nth-child(4) .ls-val::before { content: 'L '; }
   }
 
 </style>
