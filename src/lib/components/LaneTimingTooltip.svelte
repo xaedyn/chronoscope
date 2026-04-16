@@ -2,6 +2,7 @@
 <!-- Floating tooltip showing tier2 timing decomposition for a scatter dot hover. -->
 <script lang="ts">
   import { tokens } from '$lib/tokens';
+  import { tick } from 'svelte';
   import type { MeasurementSample } from '$lib/types';
 
   let { sample, x, y, color }: {
@@ -63,29 +64,34 @@
   let posX = $state(x);
   let posY = $state(y);
 
-  // Reposition after layout so offsetHeight is accurate
+  // Reposition after DOM layout so offsetHeight is accurate
   $effect(() => {
-    if (!tooltipEl) { posX = x; posY = y; return; }
-    // Read layout dimensions
-    const w = tooltipEl.offsetWidth;
-    const h = tooltipEl.offsetHeight;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
+    // Track x/y to re-run when dot changes
+    const _x = x;
+    const _y = y;
+    // Wait for Svelte to flush DOM updates, then measure
+    tick().then(() => {
+      if (!tooltipEl) { posX = _x; posY = _y; return; }
+      const w = tooltipEl.offsetWidth;
+      const h = tooltipEl.offsetHeight;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
 
-    // X clamping
-    let nx = x;
-    if (nx + w > vw - VIEWPORT_MARGIN) nx = vw - w - VIEWPORT_MARGIN;
-    if (nx < VIEWPORT_MARGIN) nx = VIEWPORT_MARGIN;
+      // X clamping
+      let nx = _x;
+      if (nx + w > vw - VIEWPORT_MARGIN) nx = vw - w - VIEWPORT_MARGIN;
+      if (nx < VIEWPORT_MARGIN) nx = VIEWPORT_MARGIN;
 
-    // Y: prefer below the dot, flip above if it overflows
-    let ny = y;
-    if (ny + h > vh - VIEWPORT_MARGIN) {
-      const flipped = y - h - 16;
-      ny = flipped >= VIEWPORT_MARGIN ? flipped : VIEWPORT_MARGIN;
-    }
+      // Y: prefer below the dot, flip above if it overflows
+      let ny = _y;
+      if (ny + h > vh - VIEWPORT_MARGIN) {
+        const flipped = _y - h - 16;
+        ny = flipped >= VIEWPORT_MARGIN ? flipped : VIEWPORT_MARGIN;
+      }
 
-    posX = nx;
-    posY = ny;
+      posX = nx;
+      posY = ny;
+    });
   });
 </script>
 
