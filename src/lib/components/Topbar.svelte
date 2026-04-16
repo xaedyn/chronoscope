@@ -127,8 +127,10 @@
       </button>
       <button type="button" class="btn btn-ghost" aria-label="Open settings" aria-expanded={$uiStore.showSettings} aria-controls="settings-drawer" onclick={handleSettings}>
         <svg class="btn-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-          <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.3"/>
-          <path d="M8 1.5V3M8 13V14.5M14.5 8H13M3 8H1.5M12.6 3.4L11.5 4.5M4.5 11.5L3.4 12.6M12.6 12.6L11.5 11.5M4.5 4.5L3.4 3.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <path d="M2 4H10.5M13.5 4H14M2 8H5M8 8H14M2 12H8M11 12H14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <circle cx="12" cy="4" r="1.5" stroke="currentColor" stroke-width="1.3"/>
+          <circle cx="6.5" cy="8" r="1.5" stroke="currentColor" stroke-width="1.3"/>
+          <circle cx="9.5" cy="12" r="1.5" stroke="currentColor" stroke-width="1.3"/>
         </svg>
       </button>
       <button type="button" class="btn btn-ghost" aria-label="Share results" aria-expanded={$uiStore.showShare} aria-controls="share-popover" onclick={handleShare}>
