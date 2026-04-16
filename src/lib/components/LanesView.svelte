@@ -469,7 +469,7 @@
     {/each}
   {/if}
 
-  {#if laneHoverRound !== null && laneHoverX !== null && laneHoverY !== null && hoverEndpointId}
+  {#if laneHoverRound !== null && laneHoverX !== null && laneHoverY !== null && hoverEndpointId && endpoints.length <= 1}
     {@const hoveredSample = roundMapsByEndpoint.get(hoverEndpointId)?.get(laneHoverRound)}
     {#if hoveredSample}
       {@const hoveredEp = endpoints.find(e => e.id === hoverEndpointId)}
