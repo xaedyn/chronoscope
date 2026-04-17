@@ -21,6 +21,11 @@ describe('LanesView', () => {
   });
 
   it('renders grip handles for each lane when multiple endpoints', () => {
+    // Trim to 2 endpoints so JSDOM (containerHeight=0) stays in 'full' layout mode
+    // and showGrip is true. The compact-2col layout (≥4 endpoints) hides grips by design.
+    const eps = get(endpointStore);
+    eps.slice(2).forEach(ep => endpointStore.removeEndpoint(ep.id));
+
     const { container } = render(LanesView, { props: {} });
     const grips = container.querySelectorAll('.lane-grip');
     const lanes = container.querySelectorAll('.lane');

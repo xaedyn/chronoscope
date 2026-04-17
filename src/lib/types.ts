@@ -2,6 +2,8 @@
 // Cross-boundary TypeScript contracts. All worker messages, store shapes, and
 // share payloads are defined here. No logic — only types and interfaces.
 
+import type { Region } from './regional-defaults';
+
 // ── Lifecycle ──────────────────────────────────────────────────────────────
 export type TestLifecycleState =
   | 'idle'
@@ -171,6 +173,7 @@ export interface Settings {
   monitorDelay: number;
   cap: number;
   corsMode: 'no-cors' | 'cors';
+  region?: Region;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -181,11 +184,6 @@ export const DEFAULT_SETTINGS: Settings = {
   cap: 0,
   corsMode: 'no-cors',
 };
-
-export const DEFAULT_ENDPOINTS: Omit<Endpoint, 'id' | 'color'>[] = [
-  { url: 'https://www.google.com', enabled: true, label: 'Google' },
-  { url: 'https://1.1.1.1', enabled: true, label: 'Cloudflare DNS' },
-];
 
 // ── UI store ───────────────────────────────────────────────────────────────
 export type ActiveView = 'timeline' | 'heatmap' | 'split';
@@ -259,7 +257,7 @@ export interface SharePayload {
 
 // ── Persistence schema ─────────────────────────────────────────────────────
 export interface PersistedSettings {
-  version: 2 | 3;
+  version: 2 | 3 | 4;
   endpoints: { url: string; enabled: boolean }[];
   settings: Settings;
   ui: {

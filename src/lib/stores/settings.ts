@@ -6,14 +6,14 @@ import { DEFAULT_SETTINGS } from '../types';
 import type { Settings } from '../types';
 
 function createSettingsStore() {
-  const { subscribe, set, update } = writable<Settings>({ ...DEFAULT_SETTINGS });
+  const { subscribe, set, update } = writable<Settings>({ ...DEFAULT_SETTINGS, region: undefined });
 
   return {
     subscribe,
     update,
     set,
     reset() {
-      set({ ...DEFAULT_SETTINGS });
+      set({ ...DEFAULT_SETTINGS, region: undefined });
     },
   };
 }
