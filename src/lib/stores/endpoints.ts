@@ -3,7 +3,8 @@
 
 import { writable, derived } from 'svelte/store';
 import { tokens } from '../tokens';
-import { DEFAULT_ENDPOINTS } from '../types';
+import { REGIONAL_DEFAULTS } from '../regional-defaults';
+import type { Region } from '../regional-defaults';
 import type { Endpoint } from '../types';
 
 let _idCounter = 0;
@@ -17,12 +18,16 @@ function pickColor(index: number): string {
   return palette[index % palette.length] ?? (tokens.color.endpoint[0] as string);
 }
 
-function buildDefaultEndpoints(): Endpoint[] {
-  return DEFAULT_ENDPOINTS.map((def, i) => ({
+// Exported so App.svelte can call it with a detected region at onMount.
+// Does NOT call detectRegion() — detection is the caller's responsibility.
+// When region is undefined, returns north-america defaults (deterministic module-load behavior).
+export function buildDefaultEndpoints(region?: Region): Endpoint[] {
+  const specs = REGIONAL_DEFAULTS[region ?? 'north-america'];
+  return specs.map((spec, i) => ({
     id: generateId(),
-    url: def.url,
-    enabled: def.enabled,
-    label: def.label,
+    url: spec.url,
+    enabled: spec.enabled,
+    label: spec.label,
     color: pickColor(i),
   }));
 }
@@ -87,8 +92,8 @@ function createEndpointStore() {
       set(endpoints);
     },
 
-    reset(): void {
-      set(buildDefaultEndpoints());
+    reset(region?: Region): void {
+      set(buildDefaultEndpoints(region));
     },
   };
 }

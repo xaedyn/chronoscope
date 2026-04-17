@@ -29,7 +29,7 @@ describe('persistence', () => {
     };
     saveSettings(settings);
     const loaded = loadPersistedSettings();
-    expect(loaded?.version).toBe(3);
+    expect(loaded?.version).toBe(4);
     expect(loaded?.endpoints[0]?.url).toBe('https://example.com');
     expect(loaded?.settings.burstRounds).toBe(50);
     expect(loaded?.settings.monitorDelay).toBe(1000);
@@ -50,21 +50,21 @@ describe('persistence', () => {
     };
     localStorageMock.setItem('chronoscope_v2_settings', JSON.stringify(settings));
     const loaded = loadPersistedSettings();
-    expect(loaded?.version).toBe(3);
+    expect(loaded?.version).toBe(4);
     // Legacy key should be removed, new key should exist
     expect(localStorageMock.getItem('chronoscope_v2_settings')).toBeNull();
     expect(localStorageMock.getItem('chronoscope_settings')).not.toBeNull();
   });
 
-  it('migrates v1 data to v3', () => {
+  it('migrates v1 data to v4', () => {
     const v1Data = { version: 1, endpoints: [{ url: 'https://example.com' }] };
     const migrated = migrateSettings(v1Data);
-    expect(migrated?.version).toBe(3);
+    expect(migrated?.version).toBe(4);
     expect(migrated?.settings.burstRounds).toBe(50);
     expect(migrated?.settings.monitorDelay).toBe(1000);
   });
 
-  it('migrates v2 data to v3 with old delay as monitorDelay', () => {
+  it('migrates v2 data to v4 with old delay as monitorDelay', () => {
     const v2Data = {
       version: 2,
       endpoints: [{ url: 'https://example.com', enabled: true }],
@@ -72,7 +72,7 @@ describe('persistence', () => {
       ui: { expandedCards: [], activeView: 'split' },
     };
     const migrated = migrateSettings(v2Data);
-    expect(migrated?.version).toBe(3);
+    expect(migrated?.version).toBe(4);
     expect(migrated?.settings.monitorDelay).toBe(500);
     expect(migrated?.settings.burstRounds).toBe(50);
     expect(migrated?.settings.delay).toBe(0);

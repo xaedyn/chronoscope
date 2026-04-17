@@ -1,0 +1,63 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { get } from 'svelte/store';
+import { applyPersistedSettings } from '../../../src/lib/utils/apply-persisted-settings';
+import { endpointStore } from '../../../src/lib/stores/endpoints';
+import { settingsStore } from '../../../src/lib/stores/settings';
+import type { PersistedSettings } from '../../../src/lib/types';
+
+beforeEach(() => {
+  // Start each test from a placeholder state to confirm applyPersistedSettings overrides it.
+  endpointStore.setEndpoints([
+    { id: 'placeholder-1', url: 'https://example.com', enabled: true, label: 'placeholder', color: '#000' },
+  ]);
+});
+
+describe('applyPersistedSettings — AC2 empty-endpoints contract (§6.2)', () => {
+  it('persisted v4 with endpoints:[] results in empty endpoint store', () => {
+    const persisted: PersistedSettings = {
+      version: 4,
+      endpoints: [],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors' },
+      ui: { expandedCards: [], activeView: 'split' },
+    };
+
+    applyPersistedSettings(persisted);
+
+    const eps = get(endpointStore);
+    expect(eps).toHaveLength(0);
+  });
+
+  it('persisted v4 with endpoints:[{url,enabled}, ...] replaces placeholder', () => {
+    const persisted: PersistedSettings = {
+      version: 4,
+      endpoints: [
+        { url: 'https://user-added.example', enabled: true },
+        { url: 'https://another.example', enabled: false },
+      ],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors' },
+      ui: { expandedCards: [], activeView: 'split' },
+    };
+
+    applyPersistedSettings(persisted);
+
+    const eps = get(endpointStore);
+    expect(eps).toHaveLength(2);
+    expect(eps[0]?.url).toBe('https://user-added.example');
+    expect(eps[0]?.enabled).toBe(true);
+    expect(eps[1]?.url).toBe('https://another.example');
+    expect(eps[1]?.enabled).toBe(false);
+  });
+
+  it('applies persisted settings (including region) to settingsStore', () => {
+    const persisted: PersistedSettings = {
+      version: 4,
+      endpoints: [],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors', region: 'europe' },
+      ui: { expandedCards: [], activeView: 'split' },
+    };
+
+    applyPersistedSettings(persisted);
+
+    expect(get(settingsStore).region).toBe('europe');
+  });
+});

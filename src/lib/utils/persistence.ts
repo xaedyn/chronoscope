@@ -2,17 +2,17 @@
 // Versioned localStorage persistence with forward-only migration support.
 
 import { DEFAULT_SETTINGS } from '../types';
+import { detectRegion, isValidRegion } from '../regional-defaults';
 import type { PersistedSettings, ActiveView } from '../types';
+import type { Region } from '../regional-defaults';
 
 const STORAGE_KEY = 'chronoscope_settings'; // skipcq: JS-0860 — localStorage key, not a credential
 const LEGACY_STORAGE_KEY = 'chronoscope_v2_settings'; // skipcq: JS-0860 — localStorage key, not a credential
-const CURRENT_VERSION = 3;
+const CURRENT_VERSION = 4;
 
 export function loadPersistedSettings(): PersistedSettings | null {
   try {
     let raw = localStorage.getItem(STORAGE_KEY);
-
-    // Migrate from legacy key name
     if (raw === null) {
       raw = localStorage.getItem(LEGACY_STORAGE_KEY);
       if (raw !== null) {
@@ -20,7 +20,6 @@ export function loadPersistedSettings(): PersistedSettings | null {
         localStorage.removeItem(LEGACY_STORAGE_KEY);
       }
     }
-
     if (raw === null) return null;
     const parsed: unknown = JSON.parse(raw);
     return migrateSettings(parsed);
@@ -50,15 +49,27 @@ export function migrateSettings(data: unknown): PersistedSettings | null {
   const version = typeof record['version'] === 'number' ? record['version'] : 0;
 
   if (version === CURRENT_VERSION) {
-    return normalizeV3(record);
+    return normalizeV4(record);
+  }
+
+  if (version === 3) {
+    const v3 = normalizeV3(record);
+    if (!v3) return null;
+    return {
+      ...v3,
+      version: 4,
+      settings: {
+        ...v3.settings,
+        region: detectRegion(),
+      },
+    };
   }
 
   if (version === 2) {
-    // v2 → v3: add burstRounds + monitorDelay, migrate delay
     const v2 = normalizeV2(record);
     if (!v2) return null;
     const oldDelay = v2.settings.delay;
-    return {
+    const v3: PersistedSettings = {
       ...v2,
       version: 3,
       settings: {
@@ -68,10 +79,17 @@ export function migrateSettings(data: unknown): PersistedSettings | null {
         monitorDelay: oldDelay >= 0 ? oldDelay : DEFAULT_SETTINGS.monitorDelay,
       },
     };
+    return {
+      ...v3,
+      version: 4,
+      settings: {
+        ...v3.settings,
+        region: detectRegion(),
+      },
+    };
   }
 
   if (version === 1) {
-    // v1 → v2 → v3: add ui object, normalize settings, then migrate to v3
     const rawEndpoints = Array.isArray(record['endpoints']) ? record['endpoints'] : [];
     const endpoints = rawEndpoints
       .filter((e): e is Record<string, unknown> => e !== null && typeof e === 'object')
@@ -81,9 +99,9 @@ export function migrateSettings(data: unknown): PersistedSettings | null {
       }));
 
     return {
-      version: 3,
+      version: 4,
       endpoints,
-      settings: { ...DEFAULT_SETTINGS },
+      settings: { ...DEFAULT_SETTINGS, region: detectRegion() },
       ui: {
         expandedCards: [],
         activeView: 'split' as ActiveView,
@@ -91,6 +109,9 @@ export function migrateSettings(data: unknown): PersistedSettings | null {
     };
   }
 
+  // Unknown version — return null (triggers first-install path).
+  // Spec §5: we deliberately do NOT coerce unknown versions through normalizeV4,
+  // because that silently drops shape changes to existing fields.
   return null;
 }
 
@@ -110,10 +131,8 @@ function normalizeV2(record: Record<string, unknown>): PersistedSettings | null 
         : {};
 
     const settings = {
-      timeout:
-        typeof rawSettings['timeout'] === 'number' ? rawSettings['timeout'] : DEFAULT_SETTINGS.timeout,
-      delay:
-        typeof rawSettings['delay'] === 'number' ? rawSettings['delay'] : DEFAULT_SETTINGS.delay,
+      timeout: typeof rawSettings['timeout'] === 'number' ? rawSettings['timeout'] : DEFAULT_SETTINGS.timeout,
+      delay: typeof rawSettings['delay'] === 'number' ? rawSettings['delay'] : DEFAULT_SETTINGS.delay,
       burstRounds: DEFAULT_SETTINGS.burstRounds,
       monitorDelay: DEFAULT_SETTINGS.monitorDelay,
       cap: typeof rawSettings['cap'] === 'number' ? rawSettings['cap'] : DEFAULT_SETTINGS.cap,
@@ -133,18 +152,11 @@ function normalizeV2(record: Record<string, unknown>): PersistedSettings | null 
       : [];
 
     const activeView: ActiveView =
-      rawUi['activeView'] === 'timeline' ||
-      rawUi['activeView'] === 'heatmap' ||
-      rawUi['activeView'] === 'split'
+      rawUi['activeView'] === 'timeline' || rawUi['activeView'] === 'heatmap' || rawUi['activeView'] === 'split'
         ? rawUi['activeView']
         : 'split';
 
-    return {
-      version: 2,
-      endpoints,
-      settings,
-      ui: { expandedCards, activeView },
-    };
+    return { version: 2, endpoints, settings, ui: { expandedCards, activeView } };
   } catch {
     return null;
   }
@@ -166,14 +178,10 @@ function normalizeV3(record: Record<string, unknown>): PersistedSettings | null 
         : {};
 
     const settings = {
-      timeout:
-        typeof rawSettings['timeout'] === 'number' ? rawSettings['timeout'] : DEFAULT_SETTINGS.timeout,
-      delay:
-        typeof rawSettings['delay'] === 'number' ? rawSettings['delay'] : DEFAULT_SETTINGS.delay,
-      burstRounds:
-        typeof rawSettings['burstRounds'] === 'number' ? rawSettings['burstRounds'] : DEFAULT_SETTINGS.burstRounds,
-      monitorDelay:
-        typeof rawSettings['monitorDelay'] === 'number' ? rawSettings['monitorDelay'] : DEFAULT_SETTINGS.monitorDelay,
+      timeout: typeof rawSettings['timeout'] === 'number' ? rawSettings['timeout'] : DEFAULT_SETTINGS.timeout,
+      delay: typeof rawSettings['delay'] === 'number' ? rawSettings['delay'] : DEFAULT_SETTINGS.delay,
+      burstRounds: typeof rawSettings['burstRounds'] === 'number' ? rawSettings['burstRounds'] : DEFAULT_SETTINGS.burstRounds,
+      monitorDelay: typeof rawSettings['monitorDelay'] === 'number' ? rawSettings['monitorDelay'] : DEFAULT_SETTINGS.monitorDelay,
       cap: typeof rawSettings['cap'] === 'number' ? rawSettings['cap'] : DEFAULT_SETTINGS.cap,
       corsMode:
         rawSettings['corsMode'] === 'cors' || rawSettings['corsMode'] === 'no-cors'
@@ -191,18 +199,62 @@ function normalizeV3(record: Record<string, unknown>): PersistedSettings | null 
       : [];
 
     const activeView: ActiveView =
-      rawUi['activeView'] === 'timeline' ||
-      rawUi['activeView'] === 'heatmap' ||
-      rawUi['activeView'] === 'split'
+      rawUi['activeView'] === 'timeline' || rawUi['activeView'] === 'heatmap' || rawUi['activeView'] === 'split'
         ? rawUi['activeView']
         : 'split';
 
-    return {
-      version: 3,
-      endpoints,
-      settings,
-      ui: { expandedCards, activeView },
+    return { version: 3, endpoints, settings, ui: { expandedCards, activeView } };
+  } catch {
+    return null;
+  }
+}
+
+function normalizeV4(record: Record<string, unknown>): PersistedSettings | null {
+  try {
+    const rawEndpoints = Array.isArray(record['endpoints']) ? record['endpoints'] : [];
+    const endpoints = rawEndpoints
+      .filter((e): e is Record<string, unknown> => e !== null && typeof e === 'object')
+      .map((e) => ({
+        url: typeof e['url'] === 'string' ? e['url'] : '',
+        enabled: typeof e['enabled'] === 'boolean' ? e['enabled'] : true,
+      }));
+
+    const rawSettings =
+      record['settings'] !== null && typeof record['settings'] === 'object'
+        ? (record['settings'] as Record<string, unknown>)
+        : {};
+
+    const rawRegion: unknown = rawSettings['region'];
+    const region: Region | undefined = isValidRegion(rawRegion) ? rawRegion : undefined;
+
+    const settings = {
+      timeout: typeof rawSettings['timeout'] === 'number' ? rawSettings['timeout'] : DEFAULT_SETTINGS.timeout,
+      delay: typeof rawSettings['delay'] === 'number' ? rawSettings['delay'] : DEFAULT_SETTINGS.delay,
+      burstRounds: typeof rawSettings['burstRounds'] === 'number' ? rawSettings['burstRounds'] : DEFAULT_SETTINGS.burstRounds,
+      monitorDelay: typeof rawSettings['monitorDelay'] === 'number' ? rawSettings['monitorDelay'] : DEFAULT_SETTINGS.monitorDelay,
+      cap: typeof rawSettings['cap'] === 'number' ? rawSettings['cap'] : DEFAULT_SETTINGS.cap,
+      corsMode:
+        rawSettings['corsMode'] === 'cors' || rawSettings['corsMode'] === 'no-cors'
+          ? rawSettings['corsMode']
+          : DEFAULT_SETTINGS.corsMode,
+      ...(region !== undefined ? { region } : {}),
     };
+
+    const rawUi =
+      record['ui'] !== null && typeof record['ui'] === 'object'
+        ? (record['ui'] as Record<string, unknown>)
+        : {};
+
+    const expandedCards = Array.isArray(rawUi['expandedCards'])
+      ? (rawUi['expandedCards'] as unknown[]).filter((x): x is string => typeof x === 'string')
+      : [];
+
+    const activeView: ActiveView =
+      rawUi['activeView'] === 'timeline' || rawUi['activeView'] === 'heatmap' || rawUi['activeView'] === 'split'
+        ? rawUi['activeView']
+        : 'split';
+
+    return { version: 4, endpoints, settings, ui: { expandedCards, activeView } };
   } catch {
     return null;
   }
