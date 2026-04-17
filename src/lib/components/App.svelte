@@ -6,9 +6,11 @@
   import { get } from 'svelte/store';
   import { tokens } from '$lib/tokens';
   import { settingsStore } from '$lib/stores/settings';
-  import { endpointStore } from '$lib/stores/endpoints';
+  import { endpointStore, buildDefaultEndpoints } from '$lib/stores/endpoints';
   import { uiStore } from '$lib/stores/ui';
   import { MeasurementEngine } from '$lib/engine/measurement-engine';
+  import { detectRegion } from '$lib/regional-defaults';
+  import { applyPersistedSettings } from '$lib/utils/apply-persisted-settings';
   import { loadPersistedSettings, saveSettings } from '$lib/utils/persistence';
   import { initHashRouter } from '$lib/share/hash-router';
   import { initShortcuts } from '$lib/utils/shortcuts';
@@ -92,34 +94,6 @@
     root.style.setProperty('--radius-xs', `${tokens.radius.xs}px`);
   }
 
-  // ── Apply persisted settings to stores ──────────────────────────────────────
-  function applyPersistedSettings(persisted: PersistedSettings): void {
-    // Settings
-    settingsStore.set(persisted.settings);
-
-    // Endpoints: replace defaults with persisted ones
-    if (persisted.endpoints.length > 0) {
-      endpointStore.setEndpoints([]);
-      for (const ep of persisted.endpoints) {
-        if (ep.url.trim()) {
-          const id = endpointStore.addEndpoint(ep.url, ep.url);
-          endpointStore.updateEndpoint(id, { enabled: ep.enabled });
-        }
-      }
-    }
-
-    // UI state
-    if (persisted.ui.activeView) {
-      uiStore.setActiveView(persisted.ui.activeView);
-    }
-    for (const cardId of persisted.ui.expandedCards) {
-      // Only expand if not already expanded
-      if (!get(uiStore).expandedCards.has(cardId)) {
-        uiStore.toggleCard(cardId);
-      }
-    }
-  }
-
   // ── Persistence save subscription ───────────────────────────────────────────
   let unsubSettings: (() => void) | null = null;
   let unsubEndpoints: (() => void) | null = null;
@@ -138,7 +112,7 @@
       const endpoints = get(endpointStore);
 
       const payload: PersistedSettings = {
-        version: 3,
+        version: 4,
         endpoints: endpoints.map(ep => ({ url: ep.url, enabled: ep.enabled })),
         settings,
         ui: {
@@ -189,9 +163,13 @@
       if (persisted) {
         // 3a. Apply persisted state
         applyPersistedSettings(persisted);
+      } else {
+        // First install: seed region-aware defaults (AC1)
+        const detected = detectRegion();
+        endpointStore.setEndpoints(buildDefaultEndpoints(detected));
+        settingsStore.update(s => ({ ...s, region: detected }));
       }
     }
-    // 3b. If no persisted settings and no share URL, defaults are already in stores
 
     // 4. Create engine
     engine = new MeasurementEngine();
