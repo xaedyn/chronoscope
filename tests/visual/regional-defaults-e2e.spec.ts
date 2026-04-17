@@ -79,6 +79,6 @@ test.describe('Regional Default Lanes — E2E', () => {
 
     // NA defaults: Google, Cloudflare, AWS, Fastly
     await expect(page.locator('[aria-label="Endpoint https://www.google.com"]')).toBeVisible({ timeout: 3000 });
-    await expect(page.locator('[aria-label="Endpoint https://www.fastly.com"]')).toBeVisible({ timeout: 3000 });
+    await expect(page.locator('[aria-label="Endpoint https://www.fastly.com/robots.txt"]')).toBeVisible({ timeout: 3000 });
   });
 });

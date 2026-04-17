@@ -39,14 +39,14 @@ describe('REGIONAL_DEFAULTS', () => {
 
   it('NA/EU/LATAM lane 4 is Fastly (Fourth-operator)', () => {
     for (const region of ['north-america', 'europe', 'latam'] as Region[]) {
-      expect(REGIONAL_DEFAULTS[region][3]?.url).toBe('https://www.fastly.com');
+      expect(REGIONAL_DEFAULTS[region][3]?.url).toBe('https://www.fastly.com/robots.txt');
       expect(REGIONAL_DEFAULTS[region][3]?.role).toBe('Fourth-operator');
     }
   });
 
   it('East Asia/SEA/MEA/Oceania lane 4 is Wikipedia (Long-haul)', () => {
     for (const region of ['east-asia', 'south-southeast-asia', 'mea', 'oceania'] as Region[]) {
-      expect(REGIONAL_DEFAULTS[region][3]?.url).toBe('https://www.wikipedia.org');
+      expect(REGIONAL_DEFAULTS[region][3]?.url).toBe('https://en.wikipedia.org');
       expect(REGIONAL_DEFAULTS[region][3]?.role).toBe('Long-haul');
     }
   });
@@ -147,10 +147,10 @@ describe('brandFor', () => {
     expect(brandFor('https://aws.amazon.com')).toEqual({ label: 'AWS', role: 'Third-operator' });
   });
   it('returns Fastly/Fourth-operator', () => {
-    expect(brandFor('https://www.fastly.com')).toEqual({ label: 'Fastly', role: 'Fourth-operator' });
+    expect(brandFor('https://www.fastly.com/robots.txt')).toEqual({ label: 'Fastly', role: 'Fourth-operator' });
   });
   it('returns Wikipedia/Long-haul', () => {
-    expect(brandFor('https://www.wikipedia.org')).toEqual({ label: 'Wikipedia', role: 'Long-haul' });
+    expect(brandFor('https://en.wikipedia.org')).toEqual({ label: 'Wikipedia', role: 'Long-haul' });
   });
   it('matches trailing slash variant', () => {
     expect(brandFor('https://www.google.com/')).toEqual({ label: 'Google', role: 'Baseline' });
