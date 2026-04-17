@@ -185,11 +185,6 @@ export const DEFAULT_SETTINGS: Settings = {
   corsMode: 'no-cors',
 };
 
-export const DEFAULT_ENDPOINTS: Omit<Endpoint, 'id' | 'color'>[] = [
-  { url: 'https://www.google.com', enabled: true, label: 'Google' },
-  { url: 'https://1.1.1.1', enabled: true, label: 'Cloudflare DNS' },
-];
-
 // ── UI store ───────────────────────────────────────────────────────────────
 export type ActiveView = 'timeline' | 'heatmap' | 'split';
 
