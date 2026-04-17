@@ -21,7 +21,7 @@ describe('buildDefaultEndpoints', () => {
     expect(endpoints[0]?.url).toBe('https://www.google.com');
     expect(endpoints[1]?.url).toBe('https://www.cloudflare.com');
     expect(endpoints[2]?.url).toBe('https://aws.amazon.com');
-    expect(endpoints[3]?.url).toBe('https://www.fastly.com');
+    expect(endpoints[3]?.url).toBe('https://www.fastly.com/robots.txt');
   });
 
   it('endpoints have unique IDs', () => {
@@ -39,12 +39,12 @@ describe('buildDefaultEndpoints', () => {
 
   it('lane 4 for east-asia is Wikipedia', () => {
     const endpoints = buildDefaultEndpoints('east-asia');
-    expect(endpoints[3]?.url).toBe('https://www.wikipedia.org');
+    expect(endpoints[3]?.url).toBe('https://en.wikipedia.org');
   });
 
   it('lane 4 for north-america is Fastly', () => {
     const endpoints = buildDefaultEndpoints('north-america');
-    expect(endpoints[3]?.url).toBe('https://www.fastly.com');
+    expect(endpoints[3]?.url).toBe('https://www.fastly.com/robots.txt');
   });
 });
 
@@ -59,7 +59,7 @@ describe('endpointStore.reset', () => {
     const eps = get(endpointStore);
     expect(eps).toHaveLength(4);
     expect(eps[0]?.url).toBe('https://www.google.com');
-    expect(eps[3]?.url).toBe('https://www.fastly.com');
+    expect(eps[3]?.url).toBe('https://www.fastly.com/robots.txt');
   });
 
   it("reset('europe') replaces store with Europe's 4 endpoints", () => {
@@ -75,6 +75,6 @@ describe('endpointStore.reset', () => {
   it("reset('east-asia') places Wikipedia at lane 4", () => {
     endpointStore.reset('east-asia');
     const eps = get(endpointStore);
-    expect(eps[3]?.url).toBe('https://www.wikipedia.org');
+    expect(eps[3]?.url).toBe('https://en.wikipedia.org');
   });
 });
