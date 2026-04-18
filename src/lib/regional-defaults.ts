@@ -55,43 +55,43 @@ export interface RegionalEndpointSpec {
 export const REGIONAL_DEFAULTS: Readonly<Record<Region, readonly RegionalEndpointSpec[]>> = {
   'north-america': [
     { url: 'https://www.google.com',              label: 'Google',     role: 'Baseline',        enabled: true },
-    { url: 'https://chronoscope.dev/probe',       label: 'Self',       role: 'TAO-anchor',      enabled: true },
+    { url: 'https://www.cloudflare.com',          label: 'Cloudflare', role: 'Alt-operator',    enabled: true },
     { url: 'https://aws.amazon.com',              label: 'AWS',        role: 'Third-operator',  enabled: true },
     { url: 'https://www.fastly.com/robots.txt',   label: 'Fastly',     role: 'Fourth-operator', enabled: true },
   ],
   'europe': [
     { url: 'https://www.google.com',              label: 'Google',     role: 'Baseline',        enabled: true },
-    { url: 'https://chronoscope.dev/probe',       label: 'Self',       role: 'TAO-anchor',      enabled: true },
+    { url: 'https://www.cloudflare.com',          label: 'Cloudflare', role: 'Alt-operator',    enabled: true },
     { url: 'https://aws.amazon.com',              label: 'AWS',        role: 'Third-operator',  enabled: true },
     { url: 'https://www.fastly.com/robots.txt',   label: 'Fastly',     role: 'Fourth-operator', enabled: true },
   ],
   'east-asia': [
     { url: 'https://www.google.com',              label: 'Google',     role: 'Baseline',        enabled: true },
-    { url: 'https://chronoscope.dev/probe',       label: 'Self',       role: 'TAO-anchor',      enabled: true },
+    { url: 'https://www.cloudflare.com',          label: 'Cloudflare', role: 'Alt-operator',    enabled: true },
     { url: 'https://aws.amazon.com',              label: 'AWS',        role: 'Third-operator',  enabled: true },
     { url: 'https://en.wikipedia.org',            label: 'Wikipedia',  role: 'Long-haul',       enabled: true },
   ],
   'south-southeast-asia': [
     { url: 'https://www.google.com',              label: 'Google',     role: 'Baseline',        enabled: true },
-    { url: 'https://chronoscope.dev/probe',       label: 'Self',       role: 'TAO-anchor',      enabled: true },
+    { url: 'https://www.cloudflare.com',          label: 'Cloudflare', role: 'Alt-operator',    enabled: true },
     { url: 'https://aws.amazon.com',              label: 'AWS',        role: 'Third-operator',  enabled: true },
     { url: 'https://en.wikipedia.org',            label: 'Wikipedia',  role: 'Long-haul',       enabled: true },
   ],
   'latam': [
     { url: 'https://www.google.com',              label: 'Google',     role: 'Baseline',        enabled: true },
-    { url: 'https://chronoscope.dev/probe',       label: 'Self',       role: 'TAO-anchor',      enabled: true },
+    { url: 'https://www.cloudflare.com',          label: 'Cloudflare', role: 'Alt-operator',    enabled: true },
     { url: 'https://aws.amazon.com',              label: 'AWS',        role: 'Third-operator',  enabled: true },
     { url: 'https://www.fastly.com/robots.txt',   label: 'Fastly',     role: 'Fourth-operator', enabled: true },
   ],
   'mea': [
     { url: 'https://www.google.com',              label: 'Google',     role: 'Baseline',        enabled: true },
-    { url: 'https://chronoscope.dev/probe',       label: 'Self',       role: 'TAO-anchor',      enabled: true },
+    { url: 'https://www.cloudflare.com',          label: 'Cloudflare', role: 'Alt-operator',    enabled: true },
     { url: 'https://aws.amazon.com',              label: 'AWS',        role: 'Third-operator',  enabled: true },
     { url: 'https://en.wikipedia.org',            label: 'Wikipedia',  role: 'Long-haul',       enabled: true },
   ],
   'oceania': [
     { url: 'https://www.google.com',              label: 'Google',     role: 'Baseline',        enabled: true },
-    { url: 'https://chronoscope.dev/probe',       label: 'Self',       role: 'TAO-anchor',      enabled: true },
+    { url: 'https://www.cloudflare.com',          label: 'Cloudflare', role: 'Alt-operator',    enabled: true },
     { url: 'https://aws.amazon.com',              label: 'AWS',        role: 'Third-operator',  enabled: true },
     { url: 'https://en.wikipedia.org',            label: 'Wikipedia',  role: 'Long-haul',       enabled: true },
   ],
@@ -183,10 +183,12 @@ export function normalizeUrlForBrandLookup(url: string): string {
 const BRAND_LABELS: ReadonlyMap<string, { readonly label: string; readonly role: LaneRole }> =
   new Map([
     ['https://www.google.com',            { label: 'Google',     role: 'Baseline' }],
-    ['https://chronoscope.dev/probe',     { label: 'Self',       role: 'TAO-anchor' }],
+    ['https://www.cloudflare.com',        { label: 'Cloudflare', role: 'Alt-operator' }],
     ['https://aws.amazon.com',            { label: 'AWS',        role: 'Third-operator' }],
     ['https://www.fastly.com/robots.txt', { label: 'Fastly',     role: 'Fourth-operator' }],
     ['https://en.wikipedia.org',          { label: 'Wikipedia',  role: 'Long-haul' }],
+    // Power-user opt-in URL — not in REGIONAL_DEFAULTS; manual-add only.
+    ['https://chronoscope.dev/probe',     { label: 'Self',       role: 'TAO-anchor' }],
   ]);
 
 export function brandFor(url: string): { readonly label: string; readonly role: LaneRole } | null {
