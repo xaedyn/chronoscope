@@ -1,11 +1,12 @@
 <!-- src/lib/components/LaneHeaderWaterfall.svelte -->
-<!-- 6px-tall horizontal stacked bar showing 5 timing phases as proportional flex segments. -->
+<!-- Stacked timing-phase bar. Full mode: 6px bar + labels. Compact mode: 4px bar only, zero-value segments omitted, renders nothing when all phases are zero. -->
 <script lang="ts">
   import { tokens } from '$lib/tokens';
 
   // ── Props ────────────────────────────────────────────────────────────────────
   let {
     tier2Averages,
+    compact = false,
   }: {
     tier2Averages: {
       dnsLookup: number;
@@ -14,6 +15,7 @@
       ttfb: number;
       contentTransfer: number;
     };
+    compact?: boolean;
   } = $props();
 
   // ── Phase definitions ────────────────────────────────────────────────────────
@@ -36,45 +38,61 @@
   );
 </script>
 
-<div
-  class="wf-root"
-  style:--wf-label-color={tokens.color.tier2.labelText}
->
-  {#if tier2Total === 0}
-    <div
-      class="wf-fallback"
-      role="status"
-      aria-label="Timing decomposition unavailable in this browser"
-    >
-      <span class="wf-fallback-text">Timing data limited</span>
-    </div>
-  {:else}
-    <!-- Stacked timing bar -->
-    <div
-      class="waterfall-bar"
-      role="img"
-      aria-label={ariaLabel}
-    >
-      {#each phases as phase (phase.key)}
-        <div
-          class="wf-segment"
-          style:flex-basis={flexBasis(phase.value)}
-          style:min-width="2px"
-          style:background={phase.color}
-        ></div>
-      {/each}
-    </div>
-
-    <!-- Phase labels — only show phases with value > 0 -->
-    <div class="wf-labels" aria-hidden="true">
+{#if compact}
+  {#if tier2Total > 0}
+    <div class="wf-compact" role="img" aria-label={ariaLabel}>
       {#each phases as phase (phase.key)}
         {#if phase.value > 0}
-          <span class="wf-label">{phase.label} {Math.round(phase.value)}ms</span>
+          <div
+            class="wf-segment wf-segment--compact"
+            style:flex-basis={flexBasis(phase.value)}
+            style:background={phase.color}
+          ></div>
         {/if}
       {/each}
     </div>
   {/if}
-</div>
+{:else}
+  <div
+    class="wf-root"
+    style:--wf-label-color={tokens.color.tier2.labelText}
+  >
+    {#if tier2Total === 0}
+      <div
+        class="wf-fallback"
+        role="status"
+        aria-label="Timing decomposition unavailable in this browser"
+      >
+        <span class="wf-fallback-text">Timing data limited</span>
+      </div>
+    {:else}
+      <!-- Stacked timing bar -->
+      <div
+        class="waterfall-bar"
+        role="img"
+        aria-label={ariaLabel}
+      >
+        {#each phases as phase (phase.key)}
+          <div
+            class="wf-segment"
+            style:flex-basis={flexBasis(phase.value)}
+            style:min-width="2px"
+            style:background={phase.color}
+          ></div>
+        {/each}
+      </div>
+
+      <!-- Phase labels — only show phases with value > 0 -->
+      <div class="wf-labels" aria-hidden="true">
+        {#each phases as phase (phase.key)}
+          {#if phase.value > 0}
+            <span class="wf-label">{phase.label} {Math.round(phase.value)}ms</span>
+          {/if}
+        {/each}
+      </div>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .wf-root {
@@ -126,5 +144,23 @@
     font-family: var(--mono);
     color: var(--wf-label-color);
     opacity: 0.6;
+  }
+
+  .wf-compact {
+    display: flex;
+    height: 4px;
+    border-radius: 2px;
+    overflow: hidden;
+    gap: 0.5px;
+  }
+
+  .wf-segment--compact {
+    transition: flex-basis 400ms ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wf-segment--compact {
+      transition: none;
+    }
   }
 </style>
