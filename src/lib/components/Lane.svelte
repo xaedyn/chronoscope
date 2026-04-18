@@ -475,6 +475,10 @@
 
   /* Shift now-label below compact header */
   .lane.compact .now-label { top: 34px; }
+  /* When the compact waterfall overlay is rendered, clear its ~22px block too */
+  .lane.compact .lane-compact-waterfall ~ .lane-chart .now-label {
+    top: calc(var(--compact-header-height) + 22px);
+  }
 
   @keyframes laneEntrance {
     from { opacity: 0; transform: translateY(8px); }
