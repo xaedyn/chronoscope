@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Chronoscope v2 — Implementation Handoff</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#0b0814; --bg-2:#0e0a1a; --raised:#1a1528;
+    --t1:rgba(255,255,255,.92); --t2:rgba(255,255,255,.72);
+    --t3:rgba(255,255,255,.50); --t4:rgba(255,255,255,.32); --t5:rgba(255,255,255,.18);
+    --cyan:#67e8f9; --pink:#f9a8d4; --amber:#fbbf24; --green:#4ade80;
+    --border:rgba(255,255,255,.10); --border-bright:rgba(255,255,255,.18);
+    --glass:rgba(255,255,255,.04); --glass-hover:rgba(255,255,255,.06);
+    --sans:'Geist', system-ui, sans-serif; --mono:'Geist Mono', monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--t1);font-family:var(--sans);
+    font-size:15px;line-height:1.6;min-height:100vh;
+    text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased}
+  body{
+    background:
+      radial-gradient(ellipse 60% 40% at 20% 0%, rgba(103,232,249,.04), transparent 60%),
+      radial-gradient(ellipse 50% 40% at 80% 100%, rgba(249,168,212,.03), transparent 60%),
+      var(--bg);
+  }
+  .shell{max-width:1100px;margin:0 auto;padding:64px 48px 128px;display:grid;grid-template-columns:220px 1fr;gap:56px}
+  @media (max-width:880px){.shell{grid-template-columns:1fr;padding:32px 20px 80px}}
+
+  /* ===== Sidebar ===== */
+  .sidebar{position:sticky;top:32px;align-self:start;font-family:var(--mono);font-size:12px}
+  .brand{margin-bottom:32px}
+  .brand-kicker{font-size:10px;letter-spacing:.18em;color:var(--t3);text-transform:uppercase;margin-bottom:6px}
+  .brand-title{font-family:var(--sans);font-size:20px;font-weight:600;color:var(--t1);line-height:1.2}
+  .brand-sub{font-family:var(--sans);font-size:13px;color:var(--t3);margin-top:4px}
+  .nav{display:flex;flex-direction:column;gap:2px}
+  .nav-section{font-size:10px;letter-spacing:.18em;color:var(--t4);text-transform:uppercase;
+    padding:16px 0 6px;border-top:1px solid var(--border);margin-top:12px}
+  .nav-section:first-child{border-top:none;margin-top:0;padding-top:0}
+  .nav a{color:var(--t2);text-decoration:none;padding:5px 10px;border-radius:4px;
+    display:flex;align-items:center;gap:8px;transition:all .15s;letter-spacing:.02em}
+  .nav a:hover{color:var(--t1);background:var(--glass)}
+  .nav a .num{color:var(--t4);font-size:10px;min-width:20px}
+
+  /* ===== Main ===== */
+  main{min-width:0}
+  .hero{margin-bottom:72px;padding-bottom:56px;border-bottom:1px solid var(--border)}
+  .hero-kicker{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--cyan);
+    text-transform:uppercase;margin-bottom:20px;display:flex;align-items:center;gap:10px}
+  .hero-kicker::before{content:'';width:10px;height:10px;border-radius:50%;background:var(--cyan);
+    box-shadow:0 0 10px var(--cyan)}
+  .hero h1{font-size:54px;line-height:1.05;font-weight:700;letter-spacing:-.025em;
+    color:var(--t1);margin-bottom:20px;text-wrap:pretty}
+  .hero h1 em{font-style:normal;color:var(--cyan)}
+  .hero-lede{font-size:19px;color:var(--t2);max-width:640px;text-wrap:pretty;line-height:1.55}
+  .hero-meta{margin-top:32px;display:flex;gap:32px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--t3);text-transform:uppercase}
+  .hero-meta span strong{color:var(--t1);font-weight:500;margin-left:6px}
+
+  .hero-cta{margin-top:32px;display:flex;gap:12px;flex-wrap:wrap}
+  .cta{display:inline-flex;align-items:center;gap:10px;padding:12px 20px;
+    background:var(--glass);border:1px solid var(--border);border-radius:6px;
+    color:var(--t1);font-family:var(--sans);font-size:14px;font-weight:500;
+    text-decoration:none;transition:all .15s}
+  .cta:hover{background:var(--glass-hover);border-color:var(--border-bright)}
+  .cta.primary{background:rgba(103,232,249,.12);border-color:rgba(103,232,249,.3);color:var(--cyan)}
+  .cta.primary:hover{background:rgba(103,232,249,.18);border-color:rgba(103,232,249,.5)}
+  .cta .arrow{color:var(--t4);transition:transform .15s}
+  .cta:hover .arrow{transform:translateX(2px);color:currentColor}
+
+  /* ===== Sections ===== */
+  section{margin-bottom:80px;scroll-margin-top:24px}
+  .sec-label{font-family:var(--mono);font-size:11px;letter-spacing:.18em;color:var(--t3);
+    text-transform:uppercase;margin-bottom:14px;display:flex;align-items:baseline;gap:10px}
+  .sec-label .num{color:var(--t4)}
+  .sec-title{font-size:30px;font-weight:600;letter-spacing:-.02em;color:var(--t1);
+    margin-bottom:16px;text-wrap:balance}
+  .sec-lede{font-size:16px;color:var(--t2);max-width:680px;margin-bottom:28px;line-height:1.55}
+
+  /* ===== Card grid ===== */
+  .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+  .card{background:var(--glass);border:1px solid var(--border);border-radius:8px;
+    padding:22px 22px 20px;text-decoration:none;color:inherit;
+    transition:all .18s;position:relative;overflow:hidden}
+  .card:hover{border-color:var(--border-bright);background:var(--glass-hover);transform:translateY(-1px)}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;
+    background:var(--cyan);opacity:.4;transition:opacity .2s}
+  .card:hover::before{opacity:1}
+  .card[data-tone=pink]::before{background:var(--pink)}
+  .card[data-tone=amber]::before{background:var(--amber)}
+  .card[data-tone=green]::before{background:var(--green)}
+  .card-num{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--t4);
+    text-transform:uppercase;margin-bottom:10px}
+  .card-title{font-size:17px;font-weight:600;color:var(--t1);margin-bottom:6px;letter-spacing:-.01em}
+  .card-desc{font-size:13.5px;color:var(--t3);line-height:1.5}
+  .card-meta{margin-top:14px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    color:var(--t4);text-transform:uppercase}
+
+  /* ===== Scope table for view specs ===== */
+  .spec-table{display:grid;grid-template-columns:auto 1fr auto;gap:14px 20px;
+    margin:24px 0;padding:20px;background:var(--glass);border:1px solid var(--border);border-radius:8px;
+    font-size:13.5px}
+  .spec-table-head{font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+    color:var(--t4);text-transform:uppercase;padding-bottom:8px;border-bottom:1px solid var(--border);
+    margin-bottom:4px}
+  .spec-row{display:contents}
+  .spec-row > *{padding:4px 0}
+  .spec-row .name{font-weight:600;color:var(--t1)}
+  .spec-row .desc{color:var(--t2)}
+  .spec-row .file{font-family:var(--mono);font-size:11px;color:var(--cyan);
+    white-space:nowrap;text-align:right}
+  hr.grid-break{grid-column:1/-1;border:none;border-top:1px solid var(--border);margin:8px 0}
+
+  /* ===== Call-outs ===== */
+  .callout{margin:28px 0;padding:18px 22px;background:rgba(103,232,249,.05);
+    border:1px solid rgba(103,232,249,.18);border-radius:6px;
+    border-left:3px solid var(--cyan);font-size:14px;color:var(--t2)}
+  .callout strong{color:var(--t1);font-weight:600}
+  .callout.warn{background:rgba(251,191,36,.05);border-color:rgba(251,191,36,.2);border-left-color:var(--amber)}
+  .callout.danger{background:rgba(249,168,212,.05);border-color:rgba(249,168,212,.2);border-left-color:var(--pink)}
+
+  /* ===== Decision list ===== */
+  .decisions{display:grid;gap:8px}
+  .decision{display:grid;grid-template-columns:120px 1fr;gap:20px;padding:12px 0;
+    border-bottom:1px solid var(--border);font-size:14px}
+  .decision:last-child{border-bottom:none}
+  .decision-label{font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+    color:var(--t3);text-transform:uppercase;padding-top:3px}
+  .decision-body{color:var(--t2)}
+  .decision-body strong{color:var(--t1)}
+
+  /* ===== Phase timeline ===== */
+  .phases{display:grid;gap:0;margin-top:24px}
+  .phase{display:grid;grid-template-columns:60px 1fr auto;gap:20px;
+    padding:18px 0;border-bottom:1px solid var(--border)}
+  .phase:last-child{border-bottom:none}
+  .phase-num{font-family:var(--mono);font-size:12px;color:var(--t3);letter-spacing:.1em;padding-top:4px}
+  .phase-body h4{font-size:16px;font-weight:600;color:var(--t1);margin-bottom:6px}
+  .phase-body p{font-size:13.5px;color:var(--t3);line-height:1.5}
+  .phase-duration{font-family:var(--mono);font-size:10px;letter-spacing:.14em;
+    color:var(--t4);text-transform:uppercase;padding-top:6px}
+
+  /* ===== footer ===== */
+  footer{margin-top:80px;padding-top:32px;border-top:1px solid var(--border);
+    font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--t4)}
+
+  a.inline{color:var(--cyan);text-decoration:none;border-bottom:1px solid rgba(103,232,249,.3);
+    transition:border-color .15s}
+  a.inline:hover{border-color:var(--cyan)}
+  code{font-family:var(--mono);font-size:.88em;background:var(--glass);
+    padding:2px 6px;border-radius:3px;color:var(--t1);border:1px solid var(--border)}
+  .pill{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;
+    background:var(--glass);border:1px solid var(--border);border-radius:999px;
+    font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--t2);text-transform:uppercase}
+  .pill.cyan{background:rgba(103,232,249,.1);border-color:rgba(103,232,249,.3);color:var(--cyan)}
+  .pill.pink{background:rgba(249,168,212,.1);border-color:rgba(249,168,212,.3);color:var(--pink)}
+  .pill.amber{background:rgba(251,191,36,.1);border-color:rgba(251,191,36,.3);color:var(--amber)}
+</style>
+</head>
+<body>
+
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-kicker">Handoff · v2</div>
+      <div class="brand-title">Chronoscope</div>
+      <div class="brand-sub">Prototype → Svelte</div>
+    </div>
+    <nav class="nav">
+      <a href="#prototype"><span class="num">00</span>Prototype</a>
+
+      <div class="nav-section">Architecture</div>
+      <a href="#mapping"><span class="num">01</span>Component mapping</a>
+
+      <div class="nav-section">Views</div>
+      <a href="#overview"><span class="num">02a</span>Overview</a>
+      <a href="#overview-enriched"><span class="num">02a+</span>Overview · Enriched</a>
+      <a href="#live"><span class="num">02b</span>Live</a>
+      <a href="#atlas"><span class="num">02c</span>Atlas · Diagnose</a>
+      <a href="#strata"><span class="num">02d</span>Strata</a>
+      <a href="#terminal"><span class="num">02e</span>Terminal</a>
+
+      <div class="nav-section">Shared</div>
+      <a href="#components"><span class="num">03</span>Components</a>
+      <a href="#tokens"><span class="num">04</span>Tokens</a>
+      <a href="#types"><span class="num">05</span>Types &amp; stores</a>
+
+      <div class="nav-section">Rollout</div>
+      <a href="#plan"><span class="num">06</span>Implementation plan</a>
+      <a href="#decisions">Design decisions</a>
+    </nav>
+  </aside>
+
+  <main>
+    <!-- ===== HERO ===== -->
+    <div class="hero">
+      <div class="hero-kicker">Implementation handoff · ready to build</div>
+      <h1>Three new views, <em>two explorations</em>, zero changes to the data layer.</h1>
+      <p class="hero-lede">
+        The v2 prototype proposes three new views &mdash; a chronograph dial, a live oscilloscope,
+        and a request waterfall &mdash; all powered by the Svelte stores that already exist. Two further
+        views (Strata for long-range distributions, Terminal for a forensic event log) are proposed
+        on paper and need prototyping before they ship. This package maps every piece of the prototype
+        to concrete files, types, tokens, and a phased rollout.
+      </p>
+      <div class="hero-meta">
+        <span>prototype <strong>v2/Chronoscope v2.html</strong></span>
+        <span>target <strong>xaedyn/chronoscope@main</strong></span>
+        <span>prototyped views <strong>3</strong></span>
+        <span>proposed views <strong>2</strong></span>
+        <span>est. effort (prototyped views) <strong>~11–14 days</strong></span>
+      </div>
+      <div class="hero-cta">
+        <a class="cta primary" href="v2/Chronoscope v2.html">
+          Open prototype
+          <span class="arrow">→</span>
+        </a>
+        <a class="cta" href="handoff/README.md">
+          Read the package index
+          <span class="arrow">→</span>
+        </a>
+        <a class="cta" href="handoff/06-implementation-plan.md">
+          Jump to rollout plan
+          <span class="arrow">→</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- ===== 00 — Prototype ===== -->
+    <section id="prototype">
+      <div class="sec-label"><span class="num">00</span> Source of truth</div>
+      <h2 class="sec-title">The prototype is the visual spec.</h2>
+      <p class="sec-lede">
+        Where this handoff and the prototype disagree, the prototype wins. These docs are
+        annotations on a running design, not a replacement for it.
+      </p>
+
+      <div class="cards">
+        <a class="card" href="v2/Chronoscope v2.html" data-tone="cyan">
+          <div class="card-num">A · Live prototype</div>
+          <div class="card-title">Chronoscope v2.html</div>
+          <div class="card-desc">All five views, wired together with synthetic data and a Tweaks panel for switching states.</div>
+          <div class="card-meta">Open in browser</div>
+        </a>
+        <a class="card" href="handoff/README.md">
+          <div class="card-num">B · Package index</div>
+          <div class="card-title">README.md</div>
+          <div class="card-desc">Reading order, locked design decisions, and what&rsquo;s out of scope for this handoff.</div>
+          <div class="card-meta">Start here</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- ===== 01 — Mapping ===== -->
+    <section id="mapping">
+      <div class="sec-label"><span class="num">01</span> Architecture</div>
+      <h2 class="sec-title">Where each piece of the prototype lands.</h2>
+      <p class="sec-lede">
+        The prototype is a single React file with a <code>useReducer</code>. Production
+        splits the same state across the existing Svelte stores &mdash; no new engine,
+        no new worker, no new data contracts.
+      </p>
+
+      <div class="spec-table">
+        <div class="spec-table-head">Prototype</div>
+        <div class="spec-table-head">Role</div>
+        <div class="spec-table-head">Svelte target</div>
+
+        <div class="spec-row">
+          <div class="name">Shell</div>
+          <div class="desc">Top bar, view switcher, persistent left rail</div>
+          <div class="file">Layout.svelte</div>
+        </div>
+        <div class="spec-row">
+          <div class="name">EndpointRail</div>
+          <div class="desc">Persistent sidebar &mdash; drives focus globally</div>
+          <div class="file">EndpointRail.svelte</div>
+        </div>
+        <hr class="grid-break">
+        <div class="spec-row">
+          <div class="name">OverviewView</div>
+          <div class="desc">Chronograph dial, verdict strip, metrics triptych</div>
+          <div class="file">views/OverviewView.svelte</div>
+        </div>
+        <div class="spec-row">
+          <div class="name">LiveView</div>
+          <div class="desc">Oscilloscope &mdash; last 60s traces per endpoint</div>
+          <div class="file">views/LiveView.svelte</div>
+        </div>
+        <div class="spec-row">
+          <div class="name">AtlasView</div>
+          <div class="desc">Request waterfall, hypothesis, sample strip</div>
+          <div class="file">views/AtlasView.svelte</div>
+        </div>
+        <div class="spec-row">
+          <div class="name">StrataView</div>
+          <div class="desc">Per-endpoint distribution bands over time</div>
+          <div class="file">views/StrataView.svelte</div>
+        </div>
+        <div class="spec-row">
+          <div class="name">TerminalView</div>
+          <div class="desc">Forensic event log, keyboard-driven</div>
+          <div class="file">views/TerminalView.svelte</div>
+        </div>
+        <hr class="grid-break">
+        <div class="spec-row">
+          <div class="name">shared.jsx</div>
+          <div class="desc">classify, networkQuality, fmt, endpointColor</div>
+          <div class="file">utils/classify.ts + format.ts</div>
+        </div>
+        <div class="spec-row">
+          <div class="name">engine.jsx</div>
+          <div class="desc">Synthetic generator &mdash; <strong>delete</strong></div>
+          <div class="file">(none &mdash; real engine exists)</div>
+        </div>
+      </div>
+
+      <a class="cta" href="handoff/01-architecture-mapping.md">Full mapping <span class="arrow">→</span></a>
+    </section>
+
+    <!-- ===== 02 — Views ===== -->
+    <section>
+      <div class="sec-label"><span class="num">02</span> Views</div>
+      <h2 class="sec-title">Three prototyped views plus an Enriched upgrade, two proposed explorations, one legacy kept for safety.</h2>
+      <p class="sec-lede">
+        Three views (Overview, Live, Atlas) are in the prototype and ready to implement.
+        Overview ships in two phases &mdash; Classic first, then an Enriched upgrade that
+        layers on a baseline arc, quality trace, racing strip, event feed, and causal
+        verdict. Two further views (Strata, Terminal) are design direction only &mdash;
+        prototype them before building. The legacy <code>Lanes</code> view ships one
+        more release as an escape hatch.
+      </p>
+
+      <div class="cards">
+        <a class="card" href="handoff/02-view-specs/overview.md" id="overview" data-tone="cyan">
+          <div class="card-num">02a · Ambient health &middot; Classic</div>
+          <div class="card-title">Overview</div>
+          <div class="card-desc">520px chronograph dial with orbit ring of per-endpoint markers, verdict strip, metrics triptych. The glanceable baseline.</div>
+          <div class="card-meta">OverviewView.svelte · ChronographDial.svelte</div>
+        </a>
+        <a class="card" href="handoff/02-view-specs/overview-enriched.md" id="overview-enriched" data-tone="cyan">
+          <div class="card-num">02a+ · Enriched upgrade</div>
+          <div class="card-title">Overview · Enriched <span style="font-size:10px;color:var(--cyan);letter-spacing:.14em;text-transform:uppercase;margin-left:8px">default</span></div>
+          <div class="card-desc">Dial gains a baseline arc, 60s quality trace, within-band label, and breathing chrome. Adds racing strip, event feed, and a one-sentence causal verdict next to the dial.</div>
+          <div class="card-meta">+ RacingStrip · EventFeed · CausalVerdictStrip</div>
+        </a>
+        <a class="card" href="handoff/02-view-specs/live.md" id="live" data-tone="cyan">
+          <div class="card-num">02b · Real time</div>
+          <div class="card-title">Live</div>
+          <div class="card-desc">Oscilloscope traces for the last 60 rounds. Unified or split. Replaces the legacy split view.</div>
+          <div class="card-meta">LiveView.svelte · ScopeCanvas.svelte</div>
+        </a>
+        <a class="card" href="handoff/02-view-specs/atlas.md" id="atlas" data-tone="amber">
+          <div class="card-num">02c · Diagnose</div>
+          <div class="card-title">Atlas</div>
+          <div class="card-desc">Phase waterfall &mdash; DNS / TCP / TLS / TTFB / Transfer &mdash; with auto-generated hypothesis and last-8 sample strip.</div>
+          <div class="card-meta">AtlasView.svelte · Waterfall.svelte · PhaseBar.svelte</div>
+        </a>
+        <a class="card" href="handoff/02-view-specs/strata.md" id="strata" data-tone="green">
+          <div class="card-num">02d · Proposed</div>
+          <div class="card-title">Strata <span style="font-size:10px;color:var(--amber);letter-spacing:.14em;text-transform:uppercase;margin-left:8px">prototype first</span></div>
+          <div class="card-desc">Per-endpoint percentile bands over the selected time range. Not yet in the prototype &mdash; design direction only.</div>
+          <div class="card-meta">StrataView.svelte (future)</div>
+        </a>
+        <a class="card" href="handoff/02-view-specs/terminal.md" id="terminal" data-tone="pink">
+          <div class="card-num">02e · Proposed</div>
+          <div class="card-title">Terminal <span style="font-size:10px;color:var(--amber);letter-spacing:.14em;text-transform:uppercase;margin-left:8px">prototype first</span></div>
+          <div class="card-desc">Keyboard-driven forensic event log. Not yet in the prototype &mdash; design direction only, gated behind an advanced flag.</div>
+          <div class="card-meta">TerminalView.svelte (future)</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- ===== 03 — Components ===== -->
+    <section id="components">
+      <div class="sec-label"><span class="num">03</span> Shared components</div>
+      <h2 class="sec-title">Eight building blocks the views depend on.</h2>
+      <p class="sec-lede">
+        These are where real engineering care goes &mdash; animations, render budgets,
+        accessibility hooks. Every view consumes one or more of them.
+      </p>
+
+      <div class="cards">
+        <a class="card" href="handoff/03-components/endpoint-rail.md">
+          <div class="card-num">03a</div>
+          <div class="card-title">EndpointRail</div>
+          <div class="card-desc">264px persistent sidebar. Drives <code>uiStore.focusedEndpointId</code>. No sparklines on purpose.</div>
+        </a>
+        <a class="card" href="handoff/03-components/chronograph-dial.md">
+          <div class="card-num">03b</div>
+          <div class="card-title">ChronographDial</div>
+          <div class="card-desc">SVG dial with orbit ring, hand interpolation (rAF lerp), threshold arc, rim-pulse on cross. v2 adds baseline arc, 60s quality trace, within-band label, breathing chrome.</div>
+        </a>
+        <a class="card" href="handoff/03-components/racing-strip.md" data-tone="cyan">
+          <div class="card-num">03f · Enriched</div>
+          <div class="card-title">RacingStrip</div>
+          <div class="card-desc">All endpoints plotted on a shared latency axis. Per-row: threshold-split track, p50&ndash;p95 band, 40-sample sparkline, live dot. Click &rarr; Live, shift-click &rarr; Diagnose.</div>
+        </a>
+        <a class="card" href="handoff/03-components/event-feed.md" data-tone="pink">
+          <div class="card-num">03g · Enriched</div>
+          <div class="card-title">EventFeed</div>
+          <div class="card-desc">Last 5 threshold crossings and p95 shifts. Newest row loud; older rows fade by rank. New arrivals slide in over 1.2s.</div>
+        </a>
+        <a class="card" href="handoff/03-components/causal-verdict.md" data-tone="amber">
+          <div class="card-num">03h · Enriched</div>
+          <div class="card-title">CausalVerdictStrip</div>
+          <div class="card-desc">One sentence that names the cause. Distinguishes shared-phase upstream problems (&ldquo;DNS slow on 3 endpoints&rdquo;) from endpoint-specific ones. Drill CTA targets the worst offender.</div>
+        </a>
+        <a class="card" href="handoff/03-components/scope-canvas.md">
+          <div class="card-num">03c</div>
+          <div class="card-title">ScopeCanvas</div>
+          <div class="card-desc">Recommend reusing existing <code>timeline-renderer.ts</code> for 60fps. Fixed 1440&times;640 design space.</div>
+        </a>
+        <a class="card" href="handoff/03-components/waterfall.md">
+          <div class="card-num">03d</div>
+          <div class="card-title">Waterfall · PhaseBar</div>
+          <div class="card-desc">Refactor existing <code>LaneHeaderWaterfall</code> into a shared <code>PhaseBar</code>, reuse from Atlas.</div>
+        </a>
+        <a class="card" href="handoff/03-components/shared.md">
+          <div class="card-num">03e</div>
+          <div class="card-title">Shared utilities</div>
+          <div class="card-desc"><code>classify()</code>, <code>networkQuality()</code>, <code>fmt()</code>, <code>endpointColor()</code>. Pure functions, full unit tests.</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- ===== 04 — Tokens ===== -->
+    <section id="tokens">
+      <div class="sec-label"><span class="num">04</span> Design tokens</div>
+      <h2 class="sec-title">Nine additions to <code>tokens.ts</code>.</h2>
+      <p class="sec-lede">
+        The existing token file is the authoritative source of visual values. No new file
+        in the redesign declares raw colors, durations, or spacing &mdash; everything
+        flows through tokens.
+      </p>
+
+      <div class="spec-table">
+        <div class="spec-table-head">#</div>
+        <div class="spec-table-head">Addition</div>
+        <div class="spec-table-head">Why</div>
+
+        <div class="spec-row"><div class="name">1</div><div class="desc"><strong>Accent &middot; amber</strong> &mdash; degraded tone</div><div class="file">color.accent.amber</div></div>
+        <div class="spec-row"><div class="name">2</div><div class="desc"><strong>Surface depth</strong> &mdash; dial face, scope bg</div><div class="file">color.surface.deep</div></div>
+        <div class="spec-row"><div class="name">3</div><div class="desc"><strong>Glass variants</strong> &mdash; hover, strong</div><div class="file">color.glass.bgHover/bgStrong</div></div>
+        <div class="spec-row"><div class="name">4</div><div class="desc"><strong>SVG primitives</strong> &mdash; ticks, grid, orbit</div><div class="file">color.svg.*</div></div>
+        <div class="spec-row"><div class="name">5</div><div class="desc"><strong>Tooltip surface</strong> &mdash; stacks above all</div><div class="file">color.tooltip.*</div></div>
+        <div class="spec-row"><div class="name">6</div><div class="desc"><strong>Tier-2 label text</strong> &mdash; on light segments</div><div class="file">color.tier2.labelText</div></div>
+        <div class="spec-row"><div class="name">7</div><div class="desc"><strong>Typography scale</strong> &mdash; named sizes + tracking</div><div class="file">typography.scale/tracking</div></div>
+        <div class="spec-row"><div class="name">8</div><div class="desc"><strong>Timing primitives</strong> &mdash; hand lerp, pulses</div><div class="file">timing.handLerp/pulseRim</div></div>
+        <div class="spec-row"><div class="name">9</div><div class="desc"><strong>Lane constants</strong> &mdash; reused unchanged</div><div class="file">lane.chartWindow/padding</div></div>
+      </div>
+
+      <a class="cta" href="handoff/04-tokens-additions.md">Full token diff <span class="arrow">→</span></a>
+    </section>
+
+    <!-- ===== 05 — Types ===== -->
+    <section id="types">
+      <div class="sec-label"><span class="num">05</span> Types &amp; stores</div>
+      <h2 class="sec-title">Eight changes to the type surface.</h2>
+      <p class="sec-lede">
+        Backward-compatible. One persistence migration (v4 &rarr; v5) handles existing
+        users; deprecated view names remain in the union for one release.
+      </p>
+
+      <div class="spec-table">
+        <div class="spec-table-head">#</div>
+        <div class="spec-table-head">Change</div>
+        <div class="spec-table-head">File</div>
+
+        <div class="spec-row"><div class="name">1</div><div class="desc">Extend <code>ActiveView</code> union &mdash; 5 new + 1 alias, 3 deprecated</div><div class="file">types.ts</div></div>
+        <div class="spec-row"><div class="name">2</div><div class="desc">Add <code>focusedEndpointId</code>, <code>liveOptions</code>, <code>terminalFilters</code></div><div class="file">UIState</div></div>
+        <div class="spec-row"><div class="name">3</div><div class="desc">New <code>uiStore</code> methods &mdash; setFocused, toggleFocused, etc.</div><div class="file">stores/ui.ts</div></div>
+        <div class="spec-row"><div class="name">4</div><div class="desc">Add <code>healthThreshold</code> field to <code>Settings</code></div><div class="file">stores/settings.ts</div></div>
+        <div class="spec-row"><div class="name">5</div><div class="desc">Add <code>tier2P95</code> alongside <code>tier2Averages</code></div><div class="file">EndpointStatistics</div></div>
+        <div class="spec-row"><div class="name">6</div><div class="desc">New <code>networkQualityStore</code> derived</div><div class="file">stores/derived.ts</div></div>
+        <div class="spec-row"><div class="name">7</div><div class="desc">New <code>terminalEventsStore</code> incremental buffer</div><div class="file">stores/terminal-events.ts</div></div>
+        <div class="spec-row"><div class="name">8</div><div class="desc">Persistence v4 &rarr; v5 migration</div><div class="file">utils/apply-persisted-settings.ts</div></div>
+      </div>
+
+      <a class="cta" href="handoff/05-type-additions.md">Full type additions <span class="arrow">→</span></a>
+    </section>
+
+    <!-- ===== 06 — Plan ===== -->
+    <section id="plan">
+      <div class="sec-label"><span class="num">06</span> Rollout</div>
+      <h2 class="sec-title">Seven phases plus a 2.5 sub-phase. Each ships independently.</h2>
+      <p class="sec-lede">
+        Nothing in a later phase is a prerequisite for shipping an earlier one. Phase&nbsp;0
+        lands the plumbing before any visual work; phases&nbsp;5&ndash;6 require design
+        prototyping before they can be scheduled; phase&nbsp;7 retires the legacy views
+        once users are on the new defaults.
+      </p>
+
+      <div class="phases">
+        <div class="phase">
+          <div class="phase-num">PHASE 0</div>
+          <div class="phase-body">
+            <h4>Foundations</h4>
+            <p>Tokens, classifier, format helpers, type additions, persistence migration. No visual change.</p>
+          </div>
+          <div class="phase-duration">1&ndash;2 days</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PHASE 1</div>
+          <div class="phase-body">
+            <h4>Rail + view switcher</h4>
+            <p>Persistent 264px left rail, seven-way topbar switcher, ViewSwitcher routing. Stubs for new views.</p>
+          </div>
+          <div class="phase-duration">1 day</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PHASE 2</div>
+          <div class="phase-body">
+            <h4>Overview &middot; Classic</h4>
+            <p>Chronograph dial with orbit ring, live hand interpolation, threshold arc, verdict strip, metrics triptych. Ship as the default before Enriched lands.</p>
+          </div>
+          <div class="phase-duration">2&ndash;3 days</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PHASE 2.5</div>
+          <div class="phase-body">
+            <h4>Overview &middot; Enriched <span class="pill amber">layers on 2</span></h4>
+            <p>Dial v2 (baseline arc, quality trace, within-band label, breathing chrome). Add RacingStrip, EventFeed, CausalVerdictStrip. Extract <code>computeCausalVerdict()</code> to <code>utils/verdict.ts</code>. Flip default once soaked.</p>
+          </div>
+          <div class="phase-duration">3&ndash;4 days</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PHASE 3</div>
+          <div class="phase-body">
+            <h4>Live</h4>
+            <p>ScopeCanvas (reuse <code>timeline-renderer.ts</code> core), unified/split toggle, solo focus mode, tooltips.</p>
+          </div>
+          <div class="phase-duration">2&ndash;3 days</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PHASE 4</div>
+          <div class="phase-body">
+            <h4>Atlas</h4>
+            <p>Extract <code>PhaseBar</code> from lane header. Waterfall with P50/P95 toggle, hypothesis strip, sample strip.</p>
+          </div>
+          <div class="phase-duration">2 days</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PHASE 5</div>
+          <div class="phase-body">
+            <h4>Strata <span class="pill amber">prototype first</span></h4>
+            <p>Prototype the view, get sign-off, then build: per-row percentile bands (ticks, not KDE in v1), time range selector, low-confidence indicator.</p>
+          </div>
+          <div class="phase-duration">2 days after prototype</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PHASE 6</div>
+          <div class="phase-body">
+            <h4>Terminal <span class="pill amber">prototype first</span></h4>
+            <p>Prototype the view, get sign-off, then build: event derivation, severity chips, filter pills, JSONL export. Gated behind <code>showAdvancedViews</code>.</p>
+          </div>
+          <div class="phase-duration">2 days after prototype</div>
+        </div>
+        <div class="phase">
+          <div class="phase-num">PHASE 7</div>
+          <div class="phase-body">
+            <h4>Deprecation</h4>
+            <p>Retire <code>timeline</code>, <code>heatmap</code>, <code>split</code>. Bump persisted version. Escape hatch via URL.</p>
+          </div>
+          <div class="phase-duration">1 day</div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Total estimate:</strong> ~11&ndash;14 engineer-days for the three prototyped
+        views (Overview Classic + Enriched, Live, Atlas + foundations &amp; rail).
+        Strata and Terminal add ~2 days each on top, but only after each is prototyped and signed off.
+        No data-layer work is required &mdash; the prototype&rsquo;s synthetic
+        generator is deleted; every piece of data the views display is already in
+        the existing Svelte stores.
+      </div>
+
+      <a class="cta" href="handoff/06-implementation-plan.md">Full rollout plan <span class="arrow">→</span></a>
+    </section>
+
+    <!-- ===== Decisions ===== -->
+    <section id="decisions">
+      <div class="sec-label">Design decisions</div>
+      <h2 class="sec-title">Locked before handoff.</h2>
+      <p class="sec-lede">
+        These were explored during prototyping and decided. Re-opening any of them
+        is allowed but should be an explicit call, not an accident in implementation.
+      </p>
+
+      <div class="decisions">
+        <div class="decision">
+          <div class="decision-label">Dial style</div>
+          <div class="decision-body"><strong>Minimal only.</strong> Mechanical (brushed bezel, jewel screws, sub-dial) explored and rejected &mdash; too ornamental for a monitoring surface.</div>
+        </div>
+        <div class="decision">
+          <div class="decision-label">Scope style</div>
+          <div class="decision-body"><strong>Clean only.</strong> CRT (scanlines, vignette, phosphor glow) explored and rejected &mdash; reduced legibility, skeuomorphic for skeuomorphism&rsquo;s sake.</div>
+        </div>
+        <div class="decision">
+          <div class="decision-label">Endpoint focus</div>
+          <div class="decision-body"><strong>Global, driven by the rail.</strong> No per-view endpoint pickers. One source of truth: <code>uiStore.focusedEndpointId</code>.</div>
+        </div>
+        <div class="decision">
+          <div class="decision-label">Tier-2 palette</div>
+          <div class="decision-body"><strong>Existing token palette, reused everywhere.</strong> Waterfall, sample strip, hypothesis evidence all use the same five colors. No phase colors invented.</div>
+        </div>
+        <div class="decision">
+          <div class="decision-label">Rail content</div>
+          <div class="decision-body"><strong>No sparklines.</strong> The rail is chrome; every view has its own primary visualization. Pip glow is the only quiet live-motion signal.</div>
+        </div>
+        <div class="decision">
+          <div class="decision-label">Threshold UX</div>
+          <div class="decision-body"><strong>Read-only on views.</strong> Threshold changes through Settings drawer only &mdash; prevents accidental edits while reading a trace.</div>
+        </div>
+      </div>
+
+      <div class="callout warn">
+        <strong>Out of scope:</strong> Settings drawer redesign, Share popover redesign,
+        mobile/tablet layouts, light mode. All deferred to a later cycle.
+      </div>
+    </section>
+
+    <footer>
+      Chronoscope v2 &middot; Implementation handoff &middot; prototype &rarr; production
+    </footer>
+  </main>
+</div>
+
+<script>
+  // Smooth scroll for anchor links
+  document.querySelectorAll('a[href^="#"]').forEach(a => {
+    a.addEventListener('click', e => {
+      const id = a.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (!el) return;
+      e.preventDefault();
+      window.scrollTo({ top: el.offsetTop - 24, behavior: 'smooth' });
+      history.replaceState(null, '', '#' + id);
+    });
+  });
+</script>
+</body>
+</html>
