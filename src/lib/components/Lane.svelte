@@ -74,6 +74,12 @@
   function fmtLoss(pct: number): string {
     return pct === 0 ? '0%' : `${pct.toFixed(1)}%`;
   }
+
+  const hasMeaningfulTier2 = $derived(
+    tier2Averages !== undefined &&
+    tier2Averages.dnsLookup + tier2Averages.tcpConnect + tier2Averages.tlsHandshake +
+      tier2Averages.ttfb + tier2Averages.contentTransfer > 0,
+  );
 </script>
 
 <article
@@ -183,6 +189,11 @@
         <span class="ch-stat"><span class="ch-stat-label">L</span> <span class="ch-stat-val">{fmtLoss(lossPercent)}</span></span>
       {/if}
     </div>
+    {#if ready && hasMeaningfulTier2 && tier2Averages !== undefined}
+      <div class="lane-compact-waterfall">
+        <LaneHeaderWaterfall {tier2Averages} compact={true} />
+      </div>
+    {/if}
   {/if}
   <div class="lane-chart" aria-label="Latency chart for {url}">
     {#if children}
@@ -389,6 +400,20 @@
     backdrop-filter: blur(12px) saturate(1.2);
     -webkit-backdrop-filter: blur(12px) saturate(1.2);
     border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    pointer-events: none;
+  }
+
+  /* Compact tier2 waterfall — thin overlay below compact-header. Renders only when tier2Averages has non-zero phases (TAO-anchor lanes). */
+  .lane-compact-waterfall {
+    position: absolute;
+    top: var(--compact-header-height);
+    left: 0; right: 0;
+    z-index: 3;
+    padding: 2px 10px;
+    background: rgba(12, 10, 20, 0.5);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     pointer-events: none;
   }
   .ch-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }

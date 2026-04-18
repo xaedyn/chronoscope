@@ -121,3 +121,41 @@ describe('LaneHeaderWaterfall — fallback warning badge', () => {
     expect(container.querySelector('.wf-fallback')).toBeNull();
   });
 });
+
+describe('LaneHeaderWaterfall — compact variant', () => {
+  it('renders .wf-compact instead of .wf-root when compact=true', () => {
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages, compact: true } });
+    expect(container.querySelector('.wf-compact')).not.toBeNull();
+    expect(container.querySelector('.wf-root')).toBeNull();
+  });
+
+  it('compact variant omits .wf-labels', () => {
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages, compact: true } });
+    expect(container.querySelector('.wf-labels')).toBeNull();
+  });
+
+  it('compact variant renders only non-zero segments', () => {
+    // Warm-connection shape: only ttfb and contentTransfer non-zero
+    const warmAverages = {
+      dnsLookup: 0, tcpConnect: 0, tlsHandshake: 0, ttfb: 30, contentTransfer: 0.5,
+    };
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages: warmAverages, compact: true } });
+    const segments = container.querySelectorAll('.wf-segment--compact');
+    expect(segments.length).toBe(2);
+  });
+
+  it('compact variant renders nothing when all phases are zero (no bar, no fallback text)', () => {
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages: allZero, compact: true } });
+    expect(container.querySelector('.wf-compact')).toBeNull();
+    expect(container.querySelector('.wf-fallback')).toBeNull();
+    expect(container.querySelector('.waterfall-bar')).toBeNull();
+  });
+
+  it('compact variant preserves aria-label with phase breakdown', () => {
+    const { container } = render(LaneHeaderWaterfall, { props: { tier2Averages, compact: true } });
+    const bar = container.querySelector('[role="img"]');
+    expect(bar).not.toBeNull();
+    const label = bar?.getAttribute('aria-label') ?? '';
+    expect(label).toContain('TTFB');
+  });
+});
