@@ -3,6 +3,7 @@
 <!-- with rAF lerp interpolation, endpoint orbit ring outside the scale, and a -->
 <!-- rim pulse when the aggregate median crosses the health threshold.         -->
 <script lang="ts">
+  import { onDestroy } from 'svelte';
   import { tokens } from '$lib/tokens';
   import { VERDICT_STYLES, overviewVerdict, type OverviewVerdict } from '$lib/utils/classify';
   import { fmt } from '$lib/utils/format';
@@ -115,45 +116,55 @@
     return () => { if (rafId !== null) cancelAnimationFrame(rafId); rafId = null; };
   });
 
-  // ── Threshold-cross rim pulse ─────────────────────────────────────────────
-  // Edge-triggered: pulse when the median transitions from under → over. Fires
-  // for `tokens.timing.pulseRim` ms, then resets. An $effect reads the current
-  // overThreshold and compares to the tracked "previously-over" state.
+  // ── Threshold-cross effects (rim pulse + SR announcement) ────────────────
+  // Single $effect — sibling effects on the same `wasOver` flag race in Svelte
+  // 5: one writes wasOver=true before the other reads !wasOver, dropping the
+  // announcement. Cleanup also moves to onDestroy so per-rerun cleanup doesn't
+  // cancel the pending timer when overThreshold flips back-and-forth (which
+  // would otherwise leave `pulsing` or `crossingAnnouncement` permanently set).
   let pulsing = $state(false);
+  let crossingAnnouncement = $state('');
   let wasOver = false;
   let pulseTimer: ReturnType<typeof setTimeout> | null = null;
-
-  $effect(() => {
-    const over = overThreshold;
-    if (over && !wasOver) {
-      pulsing = true;
-      if (pulseTimer !== null) clearTimeout(pulseTimer);
-      pulseTimer = setTimeout(() => { pulsing = false; pulseTimer = null; }, tokens.timing.pulseRim + 500);
-    }
-    wasOver = over;
-    return () => {
-      if (pulseTimer !== null) { clearTimeout(pulseTimer); pulseTimer = null; }
-    };
-  });
-
-  // ── SR live-region text (throttled via a signal tick) ──────────────────────
-  // Announces threshold crossings only. Cleared after a short dwell so the
-  // message doesn't linger in the reader buffer.
-  let crossingAnnouncement = $state('');
   let announceTimer: ReturnType<typeof setTimeout> | null = null;
 
   $effect(() => {
-    if (overThreshold && !wasOver) {
-      const msg = liveMedian == null
+    const over = overThreshold;
+    const median = liveMedian;
+    const t = threshold;
+    if (over && !wasOver) {
+      // Rim pulse — give the CSS animation a buffer beyond the rim swap window.
+      pulsing = true;
+      if (pulseTimer !== null) clearTimeout(pulseTimer);
+      pulseTimer = setTimeout(() => { pulsing = false; pulseTimer = null; }, tokens.timing.pulseRim + 500);
+
+      // SR announcement — cleared after a short dwell so it doesn't linger.
+      const msg = median == null
         ? 'Median latency crossed threshold.'
-        : `Median latency crossed threshold — now ${Math.round(liveMedian)}ms, threshold ${threshold}ms.`;
+        : `Median latency crossed threshold — now ${Math.round(median)}ms, threshold ${t}ms.`;
       crossingAnnouncement = msg;
       if (announceTimer !== null) clearTimeout(announceTimer);
       announceTimer = setTimeout(() => { crossingAnnouncement = ''; announceTimer = null; }, 2000);
     }
-    return () => {
-      if (announceTimer !== null) { clearTimeout(announceTimer); announceTimer = null; }
-    };
+    wasOver = over;
+  });
+
+  onDestroy(() => {
+    if (pulseTimer !== null) clearTimeout(pulseTimer);
+    if (announceTimer !== null) clearTimeout(announceTimer);
+  });
+
+  // ── prefers-reduced-motion (live-listened) ────────────────────────────────
+  // OS toggle can flip while the app is open, so a one-shot read is wrong;
+  // listen and re-render. SSR-safe via the typeof window guard.
+  let prefersReducedMotion = $state(false);
+  $effect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    prefersReducedMotion = mq.matches;
+    const handler = (e: MediaQueryListEvent): void => { prefersReducedMotion = e.matches; };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
   });
 
   // ── Hand geometry ──────────────────────────────────────────────────────────
@@ -297,7 +308,7 @@
               stroke={m.over ? 'var(--accent-pink-glow)' : 'var(--bg-base)'}
               stroke-width={m.over ? 2 : 0.5}
             >
-              {#if m.over}
+              {#if m.over && !prefersReducedMotion}
                 <animate attributeName="r" values="{PIP_R_REST};4;{PIP_R_REST}" dur="1.4s" repeatCount="indefinite" />
               {/if}
             </circle>

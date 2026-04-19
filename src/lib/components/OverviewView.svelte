@@ -5,17 +5,21 @@
 <!-- "Diagnose →" CTA.                                                          -->
 <script lang="ts">
   import { measurementStore } from '$lib/stores/measurements';
-  import { endpointStore } from '$lib/stores/endpoints';
   import { statisticsStore } from '$lib/stores/statistics';
   import { settingsStore } from '$lib/stores/settings';
   import { uiStore } from '$lib/stores/ui';
-  import { networkQualityStore } from '$lib/stores/derived';
+  import { networkQualityStore, monitoredEndpointsStore } from '$lib/stores/derived';
   import { overviewVerdict, VERDICT_STYLES } from '$lib/utils/classify';
   import { fmt, fmtParts, fmtCount } from '$lib/utils/format';
   import { tokens } from '$lib/tokens';
   import ChronographDial from './ChronographDial.svelte';
 
-  const endpoints = $derived($endpointStore);
+  // Cross-phase invariant — every user-facing aggregate (live median, worst
+  // endpoint, over-threshold count, sample total, dial orbit) routes through
+  // monitoredEndpointsStore so the score, verdict, and per-endpoint chrome on
+  // this view can never disagree about who's being measured. See
+  // PHASE_NOTES.md "Patterns" §1.
+  const monitored = $derived($monitoredEndpointsStore);
   const stats = $derived($statisticsStore);
   const measurements = $derived($measurementStore);
   const threshold = $derived($settingsStore.healthThreshold);
@@ -30,16 +34,16 @@
   // ── Per-endpoint last latency map (for the dial's orbit ring) ──────────────
   const lastLatencies = $derived.by(() => {
     const out: Record<string, number | null> = {};
-    for (const ep of endpoints) {
+    for (const ep of monitored) {
       out[ep.id] = measurements.endpoints[ep.id]?.lastLatency ?? null;
     }
     return out;
   });
 
-  // ── Live median across all endpoints' lastLatency (skip nulls) ─────────────
+  // ── Live median across monitored endpoints' lastLatency (skip nulls) ───────
   const liveMedian = $derived.by(() => {
     const vals: number[] = [];
-    for (const ep of endpoints) {
+    for (const ep of monitored) {
       const lat = measurements.endpoints[ep.id]?.lastLatency;
       if (lat != null && Number.isFinite(lat)) vals.push(lat);
     }
@@ -49,10 +53,10 @@
     return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
   });
 
-  // ── Worst endpoint by p95 among ready stats ────────────────────────────────
+  // ── Worst endpoint by p95 among ready monitored stats ──────────────────────
   const worst = $derived.by(() => {
     let worstEp: { id: string; label: string; color: string; p95: number } | null = null;
-    for (const ep of endpoints) {
+    for (const ep of monitored) {
       const s = stats[ep.id];
       if (!s || !s.ready) continue;
       if (!worstEp || s.p95 > worstEp.p95) {
@@ -67,10 +71,10 @@
     return worstEp;
   });
 
-  // ── Triptych metrics ───────────────────────────────────────────────────────
+  // ── Triptych metrics — monitored only ──────────────────────────────────────
   const overCount = $derived.by(() => {
     let n = 0, total = 0;
-    for (const ep of endpoints) {
+    for (const ep of monitored) {
       const lat = measurements.endpoints[ep.id]?.lastLatency;
       if (lat == null) continue;
       total++;
@@ -80,7 +84,7 @@
   });
   const totalSamples = $derived.by(() => {
     let n = 0;
-    for (const ep of endpoints) {
+    for (const ep of monitored) {
       n += measurements.endpoints[ep.id]?.samples.length ?? 0;
     }
     return n;
@@ -105,7 +109,7 @@
       {score}
       {liveMedian}
       {threshold}
-      {endpoints}
+      endpoints={monitored}
       {lastLatencies}
       {paused}
     />
