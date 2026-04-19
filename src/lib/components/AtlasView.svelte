@@ -75,7 +75,10 @@
         color: PHASE_COLORS[phase],
         short: SHORT_LABELS[phase],
         pct: ms / phaseTotal,
-        dominant: hypothesis !== null && hypothesis.verdictPhase === phase,
+        // Use dominantPhases set membership (not verdictPhase equality) so the
+        // pair-dominance branch — which reports verdictPhase === 'mixed' — still
+        // lights up both cited phases.
+        dominant: hypothesis !== null && hypothesis.dominantPhases.includes(phase),
       };
     });
   });
@@ -173,8 +176,15 @@
     </div>
   {:else if phases === null}
     <div class="atlas-empty" role="note">
-      <p class="atlas-empty-title">Awaiting tier-2 samples…</p>
-      <p class="atlas-empty-hint">Phase breakdown appears once the first tier-2 measurement lands.</p>
+      {#if mode === 'p95' && focusedStats?.tier2Averages}
+        <!-- P50 data exists, P95 hasn't been computed yet. Without this branch -->
+        <!-- the view reads as a regression when the user toggles to P95.      -->
+        <p class="atlas-empty-title">P95 phase breakdown not yet available.</p>
+        <p class="atlas-empty-hint">Switch to P50 to view the current breakdown, or wait for more samples.</p>
+      {:else}
+        <p class="atlas-empty-title">Awaiting tier-2 samples…</p>
+        <p class="atlas-empty-hint">Phase breakdown appears once the first tier-2 measurement lands.</p>
+      {/if}
     </div>
   {:else}
     <!-- Hero waterfall -->

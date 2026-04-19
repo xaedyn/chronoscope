@@ -215,12 +215,18 @@ export interface PhaseHypothesis {
   readonly verdictPhase: Tier2Phase | 'mixed';
   readonly text: string;
   readonly dominantPct: number;
+  // Phases that callers should visually emphasize. Empty on "no dominance",
+  // single-element on the top-phase branch, two-element on the pair branch.
+  // Consumers use membership (`includes`) rather than verdictPhase equality
+  // because the pair branch reports `verdictPhase: 'mixed'` but still has
+  // two concrete phases to highlight.
+  readonly dominantPhases: readonly Tier2Phase[];
 }
 
 export function phaseHypothesis(phases: PhaseBreakdown): PhaseHypothesis {
   const total = phases.dns + phases.tcp + phases.tls + phases.ttfb + phases.transfer;
   if (total <= 0) {
-    return { verdictPhase: 'mixed', text: 'Awaiting tier-2 samples.', dominantPct: 0 };
+    return { verdictPhase: 'mixed', text: 'Awaiting tier-2 samples.', dominantPct: 0, dominantPhases: [] };
   }
   const entries: [Tier2Phase, number][] = [
     ['dns',      phases.dns],
@@ -239,6 +245,7 @@ export function phaseHypothesis(phases: PhaseBreakdown): PhaseHypothesis {
       verdictPhase: topName,
       text: `Slow ${PHASE_LABELS[topName]} — ${Math.round(topPct * 100)}% of total time.`,
       dominantPct: topPct,
+      dominantPhases: [topName],
     };
   }
   const [secondName, secondMs] = entries[1];
@@ -248,11 +255,13 @@ export function phaseHypothesis(phases: PhaseBreakdown): PhaseHypothesis {
       verdictPhase: 'mixed',
       text: `${PHASE_LABELS[topName]} and ${PHASE_LABELS[secondName]} dominate — ${Math.round(pairPct * 100)}% together.`,
       dominantPct: pairPct,
+      dominantPhases: [topName, secondName],
     };
   }
   return {
     verdictPhase: 'mixed',
     text: 'No single phase dominates — investigate overall network conditions.',
     dominantPct: 0,
+    dominantPhases: [],
   };
 }

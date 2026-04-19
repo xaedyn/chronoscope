@@ -260,6 +260,7 @@ describe('phaseHypothesis()', () => {
     expect(v.verdictPhase).toBe('mixed');
     expect(v.text).toBe('Awaiting tier-2 samples.');
     expect(v.dominantPct).toBe(0);
+    expect(v.dominantPhases).toEqual([]);
   });
 
   it('flags a single-phase bottleneck when top > 60% of total', () => {
@@ -268,6 +269,7 @@ describe('phaseHypothesis()', () => {
     expect(v.verdictPhase).toBe('ttfb');
     expect(v.text).toBe('Slow TTFB — 71% of total time.');
     expect(v.dominantPct).toBeCloseTo(0.708, 2);
+    expect(v.dominantPhases).toEqual(['ttfb']);
   });
 
   it('flags top-pair dominance when top+2 > 80% of total', () => {
@@ -276,6 +278,9 @@ describe('phaseHypothesis()', () => {
     expect(v.verdictPhase).toBe('mixed');
     expect(v.text).toBe('DNS and TTFB dominate — 91% together.');
     expect(v.dominantPct).toBeGreaterThan(0.8);
+    // Both cited phases must be in the emphasis set so the UI can highlight
+    // them via membership; verdictPhase === 'mixed' is not enough on its own.
+    expect(v.dominantPhases).toEqual(['dns', 'ttfb']);
   });
 
   it('falls through to "No single phase dominates" when spread is flat', () => {
@@ -283,6 +288,7 @@ describe('phaseHypothesis()', () => {
     expect(v.verdictPhase).toBe('mixed');
     expect(v.text).toBe('No single phase dominates — investigate overall network conditions.');
     expect(v.dominantPct).toBe(0);
+    expect(v.dominantPhases).toEqual([]);
   });
 
   it('ties break deterministically by declared phase order (dns wins dns=tcp)', () => {
