@@ -4,6 +4,20 @@ Accumulating log of watch-items surfaced during phased delivery but deferred
 for later attention. Each entry names the phase it came from, the signal, and
 the condition under which it becomes actionable.
 
+## Phase 1 decisions
+
+- **Lanes stayed enabled** in `ViewSwitcher` (only 4 of 5 non-Overview tabs
+  disabled, instead of the briefed 5 of 5). Reason: the Phase 0 v4→v5
+  migration rewrites every legacy `activeView` (`timeline`/`heatmap`/`split`)
+  to `'lanes'`, so disabling the Lanes tab would strand users with no UI
+  route to the existing Glass Lanes visualization. Plan to disable/retire
+  alongside legacy view removal in **Phase 7**.
+- **Disabled-tab pattern** (`tabindex=-1` + `title` tooltip "Prototype in
+  progress — not yet available." + `aria-disabled` + `aria-pressed` for the
+  toggle state) is the template for Phases 2–6. Each phase that brings a
+  view online just flips `enabled: true` on its `VIEWS` entry in
+  `ViewSwitcher.svelte`.
+
 ## Open watch-items
 
 ### DeepSource Category A — "function declaration in global scope" (Phase 0)
