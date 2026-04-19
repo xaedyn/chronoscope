@@ -128,10 +128,11 @@
     root.style.setProperty('--glass-bg-rail-selected', tokens.color.glass.bgRailSelected);
 
     // v2 motion primitives
-    root.style.setProperty('--timing-hand-lerp',     String(tokens.timing.handLerp));
-    root.style.setProperty('--timing-pulse-rim',     `${tokens.timing.pulseRim}ms`);
-    root.style.setProperty('--timing-orbit-pulse',   `${tokens.timing.orbitPulse}ms`);
-    root.style.setProperty('--timing-trace-repaint', `${tokens.timing.traceRepaint}ms`);
+    root.style.setProperty('--timing-hand-lerp',        String(tokens.timing.handLerp));
+    root.style.setProperty('--timing-pulse-rim',        `${tokens.timing.pulseRim}ms`);
+    root.style.setProperty('--timing-pulse-dial-glow',  `${tokens.timing.pulseDialGlow}ms`);
+    root.style.setProperty('--timing-orbit-pulse',      `${tokens.timing.orbitPulse}ms`);
+    root.style.setProperty('--timing-trace-repaint',    `${tokens.timing.traceRepaint}ms`);
 
     // Legacy properties (Settings/Share drawers not yet redesigned)
     root.style.setProperty('--surface-raised',   tokens.color.surface.raised);

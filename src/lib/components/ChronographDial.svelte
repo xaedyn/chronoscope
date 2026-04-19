@@ -93,6 +93,20 @@
   const endpointCount = $derived(endpoints.length);
   const scoreDisplay = $derived(score == null ? '—' : String(score));
 
+  // ── prefers-reduced-motion (live-listened) ────────────────────────────────
+  // OS toggle can flip while the app is open, so a one-shot read is wrong;
+  // listen and re-render. SSR-safe via the typeof window guard. Declared
+  // before the rAF effect + SVG <animate> gate because both read it.
+  let prefersReducedMotion = $state(false);
+  $effect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    prefersReducedMotion = mq.matches;
+    const handler = (e: MediaQueryListEvent): void => { prefersReducedMotion = e.matches; };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  });
+
   // ── Live hand: rAF lerp toward the target angle ────────────────────────────
   const targetAng = $derived(latToAng(liveMedian ?? 0));
   let displayAng = $state(targetAng);
@@ -142,10 +156,11 @@
     const median = liveMedian;
     const t = threshold;
     if (over && !wasOver) {
-      // Rim pulse — give the CSS animation a buffer beyond the rim swap window.
+      // Rim pulse — window matches the CSS keyframe duration (--timing-pulse-dial-glow)
+      // so the `pulsing` class drops off exactly when the animation completes.
       pulsing = true;
       if (pulseTimer !== null) clearTimeout(pulseTimer);
-      pulseTimer = setTimeout(() => { pulsing = false; pulseTimer = null; }, tokens.timing.pulseRim + 500);
+      pulseTimer = setTimeout(() => { pulsing = false; pulseTimer = null; }, tokens.timing.pulseDialGlow);
 
       // SR announcement — cleared after a short dwell so it doesn't linger.
       const msg = median == null
@@ -161,19 +176,6 @@
   onDestroy(() => {
     if (pulseTimer !== null) clearTimeout(pulseTimer);
     if (announceTimer !== null) clearTimeout(announceTimer);
-  });
-
-  // ── prefers-reduced-motion (live-listened) ────────────────────────────────
-  // OS toggle can flip while the app is open, so a one-shot read is wrong;
-  // listen and re-render. SSR-safe via the typeof window guard.
-  let prefersReducedMotion = $state(false);
-  $effect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) return;
-    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-    prefersReducedMotion = mq.matches;
-    const handler = (e: MediaQueryListEvent): void => { prefersReducedMotion = e.matches; };
-    mq.addEventListener('change', handler);
-    return () => mq.removeEventListener('change', handler);
   });
 
   // ── Hand geometry ──────────────────────────────────────────────────────────
@@ -318,7 +320,7 @@
               stroke-width={m.over ? 2 : 0.5}
             >
               {#if m.over && !prefersReducedMotion}
-                <animate attributeName="r" values="{PIP_R_REST};4;{PIP_R_REST}" dur="1.4s" repeatCount="indefinite" />
+                <animate attributeName="r" values="{PIP_R_OVER};{PIP_R_OVER + 1.5};{PIP_R_OVER}" dur="1.4s" repeatCount="indefinite" />
               {/if}
             </circle>
           </g>
@@ -363,12 +365,12 @@
     display: block;
   }
 
-  /* The svg-level pulsing class runs a one-shot drop-shadow pulse whenever the
-     aggregate median crosses the health threshold. Driven by the component's
-     `pulsing` signal, reset after `timing.pulseRim` ms. */
+  /* One-shot drop-shadow flash when the aggregate median crosses the health
+     threshold. Driven by the component's `pulsing` signal, cleared after
+     --timing-pulse-dial-glow ms — same token as the JS setTimeout so the
+     class and the keyframe can't drift apart. */
   .dial.pulsing {
-    animation: dialPulse var(--timing-pulse-rim, 400ms) ease-out;
-    animation-duration: 900ms; /* full pulse window exceeds the rim swap */
+    animation: dialPulse var(--timing-pulse-dial-glow, 900ms) ease-out;
   }
   @keyframes dialPulse {
     0%   { filter: drop-shadow(0 0 0    var(--accent-pink-glow)); }

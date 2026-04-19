@@ -18,7 +18,7 @@
   // endpoint, over-threshold count, sample total, dial orbit) routes through
   // monitoredEndpointsStore so the score, verdict, and per-endpoint chrome on
   // this view can never disagree about who's being measured. See
-  // PHASE_NOTES.md "Patterns" §1.
+  // PATTERNS.md §3.
   const monitored = $derived($monitoredEndpointsStore);
   const stats = $derived($statisticsStore);
   const measurements = $derived($measurementStore);

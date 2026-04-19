@@ -16,7 +16,7 @@ import type { Endpoint } from '../types';
  * triptych counts, racing-strip rows, event derivation, baseline window…) MUST
  * derive from this set, not from the raw `endpointStore`. The raw store is
  * still appropriate for chrome that explicitly lists every endpoint regardless
- * of status (e.g. the EndpointRail). See PHASE_NOTES.md "Patterns" §1.
+ * of status (e.g. the EndpointRail). See PATTERNS.md §3.
  */
 export const monitoredEndpointsStore: Readable<readonly Endpoint[]> = derived(
   endpointStore,
