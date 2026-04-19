@@ -171,6 +171,23 @@ the condition under which it becomes actionable.
   view online just flips `enabled: true` on its `VIEWS` entry in
   `ViewSwitcher.svelte`.
 
+## Deferred
+
+### Phase 5 — Strata view (#50)
+Handoff spec `handoff/02-view-specs/strata.md` is exploratory with no
+prototype. Every prior phase shipped against a validated visual; Phase
+5 would mean re-deriving design from prose. Blocked on a design cycle
+producing a static prototype + clarity on what "Strata" actually
+visualizes (histograms vs percentile stacks vs time-banded strata).
+Tab stays disabled-with-tooltip until unblocked.
+
+### Phase 6 — Terminal view (#51)
+Same shape as #50: `handoff/02-view-specs/terminal.md` is exploratory,
+no prototype exists. Open questions include structured-log-vs-console
+framing, live-tail / pause-on-scroll behavior, and the relationship to
+the existing Overview EventFeed (superset or different cut?). Tab
+stays disabled-with-tooltip until unblocked.
+
 ## Open watch-items
 
 ### DeepSource Category A — "function declaration in global scope" (Phase 0)
