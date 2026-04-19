@@ -137,9 +137,15 @@
 
   .feed-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
   .feed-row {
+    /* Rank-based fade: row 0 full opacity, each older row a notch dimmer.
+       Matches v2 prototype .v2-feed-row. */
     opacity: calc(1 - var(--rank, 0) * 0.14);
     transition: background 140ms ease, opacity 400ms ease;
     border-radius: 6px;
+    /* Base type size inherited by every column. .latest bumps this one notch. */
+    font-family: var(--mono);
+    font-size: var(--ts-sm);
+    line-height: 1.4;
   }
   .feed-row:hover { opacity: 1; background: rgba(255,255,255,.04); }
   .feed-row.latest { font-size: var(--ts-base); }
@@ -149,7 +155,9 @@
   .feed-btn {
     width: 100%;
     display: grid;
-    grid-template-columns: 60px 10px 120px 1fr;
+    /* 58px time / 10px dot slot / 120px name / remainder for action.
+       Matches v2 prototype .v2-feed-row grid. */
+    grid-template-columns: 58px 10px 120px 1fr;
     gap: 8px;
     align-items: center;
     padding: 6px 8px;
@@ -158,14 +166,14 @@
     color: inherit;
     cursor: pointer;
     text-align: left;
-    font-family: inherit;
+    /* Inherit the row's mono + ts-sm so all columns share one baseline. */
+    font: inherit;
   }
   .feed-btn:focus-visible { outline: 1.5px solid var(--accent-cyan); outline-offset: 2px; border-radius: 6px; }
 
   .feed-time {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
     color: var(--t4);
+    letter-spacing: 0.08em;
     font-variant-numeric: tabular-nums;
   }
   .feed-dot {
@@ -173,22 +181,20 @@
     border-radius: 50%;
   }
   .feed-name {
-    font-family: var(--mono);
-    font-size: var(--ts-sm);
     color: var(--t2);
+    letter-spacing: 0.02em;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .feed-action {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
     color: var(--t3);
-    letter-spacing: var(--tr-label);
+    font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .feed-value { font-style: normal; color: var(--t1); }
 
   .feed-row.k-up    .feed-value { color: var(--accent-pink); }
   .feed-row.k-down  .feed-value { color: var(--accent-green); }
