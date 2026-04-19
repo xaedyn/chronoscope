@@ -240,3 +240,68 @@ describe('visual-polish-v3 tokens (AC1 + AC2)', () => {
     expect(bright - mid).toBeGreaterThanOrEqual(0.04);
   });
 });
+
+describe('v2 foundation tokens (Phase 0)', () => {
+  it('exposes amber accent tri (color + glow + tone)', () => {
+    expect(tokens.color.accent.amber).toBe('#fbbf24');
+    expect(tokens.color.accent.amberGlow).toBe('rgba(251,191,36,.33)');
+    expect(tokens.color.accent.amberTone).toBe('#b38410');
+  });
+
+  it('exposes cyan and pink glow + tone companions', () => {
+    expect(tokens.color.accent.cyanGlow).toBe('rgba(103,232,249,.33)');
+    expect(tokens.color.accent.cyanTone).toBe('#3aa7b8');
+    expect(tokens.color.accent.pinkGlow).toBe('rgba(249,168,212,.33)');
+    expect(tokens.color.accent.pinkTone).toBe('#b0628a');
+  });
+
+  it('exposes dial-face surface + deep overlay', () => {
+    expect(tokens.color.surface.dialFace).toBe('#141021');
+    expect(tokens.color.surface.overlayDeep).toBe('rgba(11,8,20,.85)');
+  });
+
+  it('exposes rail-scoped glass surfaces distinct from existing bgHover/bgStrong', () => {
+    expect(tokens.color.glass.bgRailHover).toBe('rgba(255,255,255,.06)');
+    expect(tokens.color.glass.bgRailSelected).toBe('rgba(255,255,255,.10)');
+    // preserve existing consumer values
+    expect(tokens.color.glass.bgHover).toBe('rgba(255,255,255,.07)');
+    expect(tokens.color.glass.bgStrong).toBe('rgba(255,255,255,.045)');
+  });
+
+  it('exposes SVG primitives for dial, orbit ring, scope grid', () => {
+    expect(tokens.color.svg.gridLineCyan).toBe('rgba(103,232,249,.05)');
+    expect(tokens.color.svg.gridLineMajor).toBe('rgba(255,255,255,.06)');
+    expect(tokens.color.svg.tickMinor).toBe('rgba(255,255,255,.18)');
+    expect(tokens.color.svg.tickMajor).toBe('rgba(255,255,255,.50)');
+    expect(tokens.color.svg.handStroke).toBe('#ffffff');
+    expect(tokens.color.svg.dialRim).toBe('rgba(255,255,255,.14)');
+    expect(tokens.color.svg.orbitTrack).toBe('rgba(255,255,255,.06)');
+    expect(tokens.color.svg.orbitEdge).toBe('rgba(255,255,249,.10)');
+  });
+
+  it('exposes tooltip deep variant + border/text tokens', () => {
+    expect(tokens.color.tooltip.bgDeep).toBe('rgba(10,9,18,.92)');
+    expect(tokens.color.tooltip.border).toBe('rgba(255,255,255,.10)');
+    expect(tokens.color.tooltip.text).toBe('rgba(255,255,255,.95)');
+    expect(tokens.color.tooltip.textDim).toBe('rgba(255,255,255,.55)');
+  });
+
+  it('exposes typography scale (xs → xxl) and tracking', () => {
+    expect(tokens.typography.scale.xs).toBe('9px');
+    expect(tokens.typography.scale.sm).toBe('10px');
+    expect(tokens.typography.scale.md).toBe('11.5px');
+    expect(tokens.typography.scale.lg).toBe('14px');
+    expect(tokens.typography.scale.xl).toBe('18px');
+    expect(tokens.typography.scale.xxl).toBe('32px');
+    expect(tokens.typography.tracking.kicker).toBe('0.18em');
+    expect(tokens.typography.tracking.label).toBe('0.08em');
+    expect(tokens.typography.tracking.body).toBe('0');
+  });
+
+  it('exposes v2 motion primitives', () => {
+    expect(tokens.timing.handLerp).toBe(0.15);
+    expect(tokens.timing.pulseRim).toBe(400);
+    expect(tokens.timing.orbitPulse).toBe(1400);
+    expect(tokens.timing.traceRepaint).toBe(16);
+  });
+});
