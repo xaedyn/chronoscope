@@ -38,6 +38,14 @@ const primitive = {
   pink15:     'rgba(249,168,212,.15)',
   pink25:     'rgba(249,168,212,.25)',
   amber:      '#fbbf24',
+  amberGlow:  'rgba(251,191,36,.33)',   // #fbbf2455 — chronograph degraded glow
+  amberTone:  '#b38410',                // darker amber for arcs/borders
+
+  // Accent glow/tone companions (Phase 0 — v2 views)
+  cyanGlow: 'rgba(103,232,249,.33)',    // #67e8f955
+  cyanTone: '#3aa7b8',
+  pinkGlow: 'rgba(249,168,212,.33)',    // #f9a8d455
+  pinkTone: '#b0628a',
 
   green:     '#86efac',
   greenGlow: 'rgba(134,239,172,.5)',
@@ -54,9 +62,6 @@ const primitive = {
   glassBg:        'rgba(255,255,255,.03)',
   glassBorder:    'rgba(255,255,255,.07)',
   glassHighlight: 'rgba(255,255,255,.12)',
-
-  // Lane surface (slightly darker glass)
-  laneBg: 'rgba(255,255,255,.025)',
 
   // Topbar
   topbarBg: 'rgba(255,255,255,.025)',
@@ -86,6 +91,32 @@ const primitive = {
   nowDotPink: '#fbcfe8',
   thresholdStroke: '#f9a8d4',
 
+  // Chronograph dial face / scope canvas background (Phase 0 — v2 views)
+  bgDialFace: '#141021',
+
+  // Overlay layer used by v2 share/settings sheets (deeper than legacy overlay)
+  overlayDeep: 'rgba(11,8,20,.85)',
+
+  // Rail row surfaces (Phase 0 — v2 endpoint rail)
+  glassBgRailHover:    'rgba(255,255,255,.06)',
+  glassBgRailSelected: 'rgba(255,255,255,.10)',
+
+  // SVG primitives used by dial, orbit ring, scope grid (Phase 0 — v2 views)
+  svgGridCyan:   'rgba(103,232,249,.05)',
+  svgGridMajor:  'rgba(255,255,255,.06)',
+  svgTickMinor:  'rgba(255,255,255,.18)',
+  svgTickMajor:  'rgba(255,255,255,.50)',
+  svgHandStroke: '#ffffff',
+  svgDialRim:    'rgba(255,255,255,.14)',
+  svgOrbitTrack: 'rgba(255,255,255,.06)',
+  svgOrbitEdge:  'rgba(255,255,249,.10)',
+
+  // Tooltip surface for scope crosshair (Phase 0 — v2 Live view)
+  tooltipBgDeep:  'rgba(10,9,18,.92)',
+  tooltipBorder:  'rgba(255,255,255,.10)',
+  tooltipText:    'rgba(255,255,255,.95)',
+  tooltipTextDim: 'rgba(255,255,255,.55)',
+
   // Orb layers (for App.svelte CSS)
   orbCyan:   'rgba(103,232,249,.045)',
   orbPink:   'rgba(249,168,212,.04)',
@@ -110,6 +141,9 @@ export const tokens = {
       raised:   primitive.bgMid,
       elevated: primitive.bgDeep,
       overlay:  'rgba(0, 0, 0, 0.6)',
+      // Chronograph dial face + scope canvas background (v2 views).
+      dialFace:    primitive.bgDialFace,
+      overlayDeep: primitive.overlayDeep,
       border: {
         dim:    primitive.borderDim,
         mid:    primitive.borderMid,
@@ -140,18 +174,25 @@ export const tokens = {
       cyan20:     primitive.cyan20,
       cyan12:     primitive.cyan12,
       cyan06:     primitive.cyan06,
+      cyanGlow:   primitive.cyanGlow,
+      cyanTone:   primitive.cyanTone,
       pink:       primitive.pink,
       pinkBright: primitive.pinkBright,
       pink40:     primitive.pink40,
       pink20:     primitive.pink20,
       pink12:     primitive.pink12,
       pink06:     primitive.pink06,
+      pinkGlow:   primitive.pinkGlow,
+      pinkTone:   primitive.pinkTone,
       cyan25:           primitive.cyan25,
       cyanBgSubtle:     primitive.cyan15,
       cyanBorderSubtle: primitive.cyan25,
       pink25:           primitive.pink25,
       pinkBgSubtle:     primitive.pink15,
       pinkBorderSubtle: primitive.pink25,
+      amber:      primitive.amber,
+      amberGlow:  primitive.amberGlow,
+      amberTone:  primitive.amberTone,
       green:      primitive.green,
       greenGlow:  primitive.greenGlow,
     },
@@ -165,6 +206,10 @@ export const tokens = {
       bg:          primitive.glassBg,
       bgStrong:    'rgba(255,255,255,.045)',
       bgHover:     'rgba(255,255,255,.07)',
+      // Rail-scoped glass surfaces (v2 endpoint rail). Distinct from bgHover/bgStrong
+      // above to preserve existing-component visuals (see Phase 0 handoff notes).
+      bgRailHover:    primitive.glassBgRailHover,
+      bgRailSelected: primitive.glassBgRailSelected,
       border:      primitive.glassBorder,
       borderHover: primitive.glassHighlight,
       highlight:      primitive.glassHighlight,
@@ -172,10 +217,6 @@ export const tokens = {
       shadow:         'rgba(0,0,0,.15)',
       shadowStrong: 'rgba(0,0,0,.5)',
       statsBorder:  'rgba(255,255,255,.04)',
-    },
-
-    lane: {
-      bg: primitive.laneBg,
     },
 
     topbar: {
@@ -188,6 +229,11 @@ export const tokens = {
 
     tooltip: {
       bg: primitive.tooltipBg,
+      // Deep tooltip surface for v2 scope crosshair.
+      bgDeep:  primitive.tooltipBgDeep,
+      border:  primitive.tooltipBorder,
+      text:    primitive.tooltipText,
+      textDim: primitive.tooltipTextDim,
     },
 
     svg: {
@@ -196,6 +242,15 @@ export const tokens = {
       nowDotCyan:      primitive.nowDotCyan,
       nowDotPink:      primitive.nowDotPink,
       thresholdStroke: primitive.thresholdStroke,
+      // v2 chronograph + scope primitives.
+      gridLineCyan:  primitive.svgGridCyan,
+      gridLineMajor: primitive.svgGridMajor,
+      tickMinor:     primitive.svgTickMinor,
+      tickMajor:     primitive.svgTickMajor,
+      handStroke:    primitive.svgHandStroke,
+      dialRim:       primitive.svgDialRim,
+      orbitTrack:    primitive.svgOrbitTrack,
+      orbitEdge:     primitive.svgOrbitEdge,
     },
 
     heatmap: {
@@ -268,6 +323,28 @@ export const tokens = {
     caption: { size: 9,  weight: 400, opacity: 0.5,  letterSpacing: '0.04em' },
     label:   { size: 11, weight: 500, opacity: 0.58, letterSpacing: '0.06em' },
     body:    { size: 14, weight: 400, opacity: 0.94, letterSpacing: '0' },
+
+    // v2 named scale — aligned to the prototype (`v2/Chronoscope v2.html`), which
+    // is the pixel-fidelity source of truth. Half-pixel sizes from the earlier
+    // handoff spec were reconciled to the prototype's integer-px scale.
+    scale: {
+      xs:   '10px',  // micro labels, all-caps only
+      sm:   '11px',  // mono metadata, urls
+      md:   '12px',  // controls, chip text
+      base: '13px',  // body copy, chips
+      lg:   '14px',  // rail metrics, brand name, sub-metric numbers
+      xl:   '17px',  // subsection titles, logo
+      xl2:  '20px',  // section titles
+      xl3:  '24px',  // page titles
+      xxl:  '32px',  // reserved for Overview triptych values
+    },
+    tracking: {
+      kicker:  '0.22em',
+      label:   '0.14em',
+      tight:   '-0.01em',
+      display: '-0.03em',
+      body:    '0',
+    },
   },
 
   spacing: {
@@ -296,17 +373,16 @@ export const tokens = {
     btnHover:        200,
     domThrottle:     100,
     copiedFeedback: 2000,
-    // Legacy — timeline-data-pipeline.ts and statistics store still reference these
-    progressiveDisclosure: 250,
-    sonarPingFast: 300,
-    sonarPingMedium: 500,
-    sonarPingSlow: 800,
-    sonarPingTimeout: 1200,
-    statTransition:  200,
-    dotEntrance:     200,
-    dotExit:         150,
-    loadingPulse:         2400,
-    loadingRingDuration:  1800,
+    progressiveDisclosure: 250,   // SummaryCard stagger
+    loadingPulse:         2400,   // LoadingAnimation
+    loadingRingDuration:  1800,   // LoadingAnimation
+
+    // v2 motion primitives.
+    handLerp:        0.15,   // dial hand smoothing factor (per-frame)
+    pulseRim:         400,   // ms — inner-rim stroke color swap on threshold cross
+    pulseDialGlow:    900,   // ms — outer drop-shadow flash window; shared by CSS keyframe duration and JS pulse-window timer so the two can't drift
+    orbitPulse:      1400,   // ms — orbit pip radius pulse when over threshold
+    traceRepaint:      16,   // ms — scope canvas repaint throttle
   },
 
   easing: {
@@ -325,80 +401,20 @@ export const tokens = {
   shadow: {
     low:  '0 2px 8px rgba(0,0,0,.4)',
     high: '0 8px 32px rgba(0,0,0,.6)',
-    lane: '0 4px 30px rgba(0,0,0,.15)',
   },
 
-  // Lane layout constants
+  // Shell + sliding window constants. Phase 7 retired the Lanes family and
+  // its layout-algorithm tokens (gapPx / padding* / dotRadius / nowDotRadius /
+  // ringInitialR / compactThreshold / compactHeaderHeight / maxEndpoints /
+  // panelWidth / minHeight / chartPadding*). chartWindow still drives the
+  // Live scope window; topbarHeight / railWidth / xAxisHeight / footerHeight
+  // are the v2 shell chrome constants.
   lane: {
-    panelWidth:    250,   // px — left panel fixed width
-    gapPx:           8,   // gap between lane cards
-    paddingX:       10,   // horizontal padding of lanes container
-    paddingY:        8,   // top padding of lanes container
-    chartPaddingX:  18,   // left/right padding inside SVG chart area
-    chartPaddingY:  12,   // top/bottom
-    dotRadius:       3,
-    dotRadiusHover:  5.5,
-    nowDotRadius:    4,
-    ringInitialR:    7,
-    ringFinalR:     14,
-    chartWindow:    60,   // max visible rounds in SVG chart (sliding window)
-    topbarHeight:   54,
+    chartWindow:    60,
+    topbarHeight:   58,
+    railWidth:     264,
     xAxisHeight:    30,
     footerHeight:   38,
-    minHeight:           120,   // px — minimum lane height before 2-col triggers (AC3)
-    compactHeaderHeight:  28,   // px — height of compact overlay header
-    compactThreshold:      4,   // endpoint count that triggers compact mode (AC2)
-    maxEndpoints:         10,   // hard cap on endpoint count (AC4)
-  },
-
-  // Kept for timeline-data-pipeline.ts (still used by LaneSvgChart)
-  canvas: {
-    yAxis: {
-      rollingWindowSize:   20,
-      percentileClampLow:   2,
-      percentileClampHigh: 98,
-      logScaleThreshold:   50,
-      linearHeadroomPct:  0.2,
-      minHeadroomMs:        5,
-      minVisibleRangeMs:   10,
-      targetGridlineCount:  5,
-    },
-    xAxis: {
-      minLabelSpacing: 60,
-      labelOffsetY:     4,
-      paddingBottom:   32,
-    },
-    ribbon: {
-      fillOpacity:     0.15,
-      medianOpacity:   0.6,
-      medianLineWidth: 1.5,
-      medianLineDash:  [4, 4] as readonly number[],
-    },
-    // Legacy — retained so effects-renderer.ts compiles without errors
-    sonarPing: {
-      fast:    { initialRadius: 3, finalRadius: 12, maxConcurrent: 5 },
-      medium:  { initialRadius: 3, finalRadius: 20, maxConcurrent: 5 },
-      slow:    { initialRadius: 3, finalRadius: 32, maxConcurrent: 3 },
-      timeout: { initialRadius: 3, finalRadius: 48, maxConcurrent: 1 },
-    },
-    pointRadius:      4,
-    pointRadiusHover: 6,
-    pointOutlineWidth: 1.5,
-    gridLineDash:     [4, 8] as readonly number[],
-    gridLineOpacity:  0.3,
-    axisLineOpacity:  0.6,
-    sweepLineOpacity: 0.15,
-    sweepLineGlowWidth: 4,
-    heatmapCellSize:  8,
-    haloRadius:      16,
-    haloOpacity:     0.3,
-    emptyState: {
-      sweepPeriod:     4000,
-      sweepLineOpacity: 0.25,
-      ringOpacity:     0.08,
-      textOpacity:     0.5,
-      trailAngleDeg:   60,
-    },
   },
 
   breakpoints: { small: 480, mobile: 375, tablet: 768, desktop: 1024, wide: 1440 },
