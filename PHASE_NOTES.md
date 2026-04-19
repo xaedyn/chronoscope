@@ -4,6 +4,40 @@ Accumulating log of watch-items surfaced during phased delivery but deferred
 for later attention. Each entry names the phase it came from, the signal, and
 the condition under which it becomes actionable.
 
+## Phase 3 decisions
+
+- **SVG polylines over Canvas2D.** Spec recommended Canvas2D for
+  production (reuse `timeline-renderer.ts`), but the prototype uses SVG
+  and Phase 3 was framed as light mode. With 10 endpoints × 60 rounds =
+  600 draw ops, SVG is comfortably 60 fps; revisit only if a future
+  phase pushes the point count past ~2,000.
+- **Routing updates alongside the view.** Now that Live exists, Rail
+  double-click + Space drill to `'live'` (was `'lanes'` in Phases 1–2.5),
+  RacingStrip click routes to `'live'` (shift-click still `'lanes'`
+  until Atlas lands), OverviewView event-feed drill to `'live'`. The
+  OverviewView **Diagnose** CTA stays pointed at `'lanes'` pending
+  Phase 4 Atlas — same TODO pattern comment at the call site.
+- **PATTERNS.md §2 + §3 honored without new entries.** All Phase 3 UI
+  motion (chip hovers, tooltip) is `@media (prefers-reduced-motion:
+  reduce)` gated; the scope itself has no JS-driven animation — traces
+  redraw on data change, not lerp. Every metric derivation iterates
+  `monitoredEndpointsStore`. No new cross-phase rules surfaced.
+- **Per-component fixes from CR on PR #48** (sparkline-style gap logic
+  reuse, trailing-edge throttle pattern, keyboard accessibility on
+  interactive SVG elements) did not generalize beyond their components,
+  so they live in the commit history rather than PATTERNS.md.
+- **No new stores.** LiveView composes from `measurementStore`,
+  `statisticsStore`, `settingsStore`, `uiStore`, and the derived
+  `monitoredEndpointsStore` — per the MEDIUM-risk non-negotiable.
+
+### Phase 3 — Deferred
+
+- **Time-range selector.** `liveOptions.timeRange` persists
+  (`1m`/`5m`/`15m`/`1h`/`24h`) from the Phase 0 migration, but no UI
+  exposes it yet. Scope uses a fixed `tokens.lane.chartWindow` (60
+  rounds). Future enhancement — retain the persisted field because
+  removing it would require a v7 migration just to undo scaffolding.
+
 ## Phase 2.5 decisions
 
 - **v5→v6 migration landed cleanly.** Full chain tested end-to-end:
