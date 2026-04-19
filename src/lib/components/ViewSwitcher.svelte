@@ -46,7 +46,7 @@
   }
 </script>
 
-<nav class="view-switcher" aria-label="Views">
+<nav class="view-switcher" role="group" aria-label="Views">
   {#each VIEWS as view (view.id)}
     {@const active = isActive(view.id)}
     <button
@@ -54,8 +54,8 @@
       class="view-tab"
       class:active
       class:disabled={!view.enabled}
-      role="tab"
-      aria-selected={active}
+      aria-current={active ? 'page' : undefined}
+      aria-pressed={active}
       aria-disabled={!view.enabled}
       title={view.enabled ? '' : DISABLED_TOOLTIP}
       tabindex={view.enabled ? 0 : -1}

@@ -48,7 +48,7 @@
       {@const bucket = bucketFor(ep.id)}
       {@const style = HEALTH_STYLES[bucket]}
       {@const epStats = stats[ep.id]}
-      {@const parts = epStats ? fmtParts(epStats.p50) : { num: '—', unit: 'ms' }}
+      {@const parts = epStats?.ready ? fmtParts(epStats.p50) : { num: '—', unit: '' }}
       {@const focused = focusedId === ep.id}
       {@const epColor = ep.color || tokens.color.endpoint[0]}
       <button
@@ -56,8 +56,8 @@
         class="rail-row"
         class:focused
         class:disabled={!ep.enabled}
-        role="tab"
-        aria-selected={focused}
+        disabled={!ep.enabled}
+        aria-pressed={focused}
         aria-label="{ep.label}, {ep.url}, status: {style.label}"
         onclick={() => handleClick(ep.id)}
         ondblclick={() => handleDoubleClick(ep.id)}
@@ -74,7 +74,7 @@
         </span>
         <span class="rail-row-metric">
           <span class="rail-row-p50" style:color={epColor}>{parts.num}</span>
-          <span class="rail-row-unit">{parts.unit || 'ms'}</span>
+          <span class="rail-row-unit">{parts.unit}</span>
         </span>
       </button>
     {/each}
@@ -143,12 +143,12 @@
     font-family: inherit;
     transition: background 140ms ease, border-color 140ms ease;
   }
-  .rail-row:hover { background: var(--glass-bg-rail-hover); border-color: var(--border-mid); }
+  .rail-row:hover:not(:disabled) { background: var(--glass-bg-rail-hover); border-color: var(--border-mid); }
   .rail-row.focused {
     background: var(--glass-bg-rail-selected);
     border-color: var(--border-bright);
   }
-  .rail-row.disabled { opacity: 0.5; }
+  .rail-row.disabled, .rail-row:disabled { opacity: 0.5; cursor: not-allowed; }
   .rail-row:focus-visible {
     outline: 1.5px solid var(--accent-cyan);
     outline-offset: 2px;

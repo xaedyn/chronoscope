@@ -103,7 +103,6 @@
     root.style.setProperty('--border-mid',          tokens.color.surface.border.mid);
     root.style.setProperty('--border-bright',       tokens.color.surface.border.bright);
     root.style.setProperty('--surface-topbar-bg',   tokens.color.surface.overlayDeep);
-    root.style.setProperty('--t4',                  tokens.color.text.t4);
 
     // v2 surface + tooltip variants
     root.style.setProperty('--surface-dial-face',    tokens.color.surface.dialFace);

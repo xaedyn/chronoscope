@@ -74,7 +74,7 @@
     </div>
   </div>
 
-  <div class="topbar-divider" aria-hidden="true"></div>
+  <div class="topbar-divider brand-divider" aria-hidden="true"></div>
 
   <div
     class="status-pill"
@@ -86,10 +86,10 @@
   >
     <span class="status-dot" class:on={isRunning && level !== 'unknown'}></span>
     <span class="status-label">{pillStyle.label}</span>
-    <span class="status-tick">{tickText}</span>
+    <span class="status-tick" aria-hidden="true">{tickText}</span>
   </div>
 
-  <div class="topbar-divider" aria-hidden="true"></div>
+  <div class="topbar-divider run-divider" aria-hidden="true"></div>
 
   <div class="run-state">
     <span class="run-state-label">{runText}</span>
@@ -304,9 +304,11 @@
   }
 
   /* Mobile narrow: collapse the run-state label and brand-sub to keep the topbar
-     usable below 768px. Status pill + action icons stay visible.            */
+     usable below 768px. Status pill + action icons stay visible.
+     Hides .run-divider explicitly — selector is class-based because the brand
+     element is also a <div> and `:nth-of-type(2)` would match the wrong one.  */
   @media (max-width: 767px) {
-    .brand-sub, .run-state, .topbar-divider:nth-of-type(2) { display: none; }
+    .brand-sub, .run-state, .run-divider { display: none; }
     .topbar { gap: 8px; padding: 0 12px; }
     .status-pill { padding: 6px 8px; }
   }
