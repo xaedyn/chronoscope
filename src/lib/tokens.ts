@@ -38,6 +38,14 @@ const primitive = {
   pink15:     'rgba(249,168,212,.15)',
   pink25:     'rgba(249,168,212,.25)',
   amber:      '#fbbf24',
+  amberGlow:  'rgba(251,191,36,.33)',   // #fbbf2455 — chronograph degraded glow
+  amberTone:  '#b38410',                // darker amber for arcs/borders
+
+  // Accent glow/tone companions (Phase 0 — v2 views)
+  cyanGlow: 'rgba(103,232,249,.33)',    // #67e8f955
+  cyanTone: '#3aa7b8',
+  pinkGlow: 'rgba(249,168,212,.33)',    // #f9a8d455
+  pinkTone: '#b0628a',
 
   green:     '#86efac',
   greenGlow: 'rgba(134,239,172,.5)',
@@ -86,6 +94,32 @@ const primitive = {
   nowDotPink: '#fbcfe8',
   thresholdStroke: '#f9a8d4',
 
+  // Chronograph dial face / scope canvas background (Phase 0 — v2 views)
+  bgDialFace: '#141021',
+
+  // Overlay layer used by v2 share/settings sheets (deeper than legacy overlay)
+  overlayDeep: 'rgba(11,8,20,.85)',
+
+  // Rail row surfaces (Phase 0 — v2 endpoint rail)
+  glassBgRailHover:    'rgba(255,255,255,.06)',
+  glassBgRailSelected: 'rgba(255,255,255,.10)',
+
+  // SVG primitives used by dial, orbit ring, scope grid (Phase 0 — v2 views)
+  svgGridCyan:   'rgba(103,232,249,.05)',
+  svgGridMajor:  'rgba(255,255,255,.06)',
+  svgTickMinor:  'rgba(255,255,255,.18)',
+  svgTickMajor:  'rgba(255,255,255,.50)',
+  svgHandStroke: '#ffffff',
+  svgDialRim:    'rgba(255,255,255,.14)',
+  svgOrbitTrack: 'rgba(255,255,255,.06)',
+  svgOrbitEdge:  'rgba(255,255,249,.10)',
+
+  // Tooltip surface for scope crosshair (Phase 0 — v2 Live view)
+  tooltipBgDeep:  'rgba(10,9,18,.92)',
+  tooltipBorder:  'rgba(255,255,255,.10)',
+  tooltipText:    'rgba(255,255,255,.95)',
+  tooltipTextDim: 'rgba(255,255,255,.55)',
+
   // Orb layers (for App.svelte CSS)
   orbCyan:   'rgba(103,232,249,.045)',
   orbPink:   'rgba(249,168,212,.04)',
@@ -110,6 +144,9 @@ export const tokens = {
       raised:   primitive.bgMid,
       elevated: primitive.bgDeep,
       overlay:  'rgba(0, 0, 0, 0.6)',
+      // Chronograph dial face + scope canvas background (v2 views).
+      dialFace:    primitive.bgDialFace,
+      overlayDeep: primitive.overlayDeep,
       border: {
         dim:    primitive.borderDim,
         mid:    primitive.borderMid,
@@ -140,18 +177,25 @@ export const tokens = {
       cyan20:     primitive.cyan20,
       cyan12:     primitive.cyan12,
       cyan06:     primitive.cyan06,
+      cyanGlow:   primitive.cyanGlow,
+      cyanTone:   primitive.cyanTone,
       pink:       primitive.pink,
       pinkBright: primitive.pinkBright,
       pink40:     primitive.pink40,
       pink20:     primitive.pink20,
       pink12:     primitive.pink12,
       pink06:     primitive.pink06,
+      pinkGlow:   primitive.pinkGlow,
+      pinkTone:   primitive.pinkTone,
       cyan25:           primitive.cyan25,
       cyanBgSubtle:     primitive.cyan15,
       cyanBorderSubtle: primitive.cyan25,
       pink25:           primitive.pink25,
       pinkBgSubtle:     primitive.pink15,
       pinkBorderSubtle: primitive.pink25,
+      amber:      primitive.amber,
+      amberGlow:  primitive.amberGlow,
+      amberTone:  primitive.amberTone,
       green:      primitive.green,
       greenGlow:  primitive.greenGlow,
     },
@@ -165,6 +209,10 @@ export const tokens = {
       bg:          primitive.glassBg,
       bgStrong:    'rgba(255,255,255,.045)',
       bgHover:     'rgba(255,255,255,.07)',
+      // Rail-scoped glass surfaces (v2 endpoint rail). Distinct from bgHover/bgStrong
+      // above to preserve existing-component visuals (see Phase 0 handoff notes).
+      bgRailHover:    primitive.glassBgRailHover,
+      bgRailSelected: primitive.glassBgRailSelected,
       border:      primitive.glassBorder,
       borderHover: primitive.glassHighlight,
       highlight:      primitive.glassHighlight,
@@ -188,6 +236,11 @@ export const tokens = {
 
     tooltip: {
       bg: primitive.tooltipBg,
+      // Deep tooltip surface for v2 scope crosshair.
+      bgDeep:  primitive.tooltipBgDeep,
+      border:  primitive.tooltipBorder,
+      text:    primitive.tooltipText,
+      textDim: primitive.tooltipTextDim,
     },
 
     svg: {
@@ -196,6 +249,15 @@ export const tokens = {
       nowDotCyan:      primitive.nowDotCyan,
       nowDotPink:      primitive.nowDotPink,
       thresholdStroke: primitive.thresholdStroke,
+      // v2 chronograph + scope primitives.
+      gridLineCyan:  primitive.svgGridCyan,
+      gridLineMajor: primitive.svgGridMajor,
+      tickMinor:     primitive.svgTickMinor,
+      tickMajor:     primitive.svgTickMajor,
+      handStroke:    primitive.svgHandStroke,
+      dialRim:       primitive.svgDialRim,
+      orbitTrack:    primitive.svgOrbitTrack,
+      orbitEdge:     primitive.svgOrbitEdge,
     },
 
     heatmap: {
@@ -268,6 +330,21 @@ export const tokens = {
     caption: { size: 9,  weight: 400, opacity: 0.5,  letterSpacing: '0.04em' },
     label:   { size: 11, weight: 500, opacity: 0.58, letterSpacing: '0.06em' },
     body:    { size: 14, weight: 400, opacity: 0.94, letterSpacing: '0' },
+
+    // v2 named scale — chip labels, rail url, rail metric, triptych values, verdict title.
+    scale: {
+      xs:  '9px',     // chip labels, metadata kickers
+      sm:  '10px',    // rail url, axis labels, severity chips
+      md:  '11.5px',  // rail label, segment labels
+      lg:  '14px',    // rail metric, sub-metric numbers
+      xl:  '18px',    // verdict title
+      xxl: '32px',    // overview triptych values
+    },
+    tracking: {
+      kicker: '0.18em',
+      label:  '0.08em',
+      body:   '0',
+    },
   },
 
   spacing: {
@@ -307,6 +384,12 @@ export const tokens = {
     dotExit:         150,
     loadingPulse:         2400,
     loadingRingDuration:  1800,
+
+    // v2 motion primitives.
+    handLerp:     0.15,   // dial hand smoothing factor (per-frame)
+    pulseRim:      400,   // ms — dial rim pulse on threshold cross
+    orbitPulse:   1400,   // ms — orbit pip pulse when over threshold
+    traceRepaint:   16,   // ms — scope canvas repaint throttle
   },
 
   easing: {
