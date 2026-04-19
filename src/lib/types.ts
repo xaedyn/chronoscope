@@ -160,12 +160,28 @@ export interface EndpointStatistics {
     ttfb: number;
     contentTransfer: number;
   };
+  // Per-phase p95 — fed by the same cadence as tier2Averages. Needed for
+  // Atlas view's P50/P95 toggle. Optional to mirror tier2Averages semantics
+  // (absent when no tier-2 samples have been captured yet).
+  readonly tier2P95?: {
+    dnsLookup: number;
+    tcpConnect: number;
+    tlsHandshake: number;
+    ttfb: number;
+    contentTransfer: number;
+  };
+  // Percent of samples that did NOT return `ok` (0–100). Consumed by
+  // verdict.ts's `Packet loss elevated to N.N%` branch. Zero when
+  // sampleCount is zero — consumers should gate on `ready` instead.
+  readonly lossPercent: number;
   readonly ready: boolean;
 }
 
 export type StatisticsState = Record<string, EndpointStatistics>;
 
 // ── Settings store ─────────────────────────────────────────────────────────
+export type OverviewMode = 'classic' | 'enriched';
+
 export interface Settings {
   timeout: number;
   delay: number;
@@ -174,6 +190,15 @@ export interface Settings {
   cap: number;
   corsMode: 'no-cors' | 'cors';
   region?: Region;
+  // Chooses between the Phase 2 Classic dial (score + ticks + hand) and the
+  // Phase 2.5 Enriched dial (+ baseline arc + quality trace + racing strip +
+  // event feed + causal verdict). Landed in v6; default 'classic' until the
+  // enriched surface is flipped to default in a later release.
+  overviewMode: OverviewMode;
+  // Latency alarm threshold in ms — distinct from `timeout` (which is the hard
+  // request abort). Drives classify()/networkQuality() and the chronograph dial.
+  // Must be strictly less than `timeout`; callers enforce.
+  healthThreshold: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -183,10 +208,32 @@ export const DEFAULT_SETTINGS: Settings = {
   monitorDelay: 1000,
   cap: 0,
   corsMode: 'no-cors',
+  healthThreshold: 120,
+  overviewMode: 'classic',
 };
 
 // ── UI store ───────────────────────────────────────────────────────────────
-export type ActiveView = 'timeline' | 'heatmap' | 'split';
+// v2 view union — post-Phase-7 shape. The Lanes family ('lanes' | 'timeline'
+// | 'heatmap' | 'split') has been retired. Persisted payloads carrying any of
+// those values collapse to 'overview' via stepV6toV7 in persistence.ts.
+export type ActiveView =
+  | 'overview'
+  | 'live'
+  | 'atlas'
+  | 'strata'
+  | 'terminal';
+
+export type LiveTimeRange = '1m' | '5m' | '15m' | '1h' | '24h';
+
+export type TerminalEventType =
+  | 'timeout'
+  | 'error'
+  | 'threshold_up'
+  | 'threshold_down'
+  | 'freeze'
+  | 'endpoint_added'
+  | 'endpoint_removed'
+  | 'reuse_change';
 
 export interface HoverTarget {
   readonly endpointId: string;
@@ -208,28 +255,21 @@ export interface UIState {
   showShare: boolean;
   showKeyboardHelp: boolean;
   isSharedView: boolean;
-  laneHoverRound: number | null;
-  laneHoverX: number | null;
-  laneHoverY: number | null;
-  heatmapTooltip: { text: string; x: number; y: number } | null;
   showEndpoints: boolean;
-}
 
-// ── Lane hover ─────────────────────────────────────────────────────────────
-export interface LaneHoverState {
-  readonly round: number;
-  readonly x: number;  // clientX position of hover line
-}
+  // Globally focused endpoint — drives rail selection and per-view focus.
+  // null = unfocused (rail shows aggregate). Persisted across sessions; on
+  // rehydration the id is cleared silently if the endpoint no longer exists.
+  focusedEndpointId: string | null;
 
-// ── Heatmap strip ──────────────────────────────────────────────────────────
-export interface HeatmapCellData {
-  readonly startRound: number;
-  readonly endRound: number;
-  readonly worstLatency: number;
-  readonly worstStatus: SampleStatus;
-  readonly startElapsed: number;
-  readonly endElapsed: number;
-  readonly color: string;
+  // Live view layout options (split scopes vs unified overlay + window).
+  liveOptions: {
+    split: boolean;
+    timeRange: LiveTimeRange;
+  };
+
+  // Terminal view filter set. Empty = show all event types.
+  terminalFilters: Set<TerminalEventType>;
 }
 
 // ── Share payload ──────────────────────────────────────────────────────────
@@ -256,84 +296,23 @@ export interface SharePayload {
 }
 
 // ── Persistence schema ─────────────────────────────────────────────────────
+// v5 adds `healthThreshold` (settings) and `focusedEndpointId`, `liveOptions`,
+// `terminalFilters` (ui). v6 adds `settings.overviewMode` (classic | enriched).
+// Older versions migrate forward via persistence.ts. Sets serialize as arrays
+// on disk; `ui.terminalFilters` round-trips accordingly.
 export interface PersistedSettings {
-  version: 2 | 3 | 4;
+  version: 2 | 3 | 4 | 5 | 6 | 7;
   endpoints: { url: string; enabled: boolean }[];
   settings: Settings;
   ui: {
     expandedCards: string[];
     activeView: ActiveView;
+    focusedEndpointId?: string | null;
+    liveOptions?: {
+      split: boolean;
+      timeRange: LiveTimeRange;
+    };
+    terminalFilters?: TerminalEventType[];
   };
 }
 
-// ── Render data ────────────────────────────────────────────────────────────
-export interface ScatterPoint {
-  readonly x: number;
-  readonly y: number;
-  readonly latency: number;
-  readonly status: SampleStatus;
-  readonly endpointId: string;
-  readonly round: number;
-  readonly color: string;
-  readonly errorMessage?: string;
-}
-
-export interface HeatmapCell {
-  readonly col: number;
-  readonly row: number;
-  readonly color: string;
-  readonly latency: number;
-  readonly status: SampleStatus;
-  readonly endpointId: string;
-  readonly round: number;
-}
-
-export interface SonarPing {
-  readonly id: string;
-  readonly x: number;
-  readonly y: number;
-  readonly color: string;
-  readonly tier: 'fast' | 'medium' | 'slow' | 'timeout';
-  startTime: number;
-}
-
-// ── Pipeline output types ─────────────────────────────────────────────────
-
-export interface Gridline {
-  readonly ms: number;
-  readonly normalizedY: number;
-  readonly label: string;
-}
-
-export interface YRange {
-  readonly min: number;
-  readonly max: number;
-  readonly isLog: boolean;
-  readonly gridlines: readonly Gridline[];
-}
-
-export interface XTick {
-  readonly round: number;
-  readonly normalizedX: number;
-  readonly label: string;
-}
-
-export interface RibbonData {
-  /** P25 path: [round, normalizedY][] — bottom edge of ribbon band */
-  readonly p25Path: readonly (readonly [number, number])[];
-  /** P50 path: [round, normalizedY][] — median line */
-  readonly p50Path: readonly (readonly [number, number])[];
-  /** P75 path: [round, normalizedY][] — top edge of ribbon band */
-  readonly p75Path: readonly (readonly [number, number])[];
-}
-
-export interface FrameData {
-  readonly pointsByEndpoint: ReadonlyMap<string, readonly ScatterPoint[]>;
-  readonly ribbonsByEndpoint: ReadonlyMap<string, RibbonData>;
-  readonly yRange: YRange;
-  readonly yRangesByEndpoint: ReadonlyMap<string, YRange>;
-  readonly xTicks: readonly XTick[];
-  readonly maxRound: number;
-  readonly freezeEvents: readonly FreezeEvent[];
-  readonly hasData: boolean;
-}
