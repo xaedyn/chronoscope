@@ -4,6 +4,51 @@ Accumulating log of watch-items surfaced during phased delivery but deferred
 for later attention. Each entry names the phase it came from, the signal, and
 the condition under which it becomes actionable.
 
+## Phase 2.5 decisions
+
+- **v5→v6 migration landed cleanly.** Full chain tested end-to-end:
+  v1 → v6, v2 → v6, v3 → v6, v4 → v6 (two-hop), v5 → v6 (one-hop), v6
+  pass-through. Unknown/missing/non-numeric version → null fallback.
+  Garbage `overviewMode` coerces to `'classic'`. Forward-written
+  `overviewMode` on a v5 payload is honored. New-field seeding lives in
+  `stepV5toV6` in `persistence.ts`; runtime hydration in
+  `apply-persisted-settings.ts`.
+- **verdict.ts ⇄ classify.ts boundary.** classify answers *"what bucket
+  does X land in?"* — owns `classify`, `networkQuality`, `networkLevel`,
+  `overviewVerdict`, and the three style palettes. verdict answers
+  *"why is X in that bucket and what's the one-sentence diagnosis?"* —
+  owns `computeCausalVerdict`, phase-dominance derivation, and the
+  `Tier2Phase` / `Verdict` vocabulary. No cyclic imports: verdict imports
+  `EndpointStatistics` only; classify has zero verdict dependency.
+  Boundary documented as two-line file-header comment in each file.
+- **Dial breathing chrome uses `@property`-registered CSS custom
+  properties**, not JS-driven SVG attribute animation. `--ring-opacity`,
+  `--face-stroke`, `--tick-minor-op`, `--tick-major-op`, `--label-op`,
+  `--score-weight` each registered with the correct `<number>` / `<length>`
+  syntax and initial value; values lerp over 900 ms via `transition`.
+  Reduced-motion users get the `@media` gate that kills the transition
+  — same pattern as the rim pulse from Phase 2.
+- **ChronographDialV2 as a sibling, not a variant.** Classic dial stays
+  frozen at its Phase 2 shape; V2 is a separate file. Geometry constants
+  are duplicated rather than extracted to a shared module — intentional
+  per the "sibling, not branched" directive so a bug fix on one doesn't
+  silently change the other. Revisit if a third dial ever ships.
+- **`monitoredEndpointsStore` held across every new derivation.** Score
+  history ring, event-derivation walk, baseline pool, verdict rows,
+  sparkline samples, `avgP50`/`avgJitter`/`avgLoss` all iterate
+  `monitored` per PATTERNS.md §3. Enriched derivations short-circuit
+  when `!isEnriched` so Classic users pay no CPU.
+- **Event relative-time clock is independent of measurement cadence.**
+  EventFeed "N s ago" labels would stall between rounds if `now` was
+  derived from `measurements.roundCounter`; the ticker is a 1 s
+  `setInterval` gated on `isEnriched`, combined with roundCounter as a
+  secondary trigger. Torn down on mode flip + `onDestroy`.
+- **No new PATTERNS.md entries this phase** — CR's findings on PR #47
+  (EventFeed self-invalidating effect, RacingStrip sparkline gap logic,
+  honest-hint copy, test title/assertion mismatch) were component-local
+  rather than cross-phase rules, so they live in the commit history
+  and PR discussion, not the patterns catalogue.
+
 ## Phase 2 decisions
 
 - **Classic Overview only.** Phase 2 ships the minimal chronograph dial + diagnosis
