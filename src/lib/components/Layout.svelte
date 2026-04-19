@@ -73,7 +73,7 @@
       <main id="main-content" class="shell-main" tabindex="-1">
         {#if activeView === 'live'}
           <LiveView />
-        {:else if activeView === 'atlas'}
+        {:else if activeView === 'diagnose'}
           <AtlasView />
         {:else}
           <!--
