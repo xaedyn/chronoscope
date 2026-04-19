@@ -1,0 +1,11 @@
+# CodeRabbit configuration.
+# https://docs.coderabbit.ai/guides/configure-coderabbit
+#
+# Reviews are enabled on PRs targeting both main and the v2 redesign umbrella
+# branch, so every phase PR into chronoscope-v2-redesign gets reviewed.
+reviews:
+  auto_review:
+    enabled: true
+    base_branches:
+      - main
+      - chronoscope-v2-redesign
