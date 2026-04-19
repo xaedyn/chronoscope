@@ -112,6 +112,17 @@
     root.style.setProperty('--tooltip-text',         tokens.color.tooltip.text);
     root.style.setProperty('--tooltip-text-dim',     tokens.color.tooltip.textDim);
 
+    // v2 SVG primitives (dial, orbit ring, scope)
+    root.style.setProperty('--svg-grid-cyan',  tokens.color.svg.gridLineCyan);
+    root.style.setProperty('--svg-grid-major', tokens.color.svg.gridLineMajor);
+    root.style.setProperty('--svg-tick-minor', tokens.color.svg.tickMinor);
+    root.style.setProperty('--svg-tick-major', tokens.color.svg.tickMajor);
+    root.style.setProperty('--svg-hand-stroke', tokens.color.svg.handStroke);
+    root.style.setProperty('--svg-dial-rim',   tokens.color.svg.dialRim);
+    root.style.setProperty('--svg-orbit-track', tokens.color.svg.orbitTrack);
+    root.style.setProperty('--svg-orbit-edge', tokens.color.svg.orbitEdge);
+    root.style.setProperty('--svg-threshold',  tokens.color.svg.thresholdStroke);
+
     // v2 rail surfaces
     root.style.setProperty('--glass-bg-rail-hover',    tokens.color.glass.bgRailHover);
     root.style.setProperty('--glass-bg-rail-selected', tokens.color.glass.bgRailSelected);

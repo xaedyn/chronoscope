@@ -89,6 +89,41 @@ export function networkQuality(
   return Math.round(total / ready.length);
 }
 
+export type OverviewVerdict = 'unknown' | 'healthy' | 'degraded' | 'unhealthy';
+
+export interface VerdictStyle {
+  readonly color:  string;
+  readonly glow:   string;
+  readonly label:  string;
+  readonly kicker: string;
+}
+
+/**
+ * Coarse 3-bucket label for the Overview dial and diagnosis strip. The topbar
+ * status pill uses `networkLevel()` for 4-bucket severity; this is intentionally
+ * coarser because the user-facing verdict should compress to "everything's fine
+ * / something's off / things are bad" without the warning/degraded split the
+ * pill uses for alerting.
+ *
+ *   null    → unknown   (Awaiting samples)
+ *   ≥ 80    → healthy
+ *   ≥ 50    → degraded
+ *   <  50   → unhealthy
+ */
+export function overviewVerdict(score: number | null): OverviewVerdict {
+  if (score === null) return 'unknown';
+  if (score >= 80) return 'healthy';
+  if (score >= 50) return 'degraded';
+  return 'unhealthy';
+}
+
+export const VERDICT_STYLES: Record<OverviewVerdict, VerdictStyle> = {
+  unknown:   { color: 'var(--t4)',           glow: 'transparent',              label: 'Awaiting samples', kicker: '···' },
+  healthy:   { color: 'var(--accent-cyan)',  glow: 'var(--accent-cyan-glow)',  label: 'Healthy',          kicker: 'HEALTHY' },
+  degraded:  { color: 'var(--accent-amber)', glow: 'var(--accent-amber-glow)', label: 'Degraded',         kicker: 'DEGRADED' },
+  unhealthy: { color: 'var(--accent-pink)',  glow: 'var(--accent-pink-glow)',  label: 'Unhealthy',        kicker: 'CRITICAL' },
+};
+
 export type NetworkLevel = 'unknown' | 'healthy' | 'warning' | 'degraded' | 'critical';
 
 /**
