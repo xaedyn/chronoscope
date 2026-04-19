@@ -76,8 +76,8 @@
 
   function handleClick(event: MouseEvent, ep: Endpoint): void {
     uiStore.setFocusedEndpoint(ep.id);
-    // Click → Live; Shift+click → Atlas (diagnose).
-    uiStore.setActiveView(event.shiftKey ? 'atlas' : 'live');
+    // Click → Live; Shift+click → Diagnose (the per-phase waterfall view).
+    uiStore.setActiveView(event.shiftKey ? 'diagnose' : 'live');
   }
 </script>
 
@@ -87,7 +87,7 @@
       <h3 class="racing-title">Per-endpoint comparison</h3>
       <p class="racing-sub">Live latencies on shared axis</p>
     </div>
-    <p class="racing-hint">Click → Live · ⇧ → Atlas</p>
+    <p class="racing-hint">Click → Live · ⇧ → Diagnose</p>
   </header>
 
   <div class="racing-axis" aria-hidden="true">

@@ -238,7 +238,7 @@
 
   function handleEnrichedDrill(epId: string): void {
     uiStore.setFocusedEndpoint(epId);
-    uiStore.setActiveView('atlas');
+    uiStore.setActiveView('diagnose');
   }
 
   function handleEventDrill(epId: string): void {
