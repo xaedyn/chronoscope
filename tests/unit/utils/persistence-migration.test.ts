@@ -22,7 +22,7 @@ describe('migrateSettings — full chain through v8', () => {
       ui: { expandedCards: [], activeView: 'timeline' },
     };
     const result = migrateSettings(v3);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect(result?.settings.region).toBe('europe');
     expect(result?.settings.healthThreshold).toBe(120);
     expect('overviewMode' in (result?.settings ?? {})).toBe(false);
@@ -39,7 +39,7 @@ describe('migrateSettings — full chain through v8', () => {
       ui: { expandedCards: [], activeView: 'split' },
     };
     const result = migrateSettings(v4);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect(result?.settings.region).toBe('east-asia');
     expect(result?.settings.healthThreshold).toBe(120);
     expect('overviewMode' in (result?.settings ?? {})).toBe(false);
@@ -53,7 +53,7 @@ describe('migrateSettings — full chain through v8', () => {
       ui: { expandedCards: [], activeView: 'split' },
     };
     const result = migrateSettings(v4);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect(result?.settings.region).toBeUndefined();
   });
 
@@ -85,7 +85,7 @@ describe('migrateSettings — full chain through v8', () => {
       },
     };
     const result = migrateSettings(v5);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect('overviewMode' in (result?.settings ?? {})).toBe(false);
     expect(result?.settings.healthThreshold).toBe(200);
     expect(result?.settings.region).toBe('europe');
@@ -104,7 +104,7 @@ describe('migrateSettings — full chain through v8', () => {
       ui: { expandedCards: [], activeView: 'split' },
     };
     const result = migrateSettings(v2);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect(result?.settings.burstRounds).toBe(50);
     expect(result?.settings.region).toBe('europe');
     expect(result?.settings.healthThreshold).toBe(120);
@@ -117,7 +117,7 @@ describe('migrateSettings — full chain through v8', () => {
       endpoints: [{ url: 'https://example.com' }],
     };
     const result = migrateSettings(v1);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect(result?.ui.activeView).toBe('overview');
     expect('overviewMode' in (result?.settings ?? {})).toBe(false);
   });
@@ -147,7 +147,7 @@ describe('migrateSettings — Phase 7 v6→v7 hop coverage', () => {
       ui: { expandedCards: ['card-a'], activeView: 'split' },
     };
     const result = migrateSettings(v4);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     // v4's 'split' → v5's 'lanes' → v7's 'overview' → v8 still 'overview'.
     expect(result?.ui.activeView).toBe('overview');
     expect(result?.settings.region).toBe('north-america');
@@ -173,7 +173,7 @@ describe('migrateSettings — Phase 7 v6→v7 hop coverage', () => {
       },
     };
     const result = migrateSettings(v5);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect(result?.ui.activeView).toBe('overview');
     expect(result?.settings.healthThreshold).toBe(180);
     expect('overviewMode' in (result?.settings ?? {})).toBe(false);
@@ -190,7 +190,7 @@ describe('migrateSettings — Phase 7 v6→v7 hop coverage', () => {
       ui: { expandedCards: [], activeView: 'live', focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
     };
     const result = migrateSettings(v5);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect(result?.ui.activeView).toBe('live');
   });
 
@@ -212,7 +212,7 @@ describe('migrateSettings — Phase 7 v6→v7 hop coverage', () => {
       },
     };
     const result = migrateSettings(v6);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect(result?.ui.activeView).toBe('overview');
     // overviewMode is dropped at v8 regardless of value.
     expect('overviewMode' in (result?.settings ?? {})).toBe(false);
@@ -298,9 +298,10 @@ describe('migrateSettings — v7→v8 hop coverage', () => {
       },
     };
     const result = migrateSettings(v7);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect('overviewMode' in (result?.settings ?? {})).toBe(false);
-    expect(result?.ui.activeView).toBe('atlas');
+    // v7's 'atlas' → v9's 'diagnose' (the v8→v9 step renames it).
+    expect(result?.ui.activeView).toBe('diagnose');
     expect(result?.settings.healthThreshold).toBe(200);
     expect(result?.settings.region).toBe('europe');
     expect(result?.settings.corsMode).toBe('cors');
@@ -372,9 +373,10 @@ describe('migrateSettings — v7→v8 hop coverage', () => {
       },
     };
     const result = migrateSettings(v8);
-    expect(result?.version).toBe(8);
+    expect(result?.version).toBe(9);
     expect('overviewMode' in (result?.settings ?? {})).toBe(false);
-    expect(result?.ui.activeView).toBe('atlas');
+    // v8's 'atlas' → v9's 'diagnose' via stepV8toV9.
+    expect(result?.ui.activeView).toBe('diagnose');
     expect(result?.settings.healthThreshold).toBe(200);
     expect(result?.ui.focusedEndpointId).toBe('ep-keep');
     expect(result?.ui.liveOptions).toEqual({ split: true, timeRange: '1h' });
@@ -407,5 +409,140 @@ describe('migrateSettings — v7→v8 hop coverage', () => {
     };
     const result = migrateSettings(v8);
     expect('overviewMode' in (result?.settings ?? {})).toBe(false);
+  });
+});
+
+// ── v8 → v9 hop coverage ─────────────────────────────────────────────────────
+// The Atlas view was renamed to Diagnose to match the v2 prototype vocabulary.
+// stepV8toV9 rewrites `activeView: 'atlas'` to `'diagnose'` with a debug-log
+// breadcrumb. Hop coverage: v4→v9 (five hops), v5→v9, v6→v9, v7→v9, v8→v9 (one),
+// v9 pass-through, plus log presence/absence + stray-'atlas' guard on v9.
+describe('migrateSettings — v8→v9 hop coverage', () => {
+  it('v4 → v9 (five hops, activeView=split): collapses Lanes alias to overview, no atlas to rename', () => {
+    const v4 = {
+      version: 4,
+      endpoints: [{ url: 'https://example.com', enabled: true }],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors' },
+      ui: { expandedCards: [], activeView: 'split' },
+    };
+    const result = migrateSettings(v4);
+    expect(result?.version).toBe(9);
+    expect(result?.ui.activeView).toBe('overview');
+  });
+
+  it('v5 → v9 (four hops, activeView=atlas): renames atlas → diagnose at the v9 boundary', () => {
+    const v5 = {
+      version: 5,
+      endpoints: [],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors', healthThreshold: 120 },
+      ui: { expandedCards: [], activeView: 'atlas', focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
+    };
+    const result = migrateSettings(v5);
+    expect(result?.version).toBe(9);
+    expect(result?.ui.activeView).toBe('diagnose');
+  });
+
+  it('v6 → v9 (three hops, activeView=atlas + overviewMode=classic): drops mode AND renames atlas', () => {
+    const v6 = {
+      version: 6,
+      endpoints: [],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors', healthThreshold: 120, overviewMode: 'classic' },
+      ui: { expandedCards: [], activeView: 'atlas', focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
+    };
+    const result = migrateSettings(v6);
+    expect(result?.version).toBe(9);
+    expect('overviewMode' in (result?.settings ?? {})).toBe(false);
+    expect(result?.ui.activeView).toBe('diagnose');
+  });
+
+  it('v8 → v9 (one hop, activeView=atlas): renames to diagnose', () => {
+    const v8 = {
+      version: 8,
+      endpoints: [{ url: 'https://example.com', enabled: true }],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors', healthThreshold: 200 },
+      ui: { expandedCards: [], activeView: 'atlas', focusedEndpointId: 'ep-keep', liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
+    };
+    const result = migrateSettings(v8);
+    expect(result?.version).toBe(9);
+    expect(result?.ui.activeView).toBe('diagnose');
+    // Non-view fields ride through.
+    expect(result?.settings.healthThreshold).toBe(200);
+    expect(result?.ui.focusedEndpointId).toBe('ep-keep');
+  });
+
+  it('v8 → v9: non-atlas activeView passes through unchanged', () => {
+    for (const view of ['overview', 'live', 'strata', 'terminal'] as const) {
+      const v8 = {
+        version: 8,
+        endpoints: [],
+        settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors', healthThreshold: 120 },
+        ui: { expandedCards: [], activeView: view, focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
+      };
+      const result = migrateSettings(v8);
+      expect(result?.version).toBe(9);
+      expect(result?.ui.activeView).toBe(view);
+    }
+  });
+
+  it('v8 → v9: debug-logs the rename when atlas is present', () => {
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    try {
+      const v8 = {
+        version: 8,
+        endpoints: [],
+        settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors', healthThreshold: 120 },
+        ui: { expandedCards: [], activeView: 'atlas', focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
+      };
+      migrateSettings(v8);
+      expect(debugSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/v9 migration: activeView 'atlas' renamed to 'diagnose'/),
+      );
+    } finally {
+      debugSpy.mockRestore();
+    }
+  });
+
+  it('v8 → v9: non-atlas payloads do NOT log the rename breadcrumb', () => {
+    const debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => undefined);
+    try {
+      const v8 = {
+        version: 8,
+        endpoints: [],
+        settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors', healthThreshold: 120 },
+        ui: { expandedCards: [], activeView: 'live', focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
+      };
+      migrateSettings(v8);
+      expect(debugSpy).not.toHaveBeenCalledWith(
+        expect.stringMatching(/v9 migration: activeView 'atlas'/),
+      );
+    } finally {
+      debugSpy.mockRestore();
+    }
+  });
+
+  it('v9 pass-through: already-current payload survives intact', () => {
+    const v9 = {
+      version: 9,
+      endpoints: [{ url: 'https://example.com', enabled: true }],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors', healthThreshold: 120 },
+      ui: { expandedCards: [], activeView: 'diagnose', focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
+    };
+    const result = migrateSettings(v9);
+    expect(result?.version).toBe(9);
+    expect(result?.ui.activeView).toBe('diagnose');
+  });
+
+  it('v9 pass-through: a stray "atlas" in a v9 payload coerces to overview (not silently re-renamed)', () => {
+    // Hand-edited v9 payload with retired 'atlas'. normalizeV9 doesn't run
+    // stepV8toV9, so the rename log doesn't fire — instead the stray value
+    // falls through V9_VIEWS membership and lands on 'overview'.
+    const v9 = {
+      version: 9,
+      endpoints: [],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors', healthThreshold: 120 },
+      ui: { expandedCards: [], activeView: 'atlas', focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
+    };
+    const result = migrateSettings(v9);
+    expect(result?.ui.activeView).toBe('overview');
   });
 });

@@ -29,7 +29,7 @@ describe('persistence', () => {
     };
     saveSettings(settings as unknown as PersistedSettings);
     const loaded = loadPersistedSettings();
-    expect(loaded?.version).toBe(8);
+    expect(loaded?.version).toBe(9);
     expect(loaded?.endpoints[0]?.url).toBe('https://example.com');
     expect(loaded?.settings.burstRounds).toBe(50);
     expect(loaded?.settings.monitorDelay).toBe(1000);
@@ -53,7 +53,7 @@ describe('persistence', () => {
     };
     localStorageMock.setItem('chronoscope_v2_settings', JSON.stringify(settings));
     const loaded = loadPersistedSettings();
-    expect(loaded?.version).toBe(8);
+    expect(loaded?.version).toBe(9);
     expect(localStorageMock.getItem('chronoscope_v2_settings')).toBeNull();
     expect(localStorageMock.getItem('chronoscope_settings')).not.toBeNull();
   });
@@ -61,7 +61,7 @@ describe('persistence', () => {
   it('migrates v1 data all the way to v8', () => {
     const v1Data = { version: 1, endpoints: [{ url: 'https://example.com' }] };
     const migrated = migrateSettings(v1Data);
-    expect(migrated?.version).toBe(8);
+    expect(migrated?.version).toBe(9);
     expect(migrated?.settings.burstRounds).toBe(50);
     expect(migrated?.settings.monitorDelay).toBe(1000);
     expect(migrated?.settings.healthThreshold).toBe(120);
@@ -77,7 +77,7 @@ describe('persistence', () => {
       ui: { expandedCards: [], activeView: 'split' },
     };
     const migrated = migrateSettings(v2Data);
-    expect(migrated?.version).toBe(8);
+    expect(migrated?.version).toBe(9);
     expect(migrated?.settings.monitorDelay).toBe(500);
     expect(migrated?.settings.burstRounds).toBe(50);
     expect(migrated?.settings.delay).toBe(0);
@@ -103,7 +103,7 @@ describe('persistence', () => {
         ui: { expandedCards: ['ep-1'], activeView: 'split' },
       };
       const migrated = migrateSettings(v4);
-      expect(migrated?.version).toBe(8);
+      expect(migrated?.version).toBe(9);
       expect(migrated?.settings.healthThreshold).toBe(120);
       expect(migrated?.settings.region).toBe('north-america');
       expect('overviewMode' in (migrated?.settings ?? {})).toBe(false);
@@ -178,7 +178,7 @@ describe('persistence', () => {
         },
       };
       const migrated = migrateSettings(v5);
-      expect(migrated?.version).toBe(8);
+      expect(migrated?.version).toBe(9);
       expect('overviewMode' in (migrated?.settings ?? {})).toBe(false);
       // Existing v5 fields survive intact.
       expect(migrated?.settings.healthThreshold).toBe(180);
@@ -238,7 +238,7 @@ describe('persistence', () => {
           ui: { expandedCards: [], activeView: 'overview' },
         };
         const migrated = migrateSettings(v7);
-        expect(migrated?.version).toBe(8);
+        expect(migrated?.version).toBe(9);
         expect('overviewMode' in (migrated?.settings ?? {})).toBe(false);
         expect(debugSpy).toHaveBeenCalledWith(
           expect.stringMatching(/v8 migration: settings\.overviewMode 'enriched' retired/),
@@ -261,7 +261,7 @@ describe('persistence', () => {
           ui: { expandedCards: [], activeView: 'live' },
         };
         const migrated = migrateSettings(v7);
-        expect(migrated?.version).toBe(8);
+        expect(migrated?.version).toBe(9);
         expect(migrated?.ui.activeView).toBe('live');
         expect(debugSpy).not.toHaveBeenCalled();
       } finally {
@@ -270,10 +270,10 @@ describe('persistence', () => {
     });
   });
 
-  describe('v8 pass-through', () => {
-    it('round-trips a v8 payload unchanged', () => {
-      const v8: PersistedSettings = {
-        version: 8,
+  describe('v9 pass-through', () => {
+    it('round-trips a v9 payload unchanged', () => {
+      const v9: PersistedSettings = {
+        version: 9,
         endpoints: [{ url: 'https://a.example', enabled: true }],
         settings: {
           timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000,
@@ -287,9 +287,9 @@ describe('persistence', () => {
           terminalFilters: ['timeout', 'error'],
         },
       };
-      saveSettings(v8);
+      saveSettings(v9);
       const loaded = loadPersistedSettings();
-      expect(loaded).toEqual(v8);
+      expect(loaded).toEqual(v9);
     });
 
     it('a stray overviewMode in a v8 payload is silently ignored by the reader', () => {
