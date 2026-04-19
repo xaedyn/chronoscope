@@ -221,7 +221,7 @@
     width: 8px; height: 8px;
     border-radius: 50%;
     flex-shrink: 0;
-    box-shadow: 0 0 6px currentColor;
+    box-shadow: 0 0 6px var(--ep-color, currentColor);
   }
   .racing-name {
     font-size: var(--ts-sm);
@@ -255,7 +255,11 @@
     top: 11px;
     height: 6px;
     border-radius: 3px;
-    opacity: 0.2;
+    opacity: 0.35;
+    /* screen blend lets the band brighten against the track's pink
+       over-threshold gradient without becoming muddy. Matches v2 prototype
+       .v2-racing-band. */
+    mix-blend-mode: screen;
   }
   .racing-spark { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   .racing-dotlive {
@@ -263,25 +267,40 @@
     top: 50%;
     width: 8px; height: 8px;
     border-radius: 50%;
+    /* Dark hairline border lifts the dot off the colored track without
+       relying on luminance alone. Matches v2 prototype. */
+    border: 1.5px solid rgba(0, 0, 0, 0.6);
     transform: translate(-50%, -50%);
     box-shadow: 0 0 6px var(--ep-color, #fff);
-    transition: left 250ms ease-out;
+    /* Longer, smoother ease so the dot settles rather than snaps. */
+    transition: left 420ms cubic-bezier(.4, 0, .2, 1);
   }
   .racing-dotlive.over {
     box-shadow: 0 0 10px var(--ep-color, #fff);
     width: 10px; height: 10px;
+    /* Soft pulse while over threshold — signals urgency without flashing. */
+    animation: racing-dot-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes racing-dot-pulse {
+    50% { transform: translate(-50%, -50%) scale(1.3); }
   }
 
+  /* Stats column: live value + p95 on ONE baseline, p95 pinned right. Matches
+     v2 prototype .v2-racing-stats horizontal layout. */
   .racing-stats {
     display: flex;
-    flex-direction: column;
-    align-items: flex-end;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 6px;
     font-family: var(--mono);
     font-variant-numeric: tabular-nums;
   }
   .racing-stats-live {
-    font-size: var(--ts-sm);
+    font-size: var(--ts-md);
     color: var(--t1);
+    letter-spacing: var(--tr-tight);
+    line-height: 1;
   }
   .racing-stats-p95 {
     font-size: var(--ts-xs);
@@ -291,5 +310,6 @@
 
   @media (prefers-reduced-motion: reduce) {
     .racing-row, .racing-dotlive { transition: none; }
+    .racing-dotlive.over { animation: none; }
   }
 </style>

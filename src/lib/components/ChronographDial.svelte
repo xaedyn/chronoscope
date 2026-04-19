@@ -286,17 +286,20 @@
         >{l.ms}</text>
       {/each}
 
-      <!-- 8. Center readouts. Kicker / score / verdict / live-median. -->
-      <text x={CX} y={CY - 94} text-anchor="middle" font-size="10"
+      <!-- 8. Center readouts. Kicker / score / verdict / live-median.
+           Y-positions and sizes match the v2 prototype MainDial
+           (view-overview.jsx): kicker cy-94@9px, score cy-8@120px,
+           verdict cy+22@11px, live cy+46@10px. -->
+      <text x={CX} y={CY - 94} text-anchor="middle" font-size="9"
             font-family={tokens.typography.mono.fontFamily} fill="var(--t3)" letter-spacing="0.3em">QUALITY</text>
       <text x={CX} y={CY - 8} text-anchor="middle" font-size="120" font-weight="200"
             fill="var(--t1)" font-family={tokens.typography.sans.fontFamily}
             style="letter-spacing: -0.05em; font-variant-numeric: tabular-nums;">{scoreDisplay}</text>
-      <text x={CX} y={CY + 38} text-anchor="middle" font-size="11"
+      <text x={CX} y={CY + 22} text-anchor="middle" font-size="11"
             font-family={tokens.typography.mono.fontFamily} fill={verdictStyle.color} letter-spacing="0.28em">
         {verdictStyle.kicker}
       </text>
-      <text x={CX} y={CY + 64} text-anchor="middle" font-size="10"
+      <text x={CX} y={CY + 46} text-anchor="middle" font-size="10"
             font-family={tokens.typography.mono.fontFamily} fill="var(--t4)" letter-spacing="0.18em">
         LIVE {fmt(liveMedian).toUpperCase()} · {endpointCount} {endpointCount === 1 ? 'LINK' : 'LINKS'}
       </text>

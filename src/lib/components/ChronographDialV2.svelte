@@ -137,12 +137,14 @@
   });
 
   // ── 60s quality trace (Dial v2) ────────────────────────────────────────────
-  // Sparkline inside the face, below the score. Score 100 at top, 0 at bottom.
-  // Hidden when history is too short — calibrating label shows instead.
-  const TRACE_X = CX - 70;
-  const TRACE_Y = CY + 34;
-  const TRACE_W = 140;
-  const TRACE_H = 26;
+  // Sparkline inside the face, below the score + verdict. Score 100 at top,
+  // 0 at bottom. Hidden when history is too short — calibrating label shows
+  // instead. Geometry matches view-overview-v2.jsx QualityTraceMini: 160 px
+  // wide, 22 px tall, centered at cy+74.
+  const TRACE_X = CX - 80;
+  const TRACE_Y = CY + 63;
+  const TRACE_W = 160;
+  const TRACE_H = 22;
   const TRACE_MIN_POINTS = 4;
   const qualityTraceD = $derived.by(() => {
     if (!scoreHistory || scoreHistory.length < TRACE_MIN_POINTS) return null;
@@ -418,19 +420,19 @@
         >{l.ms}</text>
       {/each}
 
-      <!-- 8. Center readouts. Kicker / score / verdict / live-median. -->
-      <text x={CX} y={CY - 94} text-anchor="middle" font-size="10"
+      <!-- 8. Center readouts. Kicker / score / verdict. The "LIVE {median} ·
+           WITHIN/ABOVE/BELOW BAND" line is rendered below the trace at
+           CY+108 (see step 8b). Y-positions and sizes match the v2 prototype
+           MainDialV2 (view-overview-v2.jsx): kicker cy-72@9px, score cy-6@100px,
+           verdict cy+22@10px. -->
+      <text x={CX} y={CY - 72} text-anchor="middle" font-size="9"
             font-family={tokens.typography.mono.fontFamily} fill="var(--t3)" letter-spacing="0.3em">QUALITY</text>
-      <text x={CX} y={CY - 8} text-anchor="middle" font-size="120" font-weight="200"
+      <text x={CX} y={CY - 6} text-anchor="middle" font-size="100" font-weight="200"
             fill="var(--t1)" font-family={tokens.typography.sans.fontFamily}
             style="letter-spacing: -0.05em; font-variant-numeric: tabular-nums;">{scoreDisplay}</text>
-      <text x={CX} y={CY + 38} text-anchor="middle" font-size="11"
+      <text x={CX} y={CY + 22} text-anchor="middle" font-size="10"
             font-family={tokens.typography.mono.fontFamily} fill={verdictStyle.color} letter-spacing="0.28em">
         {verdictStyle.kicker}
-      </text>
-      <text x={CX} y={CY + 64} text-anchor="middle" font-size="10"
-            font-family={tokens.typography.mono.fontFamily} fill="var(--t4)" letter-spacing="0.18em">
-        LIVE {fmt(liveMedian).toUpperCase()} · {endpointCount} {endpointCount === 1 ? 'LINK' : 'LINKS'}
       </text>
 
       <!-- 8a (v2). 60s quality trace inside the face. Decorative — the numeric
@@ -457,16 +459,17 @@
         >CALIBRATING</text>
       {/if}
 
-      <!-- 8b (v2). Within-band / above / below label. Informative — included
-           in the dial's aria-label via `bandLabel`. -->
-      {#if bandLabel !== null}
-        <text
-          x={CX} y={CY + 86}
-          text-anchor="middle" font-size="10"
-          font-family={tokens.typography.mono.fontFamily}
-          fill={bandLabelColor} letter-spacing="0.14em"
-        >{bandLabel}</text>
-      {/if}
+      <!-- 8b (v2). LIVE median + band label. Combines the prototype's single
+           "LIVE {median} · WITHIN BAND" / "OUTSIDE BAND" line (cy+108, 9.5 px)
+           with our more precise 3-way ABOVE/WITHIN/BELOW distinction. Dim
+           when WITHIN, amber when ABOVE/BELOW. Included in dial aria-label. -->
+      <text
+        x={CX} y={CY + 108}
+        text-anchor="middle" font-size="9.5"
+        font-family={tokens.typography.mono.fontFamily}
+        fill={bandLabel === 'WITHIN BAND' ? 'var(--t4)' : bandLabelColor}
+        letter-spacing="0.18em"
+      >LIVE {fmt(liveMedian).toUpperCase()}{bandLabel !== null ? ` · ${bandLabel}` : ''}</text>
 
       <!-- 9. Endpoint orbit ring. -->
       <g aria-hidden="true">

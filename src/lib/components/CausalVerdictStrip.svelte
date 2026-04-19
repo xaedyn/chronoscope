@@ -83,8 +83,14 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
   }
-  .verdict.warn { border-color: var(--accent-amber-glow); background: linear-gradient(0deg, rgba(251,191,36,.03), rgba(251,191,36,.03)), var(--glass-bg-rail-hover); }
-  .verdict.good { border-color: rgba(134,239,172,.25); }
+  /* Warn: amber-tinted border + subtle top-to-bottom gradient. Matches
+     v2 prototype .v2-verdict-warn — the gradient carries warmth into the
+     headline area then fades back into the neutral surface. */
+  .verdict.warn {
+    border-color: rgba(251, 191, 36, 0.3);
+    background: linear-gradient(180deg, rgba(251, 191, 36, 0.03), var(--glass-bg-rail-hover));
+  }
+  .verdict.good { border-color: rgba(134, 239, 172, 0.25); }
 
   .verdict-main {
     grid-column: 1 / -1;
@@ -128,7 +134,7 @@
     padding-top: 10px;
     border-top: 1px solid var(--border-mid);
     display: flex;
-    gap: 24px;
+    gap: 22px;
     align-items: baseline;
   }
   .verdict-metric {
@@ -164,30 +170,38 @@
     letter-spacing: var(--tr-label);
   }
 
+  /* Drill button: sans "Diagnose" + mono endpoint chip + cyan arrow. Matches
+     v2 prototype .v2-verdict-drill — mixed typography (sans label, mono name)
+     signals "act on this specific endpoint" without shouting. */
   .verdict-drill {
     grid-column: 2;
+    grid-row: 2;
     align-self: center;
+    justify-self: end;
     display: inline-flex;
     align-items: center;
     gap: 8px;
     padding: 8px 12px;
     border-radius: 8px;
-    background: var(--cyan-bg-subtle, rgba(103, 232, 249, 0.08));
-    border: 1px solid var(--cyan-border-subtle, rgba(103, 232, 249, 0.25));
+    background: rgba(103, 232, 249, 0.08);
+    border: 1px solid rgba(103, 232, 249, 0.25);
     color: var(--t1);
-    font-family: var(--mono);
-    font-size: var(--ts-sm);
-    letter-spacing: var(--tr-label);
-    text-transform: uppercase;
+    font-family: var(--sans);
+    font-size: 11.5px;
     cursor: pointer;
     transition: background 160ms ease, border-color 160ms ease;
   }
-  .verdict-drill:hover { background: var(--cyan25); }
+  .verdict-drill:hover { background: rgba(103, 232, 249, 0.15); }
   .verdict-drill:focus-visible {
     outline: 1.5px solid var(--accent-cyan);
     outline-offset: 2px;
   }
-  .verdict-drill-ep { font-variant-numeric: tabular-nums; }
+  .verdict-drill-ep {
+    font-family: var(--mono);
+    font-size: var(--ts-sm);
+    letter-spacing: var(--tr-label);
+    font-variant-numeric: tabular-nums;
+  }
   .verdict-drill-arrow { color: var(--accent-cyan); }
 
   @media (max-width: 767px) {
