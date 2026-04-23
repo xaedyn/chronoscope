@@ -26,12 +26,16 @@ interface ScrollCheck {
   readonly overflowingScrollers: readonly ScrollerReport[];
 }
 
-async function scrollState(page: Page): Promise<ScrollCheck> {
+const scrollState = async (page: Page): Promise<ScrollCheck> => {
   return await page.evaluate<ScrollCheck>(() => {
     const docEl = document.documentElement;
-    const main = document.querySelector('main#main-content');
+    const main = document.querySelector<HTMLElement>('main#main-content');
     const scope = main ?? docEl;
-    const candidates = Array.from(scope.querySelectorAll<HTMLElement>('*'));
+    // Include `scope` itself — `querySelectorAll('*')` only returns
+    // descendants, so without this the root scroller (e.g. `.shell-main`'s
+    // `overflow-y: auto`) is excluded from the check and can overflow
+    // silently.
+    const candidates = [scope as HTMLElement, ...Array.from(scope.querySelectorAll<HTMLElement>('*'))];
     const reports: ScrollerReport[] = [];
     // Include `hidden` — a container that clips content is hiding information
     // just as much as a scroller that lets the user reach it.
@@ -56,7 +60,7 @@ async function scrollState(page: Page): Promise<ScrollCheck> {
       overflowingScrollers: reports,
     };
   });
-}
+};
 
 test.describe('Overview — no scroll on first visit', () => {
   for (const vp of FLOORS) {

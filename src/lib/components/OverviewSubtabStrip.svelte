@@ -14,9 +14,13 @@
     onSelect: (next: Subtab) => void;
   } = $props();
 
-  const TABS: readonly { readonly id: Subtab; readonly label: string }[] = [
-    { id: 'racing', label: 'Per-endpoint' },
-    { id: 'events', label: 'Events' },
+  // `panelId` is the DOM id of the corresponding tabpanel; the parent
+  // (OverviewView) owns those elements and uses these same ids on its
+  // `.card-slot` wrappers so `aria-controls` / `aria-labelledby` forms a
+  // proper WAI-ARIA tabs relationship.
+  const TABS: readonly { readonly id: Subtab; readonly label: string; readonly tabId: string; readonly panelId: string }[] = [
+    { id: 'racing', label: 'Per-endpoint', tabId: 'overview-subtab-racing', panelId: 'overview-panel-racing' },
+    { id: 'events', label: 'Events', tabId: 'overview-subtab-events', panelId: 'overview-panel-events' },
   ];
 
   function onKeydown(e: KeyboardEvent, idx: number): void {
@@ -37,6 +41,8 @@
     <button
       type="button"
       role="tab"
+      id={tab.tabId}
+      aria-controls={tab.panelId}
       aria-selected={active}
       tabindex={active ? 0 : -1}
       class:active

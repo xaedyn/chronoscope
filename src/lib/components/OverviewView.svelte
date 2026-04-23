@@ -298,7 +298,12 @@
           onSelect={(t) => uiStore.setOverviewSubtab(t)}
         />
       </div>
-      <div class="card-slot card-slot--racing">
+      <div
+        class="card-slot card-slot--racing"
+        id="overview-panel-racing"
+        role="tabpanel"
+        aria-labelledby="overview-subtab-racing"
+      >
         <RacingStrip
           endpoints={monitored}
           {stats}
@@ -308,7 +313,12 @@
           focusedEndpointId={$uiStore.focusedEndpointId}
         />
       </div>
-      <div class="card-slot card-slot--events">
+      <div
+        class="card-slot card-slot--events"
+        id="overview-panel-events"
+        role="tabpanel"
+        aria-labelledby="overview-subtab-events"
+      >
         <EventFeed
           {events}
           endpoints={monitored}
