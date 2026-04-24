@@ -5,13 +5,15 @@ import { test, expect, type Page } from '@playwright/test';
 // lifecycle (cold / first round). See
 // docs/superpowers/research/2026-04-22-overview-no-scroll-acceptance-criteria.md.
 
-const FLOORS = [
+// Viewports the no-scroll invariant must hold at: the original "floor"
+// cases (1366×768 desktop, 360/390-wide mobile) plus wide displays added
+// for the fluid grid/dial ceiling. 1920×1080 is common laptop;
+// 2560×1440 is typical 32" monitor — the case the fluid layout was
+// introduced for.
+const VIEWPORTS = [
   { name: 'desktop-floor', width: 1366, height: 768 },
   { name: 'mobile-floor',  width: 360,  height: 780 },
   { name: 'mobile-390',    width: 390,  height: 844 },
-  // Wide viewports — guard against regressions in the fluid grid/dial ceiling.
-  // 1920×1080 is common laptop; 2560×1440 is typical 32" monitor (the case
-  // the fluid layout was introduced for).
   { name: 'desktop-1920',  width: 1920, height: 1080 },
   { name: 'desktop-2560',  width: 2560, height: 1440 },
 ] as const;
@@ -68,7 +70,7 @@ const scrollState = async (page: Page): Promise<ScrollCheck> => {
 };
 
 test.describe('Overview — no scroll on first visit', () => {
-  for (const vp of FLOORS) {
+  for (const vp of VIEWPORTS) {
     test(`cold state @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto('/');
@@ -96,7 +98,7 @@ test.describe('Overview — no scroll on first visit', () => {
       await page.setViewportSize({ width: w, height: h });
       await page.goto('/');
       await page.waitForSelector('#chronoscope-root');
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(400);
       return await page.evaluate(() => {
         const dial = document.querySelector<SVGElement>('svg.dial');
         const grid = document.querySelector<HTMLElement>('.overview-grid');
