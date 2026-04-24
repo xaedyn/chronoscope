@@ -646,10 +646,13 @@
 
   .dial {
     width: 100%;
-    /* 520 px is the design size. On short viewports (laptop floor 1366×768)
-       the dial caps at 440 px so the verdict strip fits above the fold. On
-       mobile widths it caps at 320 px — above the 300 px legibility floor. */
-    max-width: min(520px, 80vw);
+    /* Floor 520 px (original design size) on laptop, grows with the column
+       via container query up to 720 px on wide displays. 90cqi = 90% of the
+       .overview-left column inline size, so the dial tracks its own column
+       and ignores the rail/viewport directly. Short viewports and mobile
+       are handled by the @media overrides below (laptop floor 1366×768,
+       mobile 767/375, short-height ≤820). */
+    max-width: clamp(var(--dial-min-w, 520px), 90cqi, var(--dial-max-w, 720px));
     height: auto;
     display: block;
     /* Breathing chrome — the five --vars transitions run in parallel.

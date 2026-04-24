@@ -7,6 +7,13 @@
 :root {
   --sans: 'Sora', system-ui, sans-serif;
   --mono: 'Martian Mono', monospace;
+
+  /* Layout ceilings — consumed by OverviewView grid and ChronographDial.
+     Fluid below the ceiling (grid via 92vw, dial via 90cqi on its column),
+     capped here so the dial doesn't become wall-sized on 4K monitors. */
+  --content-max-w: 2200px;
+  --dial-min-w: 520px;
+  --dial-max-w: 720px;
 }
 
 html, body {
