@@ -211,7 +211,7 @@ export interface PhaseBreakdown {
   readonly transfer: number;
 }
 
-export interface PhaseHypothesis {
+interface PhaseHypothesis {
   readonly verdictPhase: Tier2Phase | 'mixed';
   readonly text: string;
   readonly dominantPct: number;

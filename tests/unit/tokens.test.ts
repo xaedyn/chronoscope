@@ -21,7 +21,6 @@ describe('tokens', () => {
 
   it('exposes all timing tokens as numbers (ms)', () => {
     expect(tokens.timing.fadeIn).toBe(200);
-    expect(tokens.timing.progressiveDisclosure).toBe(250);
     expect(tokens.timing.domThrottle).toBe(100);
   });
 

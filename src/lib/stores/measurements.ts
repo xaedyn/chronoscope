@@ -20,7 +20,7 @@ import { sessionHistoryStore } from './session-history';
 
 // ── Module-level singletons ────────────────────────────────────────────────
 export const incrementalLossCounter = new IncrementalLossCounter();
-export const incrementalTimestampTracker = new IncrementalTimestampTracker();
+const incrementalTimestampTracker = new IncrementalTimestampTracker();
 const sortedBuffers = new Map<string, SortedInsertionBuffer>();
 
 function getSortedBuffer(endpointId: string): SortedInsertionBuffer {

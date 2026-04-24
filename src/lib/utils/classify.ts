@@ -12,7 +12,7 @@ import type { EndpointStatistics } from '../types';
 
 export type HealthBucket = 'healthy' | 'degraded' | 'unhealthy' | 'unknown';
 
-export interface HealthStyle {
+interface HealthStyle {
   readonly color: string;
   readonly glow:  string;
   readonly label: string;
@@ -96,7 +96,7 @@ export function networkQuality(
 
 export type OverviewVerdict = 'unknown' | 'healthy' | 'degraded' | 'unhealthy';
 
-export interface VerdictStyle {
+interface VerdictStyle {
   readonly color:  string;
   readonly glow:   string;
   readonly label:  string;

@@ -35,7 +35,7 @@ export const REGION_DISPLAY_NAMES: Readonly<Record<Region, string>> = {
 
 // ── LaneRole ───────────────────────────────────────────────────────────────
 
-export type LaneRole =
+type LaneRole =
   | 'Baseline'
   | 'Alt-operator'
   | 'Third-operator'
@@ -43,7 +43,7 @@ export type LaneRole =
   | 'Long-haul'
   | 'Timing';
 
-export interface RegionalEndpointSpec {
+interface RegionalEndpointSpec {
   readonly url: string;
   readonly label: string;
   readonly role: LaneRole;

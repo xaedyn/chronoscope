@@ -97,9 +97,6 @@ describe('types', () => {
     const state: UIState = {
       activeView: 'overview',
       expandedCards: new Set(),
-      hoverTarget: null,
-      selectedTarget: null,
-      showCrosshairs: false,
       showSettings: false,
       showShare: false,
       showKeyboardHelp: false,
@@ -116,9 +113,6 @@ describe('types', () => {
     const state: UIState = {
       activeView: 'overview',
       expandedCards: new Set(),
-      hoverTarget: null,
-      selectedTarget: null,
-      showCrosshairs: false,
       showSettings: false,
       showShare: false,
       showKeyboardHelp: false,

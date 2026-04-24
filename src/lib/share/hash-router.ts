@@ -20,7 +20,7 @@ function pickColor(index: number): string {
  * Apply a decoded SharePayload to all relevant stores.
  * Returns the ordered list of endpoint IDs created.
  */
-export function applySharePayload(payload: SharePayload): string[] {
+function applySharePayload(payload: SharePayload): string[] {
   // Build Endpoint objects from the stripped share format, capped to MAX_ENDPOINTS
   const capped = payload.endpoints.slice(0, MAX_ENDPOINTS);
   const endpoints: Endpoint[] = capped.map((ep, i) => ({

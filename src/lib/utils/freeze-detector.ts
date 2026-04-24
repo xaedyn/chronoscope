@@ -4,13 +4,9 @@
 // during tab backgrounding and applies a grace period on restore to eliminate
 // false positives caused by browser timer throttling.
 
-export interface FreezeEvent {
-  readonly round: number;
-  readonly at: number;
-  readonly gapMs: number;
-}
+import type { FreezeEvent } from '../types';
 
-export type FreezeCallback = (event: FreezeEvent) => void;
+type FreezeCallback = (event: FreezeEvent) => void;
 
 const HEARTBEAT_INTERVAL_MS = 100;
 const FREEZE_THRESHOLD_MS = 2000;
