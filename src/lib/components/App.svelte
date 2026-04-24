@@ -149,8 +149,6 @@
     root.style.setProperty('--status-timeout',   tokens.color.status.timeout);
     root.style.setProperty('--surface-overlay', tokens.color.surface.overlay);
     root.style.setProperty('--spacing-lg2', `${tokens.spacing.lg2}px`);
-    root.style.setProperty('--timing-loading-pulse', `${tokens.timing.loadingPulse}ms`);
-    root.style.setProperty('--timing-loading-ring',  `${tokens.timing.loadingRingDuration}ms`);
     root.style.setProperty('--timing-btn',           `${tokens.timing.btnHover}ms`);
     root.style.setProperty('--shadow-low', tokens.shadow.low);
     root.style.setProperty('--radius-xs', `${tokens.radius.xs}px`);

@@ -23,7 +23,7 @@ interface HourBucket {
 
 // ── Public summary shape ────────────────────────────────────────────────────
 
-export interface HourSummary {
+interface HourSummary {
   readonly hourKey: string;
   readonly count: number;
   readonly errorCount: number;

@@ -373,9 +373,6 @@ export const tokens = {
     btnHover:        200,
     domThrottle:     100,
     copiedFeedback: 2000,
-    progressiveDisclosure: 250,   // SummaryCard stagger
-    loadingPulse:         2400,   // LoadingAnimation
-    loadingRingDuration:  1800,   // LoadingAnimation
 
     // v2 motion primitives.
     handLerp:        0.15,   // dial hand smoothing factor (per-frame)
@@ -419,5 +416,3 @@ export const tokens = {
 
   breakpoints: { small: 480, mobile: 375, tablet: 768, desktop: 1024, wide: 1440 },
 } as const;
-
-export type Tokens = typeof tokens;

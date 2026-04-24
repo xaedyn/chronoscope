@@ -1,7 +1,7 @@
 // src/lib/stores/endpoints.ts
-// Writable store for endpoint list with CRUD helpers and a derived valid-only view.
+// Writable store for endpoint list with CRUD helpers.
 
-import { writable, derived } from 'svelte/store';
+import { writable } from 'svelte/store';
 import { tokens } from '../tokens';
 import { REGIONAL_DEFAULTS } from '../regional-defaults';
 import type { Region } from '../regional-defaults';
@@ -99,14 +99,3 @@ function createEndpointStore() {
 }
 
 export const endpointStore = createEndpointStore();
-
-function isHttpUrl(url: string): boolean {
-  const trimmed = url.trim();
-  return trimmed.startsWith('http://') || trimmed.startsWith('https://');
-}
-
-/** Only enabled endpoints with a valid HTTP(S) URL. */
-export const validEndpoints = derived(
-  endpointStore,
-  $endpoints => $endpoints.filter(ep => ep.enabled && isHttpUrl(ep.url))
-);
