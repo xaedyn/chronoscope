@@ -231,22 +231,9 @@ export type TerminalEventType =
   | 'endpoint_removed'
   | 'reuse_change';
 
-export interface HoverTarget {
-  readonly endpointId: string;
-  readonly roundId: number;
-  readonly x: number;
-  readonly y: number;
-  readonly latency: number;
-  readonly status: SampleStatus;
-  readonly timestamp: number;
-}
-
 export interface UIState {
   activeView: ActiveView;
   expandedCards: Set<string>;
-  hoverTarget: HoverTarget | null;
-  selectedTarget: HoverTarget | null;
-  showCrosshairs: boolean;
   showSettings: boolean;
   showShare: boolean;
   showKeyboardHelp: boolean;
