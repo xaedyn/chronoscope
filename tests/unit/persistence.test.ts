@@ -133,6 +133,30 @@ describe('persistence', () => {
     expect(localStorageMock.getItem(PRIMARY_KEY)).not.toBeNull();
   });
 
+  it('legacy key with v10 payload still loads when setItem throws (Safari private mode)', () => {
+    // readRawPayload's migrate-to-primary writes are best-effort. A valid
+    // legacy payload must still load for the session even if storage writes
+    // throw — without this, a Safari private-mode user with legacy data
+    // would be wiped instead of loaded.
+    const v10: PersistedSettings = {
+      version: 10,
+      endpoints: [{ url: 'https://example.com', enabled: true }],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: 0, corsMode: 'no-cors', healthThreshold: 120 },
+      ui: { expandedCards: [], activeView: 'overview', focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
+    };
+    localStorageMock.setItem(LEGACY_KEY, JSON.stringify(v10));
+    const originalSet = localStorageMock.setItem;
+    localStorageMock.setItem = () => { throw new Error('QuotaExceededError'); };
+    try {
+      const result = loadPersistedSettings();
+      expect(result).not.toBeNull();
+      expect(result?.version).toBe(10);
+      expect(result?.endpoints[0]?.url).toBe('https://example.com');
+    } finally {
+      localStorageMock.setItem = originalSet;
+    }
+  });
+
   // ── Corrupt JSON → null + key cleared ────────────────────────────────────
 
   it('corrupt JSON under primary key → returns null AND key is cleared', () => {

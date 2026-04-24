@@ -57,8 +57,10 @@ function readRawPayload(): { raw: string | null; hadPayload: boolean } {
   if (primary !== null) return { raw: primary, hadPayload: true };
   const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
   if (legacy === null) return { raw: null, hadPayload: false };
-  localStorage.setItem(STORAGE_KEY, legacy);
-  localStorage.removeItem(LEGACY_STORAGE_KEY);
+  // Migrate to primary key best-effort. If either call throws (Safari private
+  // mode, quota), still return the legacy payload so this session can load.
+  try { localStorage.setItem(STORAGE_KEY, legacy); } catch { /* best-effort */ }
+  try { localStorage.removeItem(LEGACY_STORAGE_KEY); } catch { /* best-effort */ }
   return { raw: legacy, hadPayload: true };
 }
 

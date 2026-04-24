@@ -80,7 +80,7 @@ describe('applyPersistedSettings — G6 label hydration via brandFor', () => {
 });
 
 describe('applyPersistedSettings — AC2 empty-endpoints contract (§6.2)', () => {
-  it('persisted v4 with endpoints:[] results in empty endpoint store', () => {
+  it('persisted v10 with endpoints:[] results in empty endpoint store', () => {
     const persisted: PersistedSettings = {
       version: 10,
       endpoints: [],
@@ -94,7 +94,7 @@ describe('applyPersistedSettings — AC2 empty-endpoints contract (§6.2)', () =
     expect(eps).toHaveLength(0);
   });
 
-  it('persisted v4 with endpoints:[{url,enabled}, ...] replaces placeholder', () => {
+  it('persisted v10 with endpoints:[{url,enabled}, ...] replaces placeholder', () => {
     const persisted: PersistedSettings = {
       version: 10,
       endpoints: [
