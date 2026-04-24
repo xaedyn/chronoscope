@@ -342,22 +342,27 @@
   }
 
   /* Two-column grid: dial + causal verdict on the left, racing strip + event
-     feed on the right. Collapses to one column below 1024 px. Centered with
-     max-width so wide viewports don't stretch the grid. */
+     feed on the right. Collapses to one column below 1024 px. Fluid above
+     1440 up to the --content-max-w ceiling so ultrawide monitors use their
+     real estate instead of floating the grid in a centered 1440 box. */
   .overview-grid {
     width: 100%;
-    max-width: 1440px;
+    max-width: min(92vw, var(--content-max-w));
     margin: 0 auto;
     display: grid;
     grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
     gap: 20px;
     align-items: start;
   }
+  /* container-type lets the dial size against this column's actual width via
+     `cqi`, so it grows with the column on wide viewports without having to
+     know about the rail, gutters, or viewport directly. */
   .overview-left {
     display: flex;
     flex-direction: column;
     gap: 12px;
     min-width: 0;
+    container-type: inline-size;
   }
   .overview-right {
     display: flex;
