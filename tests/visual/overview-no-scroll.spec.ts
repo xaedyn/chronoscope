@@ -9,6 +9,11 @@ const FLOORS = [
   { name: 'desktop-floor', width: 1366, height: 768 },
   { name: 'mobile-floor',  width: 360,  height: 780 },
   { name: 'mobile-390',    width: 390,  height: 844 },
+  // Wide viewports — guard against regressions in the fluid grid/dial ceiling.
+  // 1920×1080 is common laptop; 2560×1440 is typical 32" monitor (the case
+  // the fluid layout was introduced for).
+  { name: 'desktop-1920',  width: 1920, height: 1080 },
+  { name: 'desktop-2560',  width: 2560, height: 1440 },
 ] as const;
 
 interface ScrollerReport {
@@ -82,6 +87,40 @@ test.describe('Overview — no scroll on first visit', () => {
       ).toEqual([]);
     });
   }
+
+  // Guards the fluid grid + container-query dial introduced for ultrawide
+  // monitors. If someone reverts the grid ceiling or the dial's cqi rule, the
+  // dial snaps back to its 520 px design size and this test fires.
+  test('dial and grid grow on wide viewports', async ({ page }) => {
+    const measure = async (w: number, h: number) => {
+      await page.setViewportSize({ width: w, height: h });
+      await page.goto('/');
+      await page.waitForSelector('#chronoscope-root');
+      await page.waitForTimeout(300);
+      return await page.evaluate(() => {
+        const dial = document.querySelector<SVGElement>('svg.dial');
+        const grid = document.querySelector<HTMLElement>('.overview-grid');
+        return {
+          dialW: dial ? dial.getBoundingClientRect().width : 0,
+          gridW: grid ? grid.getBoundingClientRect().width : 0,
+        };
+      });
+    };
+
+    const at1440 = await measure(1440, 900);
+    const at2560 = await measure(2560, 1440);
+
+    // 1440 holds the design size (floor); 2560 hits both ceilings.
+    expect(at1440.dialW, 'dial at 1440').toBeGreaterThanOrEqual(515);
+    expect(at1440.dialW, 'dial at 1440').toBeLessThanOrEqual(560);
+    expect(at2560.dialW, 'dial at 2560').toBeGreaterThanOrEqual(700);
+    expect(at2560.dialW, 'dial at 2560').toBeLessThanOrEqual(725);
+    expect(at2560.gridW, 'grid at 2560').toBeGreaterThanOrEqual(2150);
+    expect(at2560.gridW, 'grid at 2560').toBeLessThanOrEqual(2205);
+    // The grid at 2560 must be materially wider than at 1440 — the whole
+    // point of the fluid layout.
+    expect(at2560.gridW).toBeGreaterThan(at1440.gridW + 600);
+  });
 
   test('lifecycle stability @ mobile-floor (no reflow after engine starts)', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 780 });
