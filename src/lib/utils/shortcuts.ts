@@ -42,9 +42,6 @@ function handleKeydown(e: KeyboardEvent): void {
       } else if (ui.showShare) {
         uiStore.toggleShare();
         e.preventDefault();
-      } else if (ui.selectedTarget !== null) {
-        uiStore.setSelected(null);
-        e.preventDefault();
       }
       break;
     }

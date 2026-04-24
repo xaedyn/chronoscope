@@ -11,9 +11,6 @@ const initialState = (): UIState => ({
   // 'overview' before reaching here, so only the five current views land.
   activeView: 'overview',
   expandedCards: new Set<string>(),
-  hoverTarget: null,
-  selectedTarget: null,
-  showCrosshairs: false,
   showSettings: false,
   showShare: false,
   showKeyboardHelp: false,
@@ -45,12 +42,6 @@ function createUiStore() {
         }
         return { ...s, expandedCards: next };
       });
-    },
-    setHover(target: UIState['hoverTarget']): void {
-      update((s) => ({ ...s, hoverTarget: target }));
-    },
-    setSelected(target: UIState['selectedTarget']): void {
-      update((s) => ({ ...s, selectedTarget: target }));
     },
     toggleSettings(): void {
       update((s) => ({ ...s, showSettings: !s.showSettings }));

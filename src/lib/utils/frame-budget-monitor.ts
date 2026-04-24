@@ -1,4 +1,4 @@
-export type BudgetStatus = 'ok' | 'warn' | 'error';
+type BudgetStatus = 'ok' | 'warn' | 'error';
 
 export class FrameBudgetMonitor {
   private frameTimes: number[] = [];
