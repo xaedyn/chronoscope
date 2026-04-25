@@ -31,6 +31,12 @@
 
 <style>
   .shared-banner {
+    /* z-index lifts the banner above Layout's fixed .bg backdrop. Without
+       it, the "Run Your Own Test" button is hit-tested behind .bg and
+       clicks are intercepted (latent bug, only exposed once the banner
+       was wired into a flow that anyone clicks through). */
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: center;
     justify-content: space-between;
