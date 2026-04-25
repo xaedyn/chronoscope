@@ -220,7 +220,7 @@ function correlationHeadline(
   const sharedPct = shared / focusedSpikeCount;
 
   if (sharedPct >= 0.6) {
-    return `Spikes happen across multiple sites at once — likely your network or local infrastructure.`;
+    return 'Spikes happen across multiple sites at once — likely your network or local infrastructure.';
   }
   if (sharedPct <= 0.2) {
     return `Spikes are isolated to ${focusedLabel} — likely that site or its origin, not your connection.`;

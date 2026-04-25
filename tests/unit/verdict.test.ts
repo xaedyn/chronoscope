@@ -200,7 +200,7 @@ describe('computeCausalVerdict — jitter', () => {
       makeRow({ id: 'b', label: 'b' }, { p50: 50, stddev: 40 }),
     ];
     const v = computeCausalVerdict(rows, THRESHOLD);
-    expect(v.headline).toBe(`Latency is bouncing around — connection isn't steady.`);
+    expect(v.headline).toBe("Latency is bouncing around — connection isn't steady.");
   });
 
   it('packet loss takes precedence over jitter when both elevated', () => {

@@ -177,7 +177,7 @@ export function computeCausalVerdict(
   if (avgJit > JITTER_WARN_MS) {
     return {
       tone: 'warn',
-      headline: `Latency is bouncing around — connection isn't steady.`,
+      headline: "Latency is bouncing around — connection isn't steady.",
     };
   }
 
