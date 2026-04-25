@@ -113,7 +113,10 @@ describe('EndpointRow — edit affordance (AC2)', () => {
     expect(label).not.toContain('https://');
   });
 
-  it('edit button has WCAG 2.5.5 class', () => {
+  // jsdom can't measure computed dimensions; this test only verifies the class
+  // is applied. The actual 44×44 WCAG 2.5.5 target size is enforced by the
+  // .edit-btn CSS rule and observable via the Playwright sweep, not here.
+  it('edit button is rendered with edit-btn class', () => {
     const { container } = renderRow();
     const editBtn = container.querySelector('.edit-btn');
     expect(editBtn).not.toBeNull();

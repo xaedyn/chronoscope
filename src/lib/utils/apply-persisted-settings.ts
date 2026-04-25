@@ -17,12 +17,16 @@ import { displayLabel } from '../endpoint/displayLabel';
 // clear of DeepSource's "function declaration in global scope" rule, and each
 // helper holds a single concern so cyclomatic complexity stays below threshold.
 
-// Hydrate one persisted endpoint into the runtime store.
+// Hydrate one persisted endpoint into the runtime store. Nickname is trimmed
+// once at the boundary so storage and display agree (displayLabel re-trims at
+// render time, so an untrimmed value would display correctly but persist
+// padded — round-trip divergence).
 const hydrateEndpoint = (ep: { url: string; enabled: boolean; nickname?: string }): void => {
   const url = ep.url.trim();
   if (!url) return;
-  const label = displayLabel({ url, nickname: ep.nickname });
-  const id = endpointStore.addEndpoint(url, label, ep.nickname);
+  const nickname = ep.nickname?.trim() || undefined;
+  const label = displayLabel({ url, nickname });
+  const id = endpointStore.addEndpoint(url, label, nickname);
   endpointStore.updateEndpoint(id, { enabled: ep.enabled });
 };
 

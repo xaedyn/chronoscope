@@ -167,9 +167,10 @@
         aria-label="Endpoint nickname"
         aria-invalid={nicknameInvalid ? 'true' : 'false'}
         onkeydown={handleNicknameKeydown}
+        oninput={() => { if (nicknameInvalid) nicknameInvalid = false; }}
       />
       {#if nicknameInvalid}
-        <span class="nickname-error" role="alert">Max 80 characters</span>
+        <span class="nickname-error" role="alert">Invalid nickname (max 80 chars, no control/zero-width/bidi)</span>
       {/if}
     </div>
   {/if}

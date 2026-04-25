@@ -97,7 +97,8 @@ test.describe('AC5 — no raw URL in primary identifiers', () => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.goto('/');
         await page.waitForSelector('#chronoscope-root');
-        await page.waitForTimeout(400);
+        // Deterministic wait: sweep runs only after primary-identifier content mounts.
+        await page.waitForSelector('.rail-row-label, .feed-name', { state: 'attached' });
 
         const leaks = await findRawUrlLeaks(page);
         expect(
@@ -110,7 +111,8 @@ test.describe('AC5 — no raw URL in primary identifiers', () => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.goto('/');
         await page.waitForSelector('#chronoscope-root');
-        await page.waitForTimeout(400);
+        // Deterministic wait: sweep runs only after primary-identifier content mounts.
+        await page.waitForSelector('.rail-row-label, .feed-name', { state: 'attached' });
 
         // Navigate to the Live view via the ViewSwitcher button.
         // Anchored regex avoids matching aria-labels like "Diagnose endpoint X…"
@@ -130,7 +132,8 @@ test.describe('AC5 — no raw URL in primary identifiers', () => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.goto('/');
         await page.waitForSelector('#chronoscope-root');
-        await page.waitForTimeout(400);
+        // Deterministic wait: sweep runs only after primary-identifier content mounts.
+        await page.waitForSelector('.rail-row-label, .feed-name', { state: 'attached' });
 
         // Navigate to the Diagnose view via the ViewSwitcher button.
         // Anchored regex avoids matching aria-labels like "Diagnose endpoint X…"
@@ -176,6 +179,8 @@ test.describe('AC5 sentinel — sweep is fail-closed', () => {
       leaks.length,
       'Sentinel: sweep must detect the injected raw URL — if this fails the sweep logic is broken',
     ).toBeGreaterThan(0);
-    expect(leaks.some(l => l.text.includes('sentinel.example.com'))).toBe(true);
+    // Exact-equality match (not substring) — sentinel content is fully test-controlled.
+    // Avoids CodeQL "incomplete URL substring sanitization" false positive without suppression.
+    expect(leaks.some(l => l.text === 'https://sentinel.example.com/test')).toBe(true);
   });
 });

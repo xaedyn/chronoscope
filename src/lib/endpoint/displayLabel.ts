@@ -55,6 +55,10 @@ export function displayLabel(input: LabelInput): string {
  * WHATWG URL strips default ports (:443 for https, :80 for http) automatically.
  * IPv6 bracket notation is preserved.
  *
+ * A leading "www." is stripped for the hostname-tier (tier-3) display so that
+ * `https://www.acme.com` renders as `acme.com`. IPv6 bracketed hosts never
+ * start with `www.`, so the slice is safe.
+ *
  * Returns the literal string '(invalid URL)' on parse failure -- never throws.
  * The fail-closed sentinel prevents raw URLs from leaking through AC5 textContent
  * sweep if a malformed entry somehow passes upstream validation.
@@ -62,8 +66,11 @@ export function displayLabel(input: LabelInput): string {
 export function displayHostname(url: string): string {
   try {
     const parsed = new URL(url);
+    const host = parsed.hostname.startsWith('www.')
+      ? parsed.hostname.slice(4)
+      : parsed.hostname;
     // URL.port is empty string when the port is the scheme default.
-    return parsed.port ? `${parsed.hostname}:${parsed.port}` : parsed.hostname;
+    return parsed.port ? `${host}:${parsed.port}` : host;
   } catch {
     return '(invalid URL)';
   }

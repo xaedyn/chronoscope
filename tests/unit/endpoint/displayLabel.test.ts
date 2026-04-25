@@ -35,9 +35,14 @@ describe('displayLabel', () => {
     expect(result).not.toContain('http://');
   });
 
-  // AC1: www is stripped from hostname (displayHostname handles this via URL.hostname)
-  it('strips www from hostname tier (AC1 no-www)', () => {
+  // AC1: branded www URL resolves through brandFor (tier-2), not the hostname tier
+  it('branded www URL resolves to brand label, not hostname (AC1 tier-2)', () => {
     expect(displayLabel({ url: 'https://www.fastly.com/robots.txt' })).toBe('Fastly');
+  });
+
+  // AC1: www is stripped from hostname tier for non-brand-mapped URLs
+  it('strips leading www from hostname tier for non-brand URL (AC1 no-www)', () => {
+    expect(displayLabel({ url: 'https://www.acme-not-in-brand-map.com' })).toBe('acme-not-in-brand-map.com');
   });
 
   // Edge: undefined nickname treated same as absent
@@ -85,6 +90,21 @@ describe('displayHostname', () => {
   // localhost
   it('returns localhost for localhost URLs', () => {
     expect(displayHostname('https://localhost/path')).toBe('localhost');
+  });
+
+  // AC1: leading www is stripped
+  it('strips leading www from hostname', () => {
+    expect(displayHostname('https://www.acme.com/')).toBe('acme.com');
+  });
+
+  // AC1: leading www stripped, non-default port preserved
+  it('strips www and preserves non-default port', () => {
+    expect(displayHostname('https://www.acme.com:8443/')).toBe('acme.com:8443');
+  });
+
+  // AC1: www mid-hostname is NOT stripped (only leading)
+  it('does not strip www that is not at start of hostname', () => {
+    expect(displayHostname('https://api.www.example.com/')).toBe('api.www.example.com');
   });
 
   // Invalid URL — returns '(invalid URL)', never throws
