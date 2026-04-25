@@ -202,6 +202,68 @@ describe('hash-router: config-mode staging', () => {
     acceptPendingShare();
     expect(get(endpointStore).map((e) => e.url)).toEqual(['https://a.example.com']);
   });
+
+  // URL host is case-insensitive per RFC 3986. Without lowercasing the
+  // dedup key, a payload could smuggle ten "distinct" entries that all
+  // resolve to the same host.
+  it('dedupe is case-insensitive on the URL key', () => {
+    const mixedCase: SharePayload = {
+      v: 1,
+      mode: 'config',
+      endpoints: [
+        { url: 'https://Example.com/path', enabled: true },
+        { url: 'https://example.com/path', enabled: true },
+        { url: 'https://EXAMPLE.com/path', enabled: true },
+      ],
+      settings: MALICIOUS_CADENCE,
+    };
+    applySharePayload(mixedCase);
+    expect(get(uiStore).pendingShare?.endpoints).toHaveLength(1);
+  });
+});
+
+describe('hash-router: results-mode invariants', () => {
+  // Pre-fix, validateSharePayload accepted `mode: 'results'` with
+  // `results: undefined`. The apply path then took its else branch and
+  // skipped the snapshot load + sharedView flag — but endpoints had
+  // already been written to endpointStore. Net: rail full of attacker
+  // URLs, no banner, no read-only indicator. A half-open #79 variant.
+  it('rejects results mode without a results array (via parseShareURL)', async () => {
+    const { decodeSharePayload, encodeSharePayload } = await import('../../../src/lib/share/share-manager');
+    // Hand-craft a payload that would have passed validation pre-fix.
+    const malformed = {
+      v: 1,
+      mode: 'results',
+      endpoints: [{ url: 'https://attacker.example.com', enabled: true }],
+      settings: { timeout: 5000, delay: 0, cap: 0, corsMode: 'no-cors' },
+      // results omitted
+    };
+    const encoded = encodeSharePayload(malformed as never);
+    expect(decodeSharePayload(encoded)).toBeNull();
+  });
+
+  // The roundCounter clamp at hash-router.ts:148 is load-bearing — without
+  // it, an attacker can push the counter to MAX_SAFE_INTEGER and break
+  // downstream monotonicity / arithmetic. Pin the invariant so a future
+  // refactor can't quietly drop the clamp.
+  it('clamps roundCounter at MAX_SHARE_ROUND_COUNTER (1_000_000)', () => {
+    const adversarial: SharePayload = {
+      v: 1,
+      mode: 'results',
+      endpoints: [{ url: 'https://example.com', enabled: true }],
+      settings: MALICIOUS_CADENCE,
+      results: [
+        {
+          samples: [
+            { round: Number.MAX_SAFE_INTEGER, latency: 50, status: 'ok' },
+          ],
+        },
+      ],
+    };
+    applySharePayload(adversarial);
+    const m = get(measurementStore);
+    expect(m.roundCounter).toBeLessThanOrEqual(1_000_000);
+  });
 });
 
 describe('hash-router: results-mode application', () => {

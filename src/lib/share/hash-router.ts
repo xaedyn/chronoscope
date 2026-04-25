@@ -41,6 +41,12 @@ function pickColor(index: number): string {
  * throw at runtime when it sees two children with the same key. Deduping
  * here makes "endpoints are unique" an invariant of every downstream
  * consumer.
+ *
+ * Dedupe key is lowercased: URL hosts are case-insensitive per RFC 3986,
+ * so `https://Example.com/p` and `https://example.com/p` are the same
+ * resource. Without normalization, mixed-case duplicates would pass
+ * through and the user would see apparent duplicates in the rail. The
+ * stored URL preserves the original case (we only normalize the key).
  */
 function uniqueEndpoints(
   payloadEndpoints: readonly { url: string; enabled: boolean }[],
@@ -48,8 +54,9 @@ function uniqueEndpoints(
   const seen = new Set<string>();
   const out: { url: string; enabled: boolean }[] = [];
   for (const ep of payloadEndpoints) {
-    if (seen.has(ep.url)) continue;
-    seen.add(ep.url);
+    const key = ep.url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
     out.push({ url: ep.url, enabled: ep.enabled });
     if (out.length >= MAX_ENDPOINTS) break;
   }
