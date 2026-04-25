@@ -202,18 +202,6 @@
 
     {#if focusedEndpoint}
       <div class="diagnose-actions">
-        <div class="diagnose-segment" role="group" aria-label="Percentile mode">
-          <button
-            type="button" class="diagnose-chip"
-            class:on={mode === 'p50'} aria-pressed={mode === 'p50'}
-            onclick={() => handleSelectMode('p50')}
-          >P50</button>
-          <button
-            type="button" class="diagnose-chip"
-            class:on={mode === 'p95'} aria-pressed={mode === 'p95'}
-            onclick={() => handleSelectMode('p95')}
-          >P95</button>
-        </div>
         <button
           type="button" class="diagnose-chip diagnose-chip-action"
           onclick={handleBack}
@@ -300,6 +288,21 @@
           <span class="diagnose-section-kicker">Phase breakdown (advanced)</span>
           <span class="phases-summary-hint">DNS · TCP · TLS · Server · Transfer</span>
         </summary>
+        <!-- Percentile toggle lives inside the details so it only appears when the
+             section is expanded (it has no effect on Distribution or Correlation
+             panels — only on this waterfall). -->
+        <div class="diagnose-segment" role="group" aria-label="Percentile mode">
+          <button
+            type="button" class="diagnose-chip"
+            class:on={mode === 'p50'} aria-pressed={mode === 'p50'}
+            onclick={() => handleSelectMode('p50')}
+          >P50</button>
+          <button
+            type="button" class="diagnose-chip"
+            class:on={mode === 'p95'} aria-pressed={mode === 'p95'}
+            onclick={() => handleSelectMode('p95')}
+          >P95</button>
+        </div>
         <div class="diagnose-waterfall" role="img" aria-label={heroAria}>
           <div class="diagnose-bar">
             {#each segments as seg (seg.phase)}

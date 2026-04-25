@@ -101,6 +101,15 @@ export interface CorrelationInput {
  */
 const SPIKE_FACTOR = 1.5;
 
+/**
+ * Minimum OK sample count before spike detection produces meaningful results.
+ * Below this, the median is too noisy for the 1.5× threshold to be reliable —
+ * a fresh endpoint with 2 samples could see its second sample marked a spike
+ * just because the first one was unusually low. Surface "still learning" in
+ * the verdict instead of mis-flagging early variance.
+ */
+const MIN_SAMPLES_FOR_SPIKE = 8;
+
 function median(values: readonly number[]): number {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -117,15 +126,21 @@ function buildCells(
   samples: readonly MeasurementSample[],
   rounds: readonly number[],
   endpointMedian: number,
+  okSampleCount: number,
 ): CorrelationCell[] {
   const byRound = new Map<number, MeasurementSample>();
   for (const s of samples) byRound.set(s.round, s);
+  // Skip spike detection entirely until we have enough OK samples for the
+  // median-relative threshold to be reliable. Without this guard, an endpoint
+  // with 2 samples [40, 65] would produce median=52.5 and flag any 80ms+
+  // sample as a "spike" — wild call from a 2-point baseline.
+  const spikesEnabled = okSampleCount >= MIN_SAMPLES_FOR_SPIKE;
   return rounds.map((round) => {
     const s = byRound.get(round);
     if (!s || s.status !== 'ok' || typeof s.latency !== 'number') {
       return { round, latencyMs: null, isSpike: false };
     }
-    const isSpike = endpointMedian > 0 && s.latency > endpointMedian * SPIKE_FACTOR;
+    const isSpike = spikesEnabled && endpointMedian > 0 && s.latency > endpointMedian * SPIKE_FACTOR;
     return { round, latencyMs: s.latency, isSpike };
   });
 }
@@ -159,7 +174,7 @@ export function buildCorrelation(
   const focusedRow: CorrelationRow = {
     endpointId: focused.id,
     label: focused.label,
-    cells: buildCells(focused.samples, rounds, focusedMedian),
+    cells: buildCells(focused.samples, rounds, focusedMedian, focusedOks.length),
   };
   const otherRows: CorrelationRow[] = others.map((ep) => {
     const oks: number[] = [];
@@ -169,31 +184,41 @@ export function buildCorrelation(
     return {
       endpointId: ep.id,
       label: ep.label,
-      cells: buildCells(ep.samples, rounds, median(oks)),
+      cells: buildCells(ep.samples, rounds, median(oks), oks.length),
     };
   });
 
-  // Verdict: for each spike on the focused row, count how many other rows
-  // also spiked in the same column. Majority-correlated → network-wide.
+  // Verdict: for each spike on the focused row, count how many *known* (non-null)
+  // comparators also spiked. Treating a null cell as "did not spike" silently
+  // misclassifies network-wide events: when comparators time out alongside the
+  // focused endpoint, their cells are null and the verdict drifts toward
+  // "isolated" — the opposite of the truth.
   const focusedSpikeRounds: number[] = [];
   const otherSpikesPerFocusedSpike: number[] = [];
+  const knownComparatorsPerSpike: number[] = [];
   for (let i = 0; i < focusedRow.cells.length; i++) {
     const focusedCell = focusedRow.cells[i];
     if (!focusedCell || !focusedCell.isSpike) continue;
     focusedSpikeRounds.push(focusedCell.round);
     let coCount = 0;
+    let knownCount = 0;
     for (const row of otherRows) {
-      if (row.cells[i]?.isSpike) coCount++;
+      const cell = row.cells[i];
+      if (cell?.latencyMs !== null && cell?.latencyMs !== undefined) knownCount++;
+      if (cell?.isSpike) coCount++;
     }
     otherSpikesPerFocusedSpike.push(coCount);
+    knownComparatorsPerSpike.push(knownCount);
   }
 
-  const headline = correlationHeadline(
-    focused.label,
-    focusedSpikeRounds.length,
+  const headline = correlationHeadline({
+    focusedLabel: focused.label,
+    focusedOksCount: focusedOks.length,
+    focusedSpikeCount: focusedSpikeRounds.length,
     otherSpikesPerFocusedSpike,
-    otherRows.length,
-  );
+    knownComparatorsPerSpike,
+    otherCount: otherRows.length,
+  });
 
   return {
     rows: [focusedRow, ...otherRows],
@@ -201,24 +226,64 @@ export function buildCorrelation(
   };
 }
 
-function correlationHeadline(
-  focusedLabel: string,
-  focusedSpikeCount: number,
-  otherSpikesPerFocusedSpike: readonly number[],
-  otherCount: number,
-): string {
+interface HeadlineInput {
+  readonly focusedLabel: string;
+  readonly focusedOksCount: number;
+  readonly focusedSpikeCount: number;
+  readonly otherSpikesPerFocusedSpike: readonly number[];
+  /**
+   * For each focused-spike round, how many comparator endpoints had a known
+   * (non-null) value in that round. Used to gate the shared/isolated verdict
+   * on whether the panel actually has enough comparator coverage to call it.
+   */
+  readonly knownComparatorsPerSpike: readonly number[];
+  readonly otherCount: number;
+}
+
+function correlationHeadline(input: HeadlineInput): string {
+  const {
+    focusedLabel,
+    focusedOksCount,
+    focusedSpikeCount,
+    otherSpikesPerFocusedSpike,
+    knownComparatorsPerSpike,
+    otherCount,
+  } = input;
+
+  // Confidence gates — branch on data quality first so we never produce a
+  // confident-sounding verdict from inadequate data.
   if (otherCount === 0) {
     return `Add other endpoints to compare ${focusedLabel} against.`;
+  }
+  if (focusedOksCount === 0) {
+    return `${focusedLabel} has no successful samples to compare — check the timeline for failures.`;
+  }
+  if (focusedOksCount < MIN_SAMPLES_FOR_SPIKE) {
+    return `Still learning ${focusedLabel}'s baseline — ${focusedOksCount} of ${MIN_SAMPLES_FOR_SPIKE} samples.`;
   }
   if (focusedSpikeCount === 0) {
     return `${focusedLabel} has been steady — no notable spikes in this window.`;
   }
-  // A spike is "shared" when at least half of the other endpoints also spiked.
+
+  // For each focused-spike round, decide whether comparators give us enough
+  // coverage to make a shared/isolated call. A spike round with < 2 known
+  // comparators is "inconclusive" — we don't know what the others were doing.
+  const MIN_COMPARATORS_FOR_VERDICT = 2;
   const sharedThreshold = Math.ceil(otherCount / 2);
   let shared = 0;
-  for (const co of otherSpikesPerFocusedSpike) if (co >= sharedThreshold) shared++;
-  const sharedPct = shared / focusedSpikeCount;
+  let conclusiveSpikes = 0;
+  for (let i = 0; i < focusedSpikeCount; i++) {
+    if ((knownComparatorsPerSpike[i] ?? 0) < MIN_COMPARATORS_FOR_VERDICT) continue;
+    conclusiveSpikes++;
+    if ((otherSpikesPerFocusedSpike[i] ?? 0) >= sharedThreshold) shared++;
+  }
 
+  if (conclusiveSpikes === 0) {
+    // All spike rounds had comparator gaps — we can't make a network/site call.
+    return `Spikes detected on ${focusedLabel}, but comparator data is sparse — try running for longer to compare.`;
+  }
+
+  const sharedPct = shared / conclusiveSpikes;
   if (sharedPct >= 0.6) {
     return 'Spikes happen across multiple sites at once — likely your network or local infrastructure.';
   }
