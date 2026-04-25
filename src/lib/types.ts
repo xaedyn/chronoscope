@@ -231,6 +231,16 @@ export type TerminalEventType =
   | 'endpoint_removed'
   | 'reuse_change';
 
+// Staged share payload — config-mode shares populate this instead of writing
+// directly to endpointStore. The user must explicitly accept (or dismiss) via
+// the staging banner before the URLs reach the rail. Closes the silent-flood
+// vector from issue #79: pre-fix, the rail filled with attacker URLs on page
+// load and a single Start click weaponized the browser.
+export interface PendingShare {
+  readonly mode: 'config';
+  readonly endpoints: readonly { url: string; enabled: boolean }[];
+}
+
 export interface UIState {
   activeView: ActiveView;
   expandedCards: Set<string>;
@@ -238,6 +248,7 @@ export interface UIState {
   showShare: boolean;
   showKeyboardHelp: boolean;
   isSharedView: boolean;
+  pendingShare: PendingShare | null;
   showEndpoints: boolean;
 
   // Globally focused endpoint — drives rail selection and per-view focus.

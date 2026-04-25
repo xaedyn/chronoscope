@@ -61,6 +61,14 @@ function validateSharePayload(data: unknown): SharePayload | null {
   if (!Array.isArray(obj['endpoints'])) return null;
   if ((obj['endpoints'] as unknown[]).length > 50) return null;
 
+  // mode:'results' without a results array is structurally invalid: the
+  // payload claims to carry a snapshot but doesn't. Pre-fix, the apply
+  // path silently took the else branch (no measurement load, no shared
+  // banner) but had already written endpoints to endpointStore — leaving
+  // the user with attacker URLs in the rail and no indicator. Reject at
+  // the validator so the apply path never sees a half-formed payload.
+  if (obj['mode'] === 'results' && obj['results'] === undefined) return null;
+
   for (const ep of obj['endpoints'] as unknown[]) {
     if (ep === null || typeof ep !== 'object') return null;
     const e = ep as Record<string, unknown>;

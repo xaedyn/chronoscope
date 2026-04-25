@@ -19,6 +19,7 @@
   import SettingsDrawer from './SettingsDrawer.svelte';
   import SharePopover from './SharePopover.svelte';
   import SharedResultsBanner from './SharedResultsBanner.svelte';
+  import ConfigStagingBanner from './ConfigStagingBanner.svelte';
   import EndpointDrawer from './EndpointDrawer.svelte';
   import KeyboardOverlay from './KeyboardOverlay.svelte';
 
@@ -184,10 +185,15 @@
     bridgeTokensToCss();
 
     // 2. Check for share URL — takes priority over persisted settings
-    const handledShareURL = initHashRouter();
+    const shareMode = initHashRouter();
 
-    // 3. Load persisted settings (skip if a share URL was processed)
-    if (!handledShareURL) {
+    // 3. Load persisted settings. Skip ONLY for results-mode shares — those
+    //    mutate the stores (endpoints + measurement snapshot) for read-only
+    //    display, and re-applying persistence on top would clobber the
+    //    snapshot. Config-mode shares stage in uiStore.pendingShare without
+    //    touching the stores, so the user's saved endpoints / settings still
+    //    need to load and render behind the staging banner.
+    if (shareMode !== 'results') {
       const persisted = loadPersistedSettings();
 
       if (persisted) {
@@ -222,7 +228,9 @@
 </script>
 
 <div id="chronoscope-root">
-  {#if $uiStore.isSharedView}
+  {#if $uiStore.pendingShare}
+    <ConfigStagingBanner />
+  {:else if $uiStore.isSharedView}
     <SharedResultsBanner />
   {/if}
   <Layout onStart={handleStart} onStop={handleStop} />

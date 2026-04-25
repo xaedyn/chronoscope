@@ -1,15 +1,27 @@
 // src/lib/share/hash-router.ts
 // Reads the URL hash on boot and hydrates stores from a share payload.
 // Called once from App.svelte before any persistence restore.
+//
+// Security invariants (see issue #79 + tests/unit/share/hash-router.test.ts):
+//   1. Cadence settings (timeout/delay/burstRounds/monitorDelay/cap/corsMode)
+//      from a payload NEVER reach settingsStore. Receiver always probes at
+//      their own defaults, even after accepting a shared config.
+//   2. Config-mode payloads STAGE — they populate uiStore.pendingShare
+//      instead of endpointStore. The receiver must call acceptPendingShare()
+//      (wired to the staging banner's Accept button) before any URL lands in
+//      the rail. Pre-fix, attacker URLs auto-loaded and one Start click
+//      weaponized the browser.
+//   3. Results-mode applies endpoints + samples for snapshot display
+//      (read-only); the existing SharedResultsBanner gates the transition
+//      back to running.
 
 import { parseShareURL } from './share-manager';
 import { endpointStore, MAX_ENDPOINTS } from '../stores/endpoints';
-import { settingsStore } from '../stores/settings';
 import { measurementStore } from '../stores/measurements';
 import { uiStore } from '../stores/ui';
-import { DEFAULT_SETTINGS } from '../types';
 import type { SharePayload, MeasurementSample, SampleStatus, Endpoint } from '../types';
 import { tokens } from '../tokens';
+import { get } from 'svelte/store';
 
 // Upper bound for the round counter materialized from a share payload.
 // Matches the sample cap (10 000 per endpoint × 50 endpoints) with generous
@@ -23,39 +35,81 @@ function pickColor(index: number): string {
 }
 
 /**
- * Apply a decoded SharePayload to all relevant stores.
- * Returns the ordered list of endpoint IDs created.
+ * Dedupe by URL and cap at MAX_ENDPOINTS. Validation accepts duplicate URLs
+ * (it only checks each entry individually), so a crafted payload could cause
+ * Svelte's keyed `#each` block in the staging banner — or the rail — to
+ * throw at runtime when it sees two children with the same key. Deduping
+ * here makes "endpoints are unique" an invariant of every downstream
+ * consumer.
+ *
+ * Dedupe key is lowercased: URL hosts are case-insensitive per RFC 3986,
+ * so `https://Example.com/p` and `https://example.com/p` are the same
+ * resource. Without normalization, mixed-case duplicates would pass
+ * through and the user would see apparent duplicates in the rail. The
+ * stored URL preserves the original case (we only normalize the key).
  */
-function applySharePayload(payload: SharePayload): string[] {
-  // Build Endpoint objects from the stripped share format, capped to MAX_ENDPOINTS
-  const capped = payload.endpoints.slice(0, MAX_ENDPOINTS);
-  const endpoints: Endpoint[] = capped.map((ep, i) => ({
+function uniqueEndpoints(
+  payloadEndpoints: readonly { url: string; enabled: boolean }[],
+): { url: string; enabled: boolean }[] {
+  const seen = new Set<string>();
+  const out: { url: string; enabled: boolean }[] = [];
+  for (const ep of payloadEndpoints) {
+    const key = ep.url.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ url: ep.url, enabled: ep.enabled });
+    if (out.length >= MAX_ENDPOINTS) break;
+  }
+  return out;
+}
+
+function buildEndpoints(
+  payloadEndpoints: readonly { url: string; enabled: boolean }[],
+): Endpoint[] {
+  return uniqueEndpoints(payloadEndpoints).map((ep, i) => ({
     id: `shared-ep-${i}-${Date.now()}`,
     url: ep.url,
     enabled: ep.enabled,
     label: ep.url,
     color: pickColor(i),
   }));
+}
 
+/**
+ * Apply a decoded SharePayload.
+ *
+ * Config mode → stages in uiStore.pendingShare. Endpoints do NOT reach the
+ * rail until acceptPendingShare() runs.
+ *
+ * Results mode → applies endpoints + measurement snapshot for read-only
+ * display. Cadence settings are dropped on the floor.
+ *
+ * Returns the ordered list of endpoint IDs *materialized* (results mode
+ * only). Config mode returns an empty list because nothing has been
+ * applied yet.
+ */
+export function applySharePayload(payload: SharePayload): string[] {
+  // Note the absence of any settingsStore write. Cadence from a payload is
+  // attacker-controllable within the validated bounds (e.g. burstRounds=500,
+  // timeout=100); applying it would amplify a future Start click. The
+  // receiver always probes at their own defaults, full stop.
+  if (payload.mode === 'config') {
+    uiStore.setPendingShare({
+      mode: 'config',
+      endpoints: uniqueEndpoints(payload.endpoints),
+    });
+    return [];
+  }
+
+  // Results mode — read-only snapshot. Apply endpoints + samples directly so
+  // the visualization renders; the SharedResultsBanner gates the transition
+  // back to running.
+  const endpoints = buildEndpoints(payload.endpoints);
   endpointStore.setEndpoints(endpoints);
-  // Explicit field copy — never spread an attacker-supplied object into
-  // settingsStore. validateSharePayload only validates the 6 known fields;
-  // a crafted payload can smuggle extras (region, healthThreshold, etc.)
-  // that spread would silently apply.
-  settingsStore.set({
-    ...DEFAULT_SETTINGS,
-    timeout: payload.settings.timeout,
-    delay: DEFAULT_SETTINGS.delay,
-    burstRounds: payload.settings.burstRounds ?? DEFAULT_SETTINGS.burstRounds,
-    monitorDelay:
-      payload.settings.monitorDelay ?? payload.settings.delay ?? DEFAULT_SETTINGS.monitorDelay,
-    cap: payload.settings.cap,
-    corsMode: payload.settings.corsMode,
-  });
 
   const ids = endpoints.map((ep) => ep.id);
 
-  if (payload.mode === 'results' && payload.results) {
+  if (payload.results) {
     const results = payload.results.slice(0, MAX_ENDPOINTS);
     // Build a snapshot from the payload results — uses plain arrays, not SampleBuffer.
     // measurementStore.loadSnapshot() converts these to RingBuffers internally.
@@ -126,15 +180,51 @@ function applySharePayload(payload: SharePayload): string[] {
 }
 
 /**
- * Call once at app boot, before loadPersistedSettings.
- * Returns true if a share URL was successfully processed — the caller should
- * skip its own localStorage restore in that case.
+ * Accept the staged config-mode share payload — moves the staged endpoints
+ * into endpointStore (the rail) and clears the staging slot. No-op if no
+ * payload is staged.
+ *
+ * Does NOT set isSharedView. That flag drives the read-only results banner;
+ * once the user has accepted a config, they're back in normal interactive
+ * mode (just with new endpoints), so showing a "Shared results — read
+ * only" banner would be misleading.
+ *
+ * Cadence settings are NOT touched: the receiver runs at their own defaults.
  */
-export function initHashRouter(): boolean {
-  if (typeof window === 'undefined') return false;
+export function acceptPendingShare(): void {
+  const pending = get(uiStore).pendingShare;
+  if (!pending) return;
+  endpointStore.setEndpoints(buildEndpoints(pending.endpoints));
+  uiStore.clearPendingShare();
+}
+
+/**
+ * Dismiss the staged share without applying. Rail / settings stay at the
+ * receiver's own state.
+ */
+export function dismissPendingShare(): void {
+  uiStore.clearPendingShare();
+}
+
+/**
+ * Call once at app boot, before loadPersistedSettings.
+ *
+ * Returns the mode of the share that was processed, or null if no share URL
+ * was present. The caller uses this to decide whether to load persisted
+ * settings:
+ *
+ *   - `'results'` — stores have been mutated with the snapshot. Skip the
+ *     persistence load to avoid clobbering it.
+ *   - `'config'`  — stores are untouched (payload is staged in
+ *     uiStore.pendingShare). Persistence MUST still load so the user sees
+ *     their own endpoints / settings behind the staging banner.
+ *   - `null`      — no share. Normal boot.
+ */
+export function initHashRouter(): 'config' | 'results' | null {
+  if (typeof window === 'undefined') return null;
 
   const payload = parseShareURL(window.location.href);
-  if (!payload) return false;
+  if (!payload) return null;
 
   applySharePayload(payload);
 
@@ -142,5 +232,5 @@ export function initHashRouter(): boolean {
   // and avoid overwriting persisted settings with shared config.
   history.replaceState(null, '', window.location.pathname + window.location.search);
 
-  return true;
+  return payload.mode;
 }
