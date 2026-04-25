@@ -128,118 +128,146 @@
   style:--timing-btn="{tokens.timing.btnHover}ms"
   style:opacity={endpoint.enabled ? 1 : 0.5}
 >
-  <!-- Color dot (pulses when running + enabled) -->
-  <span
-    class="dot"
-    class:pulse={isRunning && endpoint.enabled}
-    aria-hidden="true"
-  ></span>
-
-  <!-- Identity: label as primary in read mode; URL input revealed in edit mode -->
   {#if isEditing}
-    <input
-      type="url"
-      class="url-input"
-      bind:value={editUrl}
-      placeholder="https://example.com"
-      aria-label="Endpoint URL"
-      onkeydown={handleUrlKeydown}
-    />
-  {:else}
-    <span class="row-label" title={endpoint.url}>{endpoint.label}</span>
-  {/if}
-
-  <!-- Nickname input (edit mode only) -->
-  {#if isEditing}
-    <div class="edit-fields">
-      <input
-        type="text"
-        class="nickname-input"
-        bind:value={editNickname}
-        placeholder="Optional nickname"
-        aria-label="Endpoint nickname"
-        aria-invalid={nicknameInvalid ? 'true' : 'false'}
-        onkeydown={handleNicknameKeydown}
-        oninput={() => { if (nicknameInvalid) nicknameInvalid = false; }}
-      />
+    <!-- Edit mode: row expands vertically into a stacked form. -->
+    <!-- The cramped "two inputs in a flex row" pattern doesn't fit narrow viewports;
+         stacking gives each input full width regardless of viewport size. -->
+    <div class="edit-form">
+      <div class="edit-form-line">
+        <span class="dot" aria-hidden="true"></span>
+        <input
+          type="url"
+          class="url-input"
+          bind:value={editUrl}
+          placeholder="https://example.com"
+          aria-label="Endpoint URL"
+          onkeydown={handleUrlKeydown}
+        />
+      </div>
+      <div class="edit-form-line">
+        <input
+          type="text"
+          class="nickname-input"
+          bind:value={editNickname}
+          placeholder="Optional nickname"
+          aria-label="Endpoint nickname"
+          aria-invalid={nicknameInvalid ? 'true' : 'false'}
+          onkeydown={handleNicknameKeydown}
+          oninput={() => { if (nicknameInvalid) nicknameInvalid = false; }}
+        />
+      </div>
       {#if nicknameInvalid}
         <span class="nickname-error" role="alert">Invalid nickname (max 80 chars, no control/zero-width/bidi)</span>
       {/if}
+      <div class="edit-actions">
+        <button type="button" class="btn-secondary" onclick={handleEditCancel}>Cancel</button>
+        <button type="button" class="btn-primary" onclick={handleEditSave}>Save</button>
+        <span class="actions-spacer"></span>
+        <label
+          class="toggle-label"
+          aria-label="{endpoint.enabled ? 'Disable' : 'Enable'} this endpoint"
+          title={isLastEnabled ? 'At least one endpoint must be enabled' : ''}
+        >
+          <input
+            type="checkbox"
+            class="toggle-input"
+            checked={endpoint.enabled}
+            disabled={isRunning || isLastEnabled}
+            onchange={handleToggle}
+          />
+          <span class="toggle-track" aria-hidden="true"></span>
+        </label>
+        {#if !isLast}
+          <button
+            type="button"
+            class="remove-btn"
+            aria-label="Remove endpoint {endpoint.label}"
+            disabled={isRunning}
+            onclick={handleRemove}
+          >
+            ✕
+          </button>
+        {/if}
+      </div>
     </div>
-  {/if}
-
-  <!-- Latency text -->
-  {#if latencyText && !isEditing}
+  {:else}
+    <!-- Read mode: single horizontal line (dot · label · pencil · toggle · remove). -->
     <span
-      class="latency-text"
-      style:color={latencyColor}
-      aria-label="Last measurement: {latencyText}"
-    >
-      {latencyText}
-    </span>
-  {/if}
+      class="dot"
+      class:pulse={isRunning && endpoint.enabled}
+      aria-hidden="true"
+    ></span>
 
-  <!-- Pencil / edit button (hidden while running) -->
-  {#if !isRunning}
-    <button
-      type="button"
-      class="edit-btn"
-      class:active={isEditing}
-      aria-label="{isEditing ? 'Cancel editing' : 'Edit'} {endpoint.label}"
-      onclick={isEditing ? handleEditCancel : handleEditStart}
-    >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 14 14"
-        fill="none"
-        aria-hidden="true"
-        focusable="false"
+    <span class="row-label" title={endpoint.url}>{endpoint.label}</span>
+
+    {#if latencyText}
+      <span
+        class="latency-text"
+        style:color={latencyColor}
+        aria-label="Last measurement: {latencyText}"
       >
-        <path
-          d="M9.5 1.5L12.5 4.5L4.5 12.5H1.5V9.5L9.5 1.5Z"
-          stroke="currentColor"
-          stroke-width="1.25"
-          stroke-linejoin="round"
+        {latencyText}
+      </span>
+    {/if}
+
+    {#if !isRunning}
+      <button
+        type="button"
+        class="edit-btn"
+        aria-label="Edit {endpoint.label}"
+        onclick={handleEditStart}
+      >
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
           fill="none"
-        />
-        <path
-          d="M7.5 3.5L10.5 6.5"
-          stroke="currentColor"
-          stroke-width="1.25"
-          stroke-linecap="round"
-        />
-      </svg>
-    </button>
-  {/if}
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            d="M9.5 1.5L12.5 4.5L4.5 12.5H1.5V9.5L9.5 1.5Z"
+            stroke="currentColor"
+            stroke-width="1.25"
+            stroke-linejoin="round"
+            fill="none"
+          />
+          <path
+            d="M7.5 3.5L10.5 6.5"
+            stroke="currentColor"
+            stroke-width="1.25"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
+    {/if}
 
-  <!-- Enable/disable toggle -->
-  <label
-    class="toggle-label"
-    aria-label="{endpoint.enabled ? 'Disable' : 'Enable'} this endpoint"
-    title={isLastEnabled ? 'At least one endpoint must be enabled' : ''}
-  >
-    <input
-      type="checkbox"
-      class="toggle-input"
-      checked={endpoint.enabled}
-      disabled={isRunning || isLastEnabled}
-      onchange={handleToggle}
-    />
-    <span class="toggle-track" aria-hidden="true"></span>
-  </label>
-
-  <!-- Remove button -->
-  {#if !isLast}
-    <button
-      type="button"
-      class="remove-btn"
-      aria-label="Remove endpoint {endpoint.label}"
-      disabled={isRunning}
-      onclick={handleRemove}
+    <label
+      class="toggle-label"
+      aria-label="{endpoint.enabled ? 'Disable' : 'Enable'} this endpoint"
+      title={isLastEnabled ? 'At least one endpoint must be enabled' : ''}
     >
-      ✕
-    </button>
+      <input
+        type="checkbox"
+        class="toggle-input"
+        checked={endpoint.enabled}
+        disabled={isRunning || isLastEnabled}
+        onchange={handleToggle}
+      />
+      <span class="toggle-track" aria-hidden="true"></span>
+    </label>
+
+    {#if !isLast}
+      <button
+        type="button"
+        class="remove-btn"
+        aria-label="Remove endpoint {endpoint.label}"
+        disabled={isRunning}
+        onclick={handleRemove}
+      >
+        ✕
+      </button>
+    {/if}
   {/if}
 </div>
 
@@ -251,6 +279,14 @@
     padding: var(--spacing-md);
     min-height: 44px; /* WCAG touch target */
     position: relative;
+  }
+
+  /* Edit mode: container becomes a vertical stack so .edit-form's columns
+     can flow naturally. The two-input flex-row layout was unusable at narrow
+     viewports — even Google's URL would collapse to one character. */
+  .endpoint-row:has(.edit-form) {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   /* Gradient separator between rows */
@@ -330,19 +366,74 @@
     white-space: nowrap;
   }
 
-  /* ── Edit fields (nickname row) ──────────────────────────────────────────── */
-  .edit-fields {
+  /* ── Edit form (vertical stack inside .endpoint-row when isEditing) ──────── */
+  .edit-form {
     display: flex;
     flex-direction: column;
-    gap: 2px;
-    flex-shrink: 0;
-    min-width: 0;
+    gap: var(--spacing-sm);
+    width: 100%;
+  }
+
+  .edit-form-line {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  /* Within the form, URL input and nickname input both expand full-width.
+     Override the read-mode .url-input flex:1 inheritance; the form-line is
+     already a flex container. */
+  .edit-form .url-input,
+  .edit-form .nickname-input {
+    flex: 1;
+    width: 100%;
+  }
+
+  /* Action bar — Cancel/Save on the left, toggle/remove on the right. */
+  .edit-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    /* Sit just inside the dot's column so the action bar visually nests under
+       the input column rather than the dot. */
+    padding-left: calc(10px + var(--spacing-sm));
+  }
+
+  .actions-spacer { flex: 1; }
+
+  .btn-primary,
+  .btn-secondary {
+    min-height: 32px;
+    padding: 0 var(--spacing-md);
+    border-radius: var(--btn-radius);
+    border: 1px solid transparent;
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background var(--timing-btn) ease, border-color var(--timing-btn) ease;
+  }
+  .btn-primary {
+    background: color-mix(in srgb, var(--accent-cyan) 18%, transparent);
+    color: var(--accent-cyan);
+    border-color: color-mix(in srgb, var(--accent-cyan) 35%, transparent);
+  }
+  .btn-primary:hover {
+    background: color-mix(in srgb, var(--accent-cyan) 28%, transparent);
+  }
+  .btn-secondary {
+    background: transparent;
+    color: var(--t2);
+    border-color: var(--glass-border);
+  }
+  .btn-secondary:hover {
+    color: var(--t1);
+    border-color: var(--glass-highlight);
   }
 
   /* ── Nickname input ──────────────────────────────────────────────────────── */
   .nickname-input {
     min-width: 0;
-    width: 140px;
     background: rgba(0,0,0,.2);
     border: 1px solid var(--glass-border);
     border-radius: var(--btn-radius);
@@ -405,7 +496,6 @@
   }
 
   .endpoint-row:hover .edit-btn,
-  .edit-btn.active,
   .edit-btn:focus-visible {
     opacity: 1;
     visibility: visible;
@@ -414,10 +504,6 @@
   .edit-btn:hover:not(:disabled) {
     background: var(--glass-bg);
     border-color: rgba(103,232,249,.15);
-    color: var(--accent-cyan);
-  }
-
-  .edit-btn.active {
     color: var(--accent-cyan);
   }
 
