@@ -317,9 +317,15 @@ describe('MeasurementEngine — AC1: cap clamping at engine read', () => {
     // NaN triggers the warn because `NaN !== anything` is always true, including
     // `NaN !== MAX_CAP`. This is the highest-risk case — clampCap returning NaN
     // would silently disable the cap check, and this assertion catches that.
-    expect(warnSpy).toHaveBeenCalled();
-    expect(warnSpy.mock.calls[0]?.[0]).toContain('settings.cap');
-    expect(warnSpy.mock.calls[0]?.[0]).toContain(String(injected));
+    // Rate-limit: engine emits the warn at most once per session (set in start()
+    // and gated by _capWarnEmitted), so we assert exactly one warn even though
+    // the cap check fires every round.
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    // Join all args of the first call to tolerate future warn-message
+    // refactors (e.g., splitting the value into a second arg).
+    const firstCallText = (warnSpy.mock.calls[0] ?? []).map(String).join(' ');
+    expect(firstCallText).toContain('settings.cap');
+    expect(firstCallText).toContain(String(injected));
   });
 
   // AC1 — negative injection clamps to 1 (minimum), completes at round 1
@@ -334,8 +340,9 @@ describe('MeasurementEngine — AC1: cap clamping at engine read', () => {
 
     expect(get(measurementStore).lifecycle).toBe('completed');
     expect(get(measurementStore).roundCounter).toBe(1); // clampCap(-1) = 1
-    expect(warnSpy).toHaveBeenCalled();
-    expect(warnSpy.mock.calls[0]?.[0]).toContain('settings.cap');
+    expect(warnSpy).toHaveBeenCalledTimes(1); // rate-limited to once per session
+    const firstCallText = (warnSpy.mock.calls[0] ?? []).map(String).join(' ');
+    expect(firstCallText).toContain('settings.cap');
   });
 
   // AC1 negative — valid in-range cap does NOT trigger the warn

@@ -5,11 +5,13 @@ import { settingsStore } from '../../../src/lib/stores/settings';
 import { MAX_CAP } from '../../../src/lib/limits';
 import { DEFAULT_SETTINGS } from '../../../src/lib/types';
 
-describe('FooterBar', () => {
-  beforeEach(() => {
-    settingsStore.set({ ...DEFAULT_SETTINGS, region: undefined });
-  });
+// File-level reset so settingsStore.cap doesn't leak between tests or describe
+// blocks; each test sets cap explicitly when needed.
+beforeEach(() => {
+  settingsStore.set({ ...DEFAULT_SETTINGS, region: undefined });
+});
 
+describe('FooterBar', () => {
   it('renders "Measuring from your browser" text', () => {
     const { getByText } = render(FooterBar, { props: {} });
     expect(getByText(/Measuring from your browser/i)).toBeTruthy();
@@ -34,10 +36,6 @@ describe('FooterBar', () => {
 });
 
 describe('FooterBar — AC5: no infinity glyph', () => {
-  beforeEach(() => {
-    settingsStore.set({ ...DEFAULT_SETTINGS, region: undefined });
-  });
-
   it.each([1, 100, MAX_CAP])('renders no ∞ glyph when cap = %i', (capValue) => {
     settingsStore.update(s => ({ ...s, cap: capValue }));
     const { container } = render(FooterBar, { props: {} });
