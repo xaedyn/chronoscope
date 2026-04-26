@@ -12,7 +12,7 @@
   import { uiStore } from '$lib/stores/ui';
   import { phaseHypothesis, PHASE_LABELS, type PhaseBreakdown, type Tier2Phase } from '$lib/utils/verdict';
   import { buildHistogram, buildCorrelation } from '$lib/utils/diagnose-stats';
-  import { fmt } from '$lib/utils/format';
+  import { fmt, axisEdgeLabel, binLabel } from '$lib/utils/format';
   import { tokens } from '$lib/tokens';
   import type { MeasurementSample } from '$lib/types';
 
@@ -102,7 +102,7 @@
     if (!m) return [];
     return m.samples.toArray().slice(-50);
   });
-  const histogram = $derived(buildHistogram(focusedAllSamples, 10));
+  const histogram = $derived(buildHistogram(focusedAllSamples));
 
   // p50 / p95 / spread — recompute locally so the histogram and the readout
   // share a single source of truth (focusedStats may use a different window).
@@ -228,16 +228,42 @@
           <span class="distro-stat"><span class="distro-stat-label">spread</span> {distroStats.spread.toFixed(1)}×</span>
           <span class="distro-stat-meta">over last {distroStats.n} samples</span>
         </div>
-        <div class="distro-chart" role="img" aria-label="Latency histogram across last {distroStats.n} samples">
+        <div
+          class="distro-chart"
+          role="img"
+          aria-label="Latency histogram (log scale) across last {distroStats.n} samples"
+        >
           {#each histogram.bins as bin, i (i)}
-            <div class="distro-bin" title="{Math.round(bin.fromMs)}–{Math.round(bin.toMs)} ms · {bin.count} samples">
-              <div class="distro-bar" style:height="{histogram.maxCount > 0 ? (bin.count / histogram.maxCount) * 100 : 0}%"></div>
+            <div
+              class="distro-bin"
+              title="{binLabel(bin)} · {bin.count} sample{bin.count === 1 ? '' : 's'}"
+            >
+              <div
+                class="distro-bar"
+                style:height="{histogram.maxCount > 0 ? (bin.count / histogram.maxCount) * 100 : 0}%"
+              ></div>
             </div>
           {/each}
         </div>
         <div class="distro-axis" aria-hidden="true">
-          <span>{fmt(histogram.bins[0]?.fromMs ?? 0)} ms</span>
-          <span>{fmt(histogram.bins[histogram.bins.length - 1]?.toMs ?? 0)} ms</span>
+          {#if histogram.bins.length > 0}
+            {@const firstBin = histogram.bins[0]}
+            {@const lastBin = histogram.bins[histogram.bins.length - 1]}
+            <span>
+              {#if firstBin && firstBin.fromMs <= 0}
+                &lt;{axisEdgeLabel(firstBin.toMs)}
+              {:else if firstBin}
+                {axisEdgeLabel(firstBin.fromMs)}
+              {/if}
+            </span>
+            <span>
+              {#if lastBin && !Number.isFinite(lastBin.toMs)}
+                ≥{axisEdgeLabel(lastBin.fromMs)}
+              {:else if lastBin}
+                {axisEdgeLabel(lastBin.toMs)}
+              {/if}
+            </span>
+          {/if}
         </div>
       {:else}
         <p class="distro-empty">Need at least 2 samples with different latencies before a distribution chart is meaningful. Run for a few more rounds.</p>

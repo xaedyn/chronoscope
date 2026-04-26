@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { fmt, fmtParts, fmtPct, fmtCount } from '../../src/lib/utils/format';
+import { fmt, fmtParts, fmtPct, fmtCount, fmtAxisMs, axisEdgeLabel, binLabel } from '../../src/lib/utils/format';
+import type { HistogramBin } from '../../src/lib/utils/diagnose-stats';
 
 describe('fmt()', () => {
   it('returns "—" for null/undefined/NaN/Infinity/negative', () => {
@@ -76,5 +77,74 @@ describe('fmtCount()', () => {
     expect(fmtCount(42)).toBe('42');
     expect(fmtCount(1234)).toBe('1,234');
     expect(fmtCount(1000000)).toBe('1,000,000');
+  });
+});
+
+describe('fmtAxisMs()', () => {
+  it('AC #11: axis values below 1000 render as bare integer strings', () => {
+    expect(fmtAxisMs(2)).toBe('2');
+    expect(fmtAxisMs(50)).toBe('50');
+    expect(fmtAxisMs(500)).toBe('500');
+    expect(fmtAxisMs(999)).toBe('999');
+  });
+
+  it('AC #11: axis values at or above 1000 render with "s" suffix', () => {
+    expect(fmtAxisMs(1000)).toBe('1s');
+    expect(fmtAxisMs(2000)).toBe('2s');
+    expect(fmtAxisMs(2500)).toBe('2.5s');
+  });
+});
+
+describe('axisEdgeLabel()', () => {
+  it('AC #11a: values below 1000 ms append " ms" suffix', () => {
+    expect(axisEdgeLabel(50)).toBe('50 ms');
+    expect(axisEdgeLabel(500)).toBe('500 ms');
+    expect(axisEdgeLabel(999)).toBe('999 ms');
+  });
+
+  it('AC #11a: values at or above 1000 use fmtAxisMs without ms suffix (bin-8 boundary regression guard)', () => {
+    // The boundary case: axisEdgeLabel(1000) MUST NOT render "1s ms".
+    expect(axisEdgeLabel(1000)).toBe('1s');
+    expect(axisEdgeLabel(1000)).not.toContain(' ms');
+    expect(axisEdgeLabel(2000)).toBe('2s');
+    expect(axisEdgeLabel(2500)).toBe('2.5s');
+  });
+});
+
+describe('binLabel()', () => {
+  it('AC #12: bin 0 (open-low boundary) renders as "<N ms"', () => {
+    const bin0: HistogramBin = { fromMs: 0, toMs: 2, count: 3 };
+    expect(binLabel(bin0)).toBe('<2 ms');
+  });
+
+  it('AC #12: internal ms-range bins render as "from–to ms"', () => {
+    expect(binLabel({ fromMs: 2, toMs: 5, count: 3 })).toBe('2–5 ms');
+    expect(binLabel({ fromMs: 10, toMs: 20, count: 3 })).toBe('10–20 ms');
+    expect(binLabel({ fromMs: 200, toMs: 500, count: 3 })).toBe('200–500 ms');
+  });
+
+  it('AC #13: bin 8 {500, 1000} renders as "500–1000 ms" (unit-hop regression)', () => {
+    // The previous draft produced "500–1s" — this is the regression guard.
+    expect(binLabel({ fromMs: 500, toMs: 1000, count: 2 })).toBe('500–1000 ms');
+  });
+
+  it('AC #12: bin 9 (s-range internal bin) renders as "from–to s"', () => {
+    expect(binLabel({ fromMs: 1000, toMs: 2000, count: 3 })).toBe('1–2 s');
+  });
+
+  it('AC #12: bin 10 (open-high boundary) renders as "≥N s" when fromMs >= 1000', () => {
+    expect(binLabel({ fromMs: 2000, toMs: Number.POSITIVE_INFINITY, count: 3 })).toBe('≥2 s');
+  });
+
+  it('AC #12: singular/plural — count 1 omits trailing "s" on "samples"', () => {
+    const bin: HistogramBin = { fromMs: 0, toMs: 2, count: 1 };
+    const title = `${binLabel(bin)} · ${bin.count} sample${bin.count === 1 ? '' : 's'}`;
+    expect(title).toBe('<2 ms · 1 sample');
+  });
+
+  it('AC #12: plural — count 3 appends "samples"', () => {
+    const bin: HistogramBin = { fromMs: 0, toMs: 2, count: 3 };
+    const title = `${binLabel(bin)} · ${bin.count} sample${bin.count === 1 ? '' : 's'}`;
+    expect(title).toBe('<2 ms · 3 samples');
   });
 });
