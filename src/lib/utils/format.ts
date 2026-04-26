@@ -4,6 +4,8 @@
 // every rendered ms/count/percent routes through these so tabular numerals and
 // precision rules stay consistent. No store imports, no side effects.
 
+import type { HistogramBin } from './diagnose-stats';
+
 /**
  * Format a latency value in milliseconds for display.
  *
@@ -87,4 +89,68 @@ export function formatElapsed(ms: number): string {
   }
   const ss = String(seconds).padStart(2, '0');
   return `${minutes}:${ss}`;
+}
+
+// ── Histogram axis and tooltip helpers ────────────────────────────────────────
+// These helpers are colocated in format.ts (not in DiagnoseView.svelte) so they
+// are unit-testable without mounting a component. No store imports, no DOM.
+
+/**
+ * Format a millisecond value for use as a histogram axis tick label.
+ * Below 1000 ms: bare integer ("2", "50", "500").
+ * At or above 1000 ms: seconds with no trailing zero ("1s", "2s", "2.5s").
+ *
+ *   fmtAxisMs(50)   → "50"
+ *   fmtAxisMs(500)  → "500"
+ *   fmtAxisMs(1000) → "1s"
+ *   fmtAxisMs(2500) → "2.5s"
+ */
+export function fmtAxisMs(ms: number): string {
+  if (ms < 1000) return Math.round(ms).toString();
+  return `${ms / 1000}s`;
+}
+
+/**
+ * Format an axis-edge value with its unit. Below 1000 ms appends " ms";
+ * at or above 1000 ms uses fmtAxisMs which already includes the "s" suffix.
+ *
+ * This helper exists so the unit-suffix decision lives in ONE place and is
+ * unit-testable. Without it, the .svelte template needs an inline
+ * `value >= 1000 ? '' : ' ms'` ternary, which previously drifted to `> 1000`
+ * and produced "1s ms" at the bin-8 boundary.
+ *
+ *   axisEdgeLabel(50)   → "50 ms"
+ *   axisEdgeLabel(500)  → "500 ms"
+ *   axisEdgeLabel(1000) → "1s"            ← the bin-8 boundary case
+ *   axisEdgeLabel(2000) → "2s"
+ */
+export function axisEdgeLabel(ms: number): string {
+  return ms >= 1000 ? fmtAxisMs(ms) : `${fmtAxisMs(ms)} ms`;
+}
+
+/**
+ * Format a HistogramBin as a human-readable label for bar tooltips and axis
+ * outer-bin markers. Hop from ms to s between bin 8 (toMs===1000) and bin 9
+ * (toMs===2000) — the rule is toMs > 1000, not toMs >= 1000.
+ *
+ * Bin 0 (fromMs <= 0):        "<{toMs} ms"           e.g. "<2 ms"
+ * Bin 10 (toMs === +∞):       "≥{N} s" / "≥{N} ms"
+ * Internal ms bins:           "{from}–{to} ms"       e.g. "500–1000 ms"
+ * Internal s bins (toMs>1000): "{f/1000}–{t/1000} s" e.g. "1–2 s"
+ */
+export function binLabel(bin: HistogramBin): string {
+  // Bin 0 — open-low boundary bin.
+  if (bin.fromMs <= 0) return `<${bin.toMs} ms`;
+
+  // Bin 10 — open-high boundary bin.
+  if (!Number.isFinite(bin.toMs)) {
+    return bin.fromMs >= 1000
+      ? `≥${bin.fromMs / 1000} s`
+      : `≥${bin.fromMs} ms`;
+  }
+
+  // Internal bin — single unit per bin, hop at toMs > 1000.
+  return bin.toMs <= 1000
+    ? `${bin.fromMs}–${bin.toMs} ms`
+    : `${bin.fromMs / 1000}–${bin.toMs / 1000} s`;
 }
