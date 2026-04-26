@@ -7,9 +7,18 @@ import type { MeasurementSample } from '../types';
 // ── Histogram ────────────────────────────────────────────────────────────────
 
 export interface HistogramBin {
-  /** Lower edge of the bin in milliseconds, inclusive. */
+  /**
+   * Lower edge of the bin in milliseconds, inclusive. Bin slots come from a
+   * fixed log schema, NOT from data — `fromMs` does not equal `min(samples)`.
+   * The first bin uses `fromMs === 0` as a convention for downstream renderers,
+   * but represents the open interval (-∞, toMs); display label is "<{toMs} ms".
+   */
   readonly fromMs: number;
-  /** Upper edge of the bin in milliseconds, exclusive (except the last bin). */
+  /**
+   * Upper edge of the bin in milliseconds, exclusive. The last bin uses
+   * `toMs === Number.POSITIVE_INFINITY` and represents [fromMs, +∞);
+   * display label is "≥{fromMs}". All other bins are half-open [fromMs, toMs).
+   */
   readonly toMs: number;
   /** Number of samples that fell into this bin. */
   readonly count: number;
@@ -23,40 +32,98 @@ export interface Histogram {
   readonly total: number;
 }
 
+// Fixed 1-2-5 log-spaced bin edges. There are 11 bins total:
+//   bin 0:  (-∞, 2)       fromMs=0, toMs=2         "<2 ms"
+//   bin 1:  [2, 5)        fromMs=2, toMs=5          "2–5 ms"
+//   bin 2:  [5, 10)       fromMs=5, toMs=10         "5–10 ms"
+//   bin 3:  [10, 20)      fromMs=10, toMs=20        "10–20 ms"
+//   bin 4:  [20, 50)      fromMs=20, toMs=50        "20–50 ms"
+//   bin 5:  [50, 100)     fromMs=50, toMs=100       "50–100 ms"
+//   bin 6:  [100, 200)    fromMs=100, toMs=200      "100–200 ms"
+//   bin 7:  [200, 500)    fromMs=200, toMs=500      "200–500 ms"
+//   bin 8:  [500, 1000)   fromMs=500, toMs=1000     "500–1000 ms"
+//   bin 9:  [1000, 2000)  fromMs=1000, toMs=2000    "1–2 s"
+//   bin 10: [2000, +∞)    fromMs=2000, toMs=+∞      "≥2 s"
+const BIN_EDGES_MS = [2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000] as const;
+
+const ALL_BINS: ReadonlyArray<{ readonly fromMs: number; readonly toMs: number }> = [
+  { fromMs: 0, toMs: 2 },
+  ...BIN_EDGES_MS.slice(0, -1).map((from, i) => ({ fromMs: from, toMs: BIN_EDGES_MS[i + 1] as number })),
+  { fromMs: 2000, toMs: Number.POSITIVE_INFINITY },
+];
+
 /**
- * Build a fixed-bin-count histogram of OK-status sample latencies. Returns
- * empty bins when there are fewer than two distinct samples — a one-bar chart
- * carries no visual information so we degrade gracefully.
+ * Build a log-spaced histogram of OK-status sample latencies using a fixed
+ * 1-2-5 bin schema with open-ended outer bins. Returns empty bins when there
+ * are fewer than 2 distinct OK-status samples — a one-bar chart carries no
+ * visual information, so we degrade gracefully.
+ *
+ * Outer empty bins are trimmed, leaving one padding bin per side when one
+ * exists in the schema. Internal empty bins are preserved — the gap between
+ * two clusters is the bimodal signal. Bin 0 and bin 10 are protected from
+ * trim when they contain data.
+ *
+ * Filter: `Number.isFinite(latency) && latency >= 0`. This explicitly
+ * excludes NaN, ±Infinity, and negative values. `typeof NaN === 'number'`
+ * is true, so the naive `typeof s.latency === 'number'` guard is insufficient.
  */
-export function buildHistogram(
-  samples: readonly MeasurementSample[],
-  binCount = 10,
-): Histogram {
+export function buildHistogram(samples: readonly MeasurementSample[]): Histogram {
   const oks: number[] = [];
   for (const s of samples) {
-    if (s.status === 'ok' && typeof s.latency === 'number') oks.push(s.latency);
+    if (s.status === 'ok' && Number.isFinite(s.latency) && s.latency >= 0) {
+      oks.push(s.latency);
+    }
   }
+
   if (oks.length < 2) return { bins: [], maxCount: 0, total: oks.length };
 
   const min = Math.min(...oks);
   const max = Math.max(...oks);
   if (max === min) return { bins: [], maxCount: 0, total: oks.length };
 
-  const span = max - min;
-  const step = span / binCount;
-  const bins: HistogramBin[] = [];
-  for (let i = 0; i < binCount; i++) {
-    const fromMs = min + step * i;
-    const toMs = i === binCount - 1 ? max : min + step * (i + 1);
-    let count = 0;
-    for (const v of oks) {
-      // Last bin is inclusive on the upper edge so max-valued samples land somewhere.
-      if (i === binCount - 1 ? v >= fromMs && v <= toMs : v >= fromMs && v < toMs) count++;
+  // Assign each sample to a bin index via interval membership.
+  // Bin 0 is open-low (catches v < 2). Bin 10 is open-high catch-all.
+  const counts = new Array<number>(ALL_BINS.length).fill(0);
+  for (const v of oks) {
+    for (let i = 0; i < ALL_BINS.length; i++) {
+      const b = ALL_BINS[i];
+      if (b === undefined) break;
+      if (i === 0) {
+        if (v < b.toMs) { counts[i] = (counts[i] ?? 0) + 1; break; }
+      } else if (!Number.isFinite(b.toMs)) {
+        counts[i] = (counts[i] ?? 0) + 1; break;
+      } else if (v >= b.fromMs && v < b.toMs) {
+        counts[i] = (counts[i] ?? 0) + 1; break;
+      }
     }
-    bins.push({ fromMs, toMs, count });
   }
+
+  // Determine the leftmost and rightmost bin indices that contain data.
+  let firstData = -1;
+  let lastData = -1;
+  for (let i = 0; i < counts.length; i++) {
+    if ((counts[i] ?? 0) > 0) {
+      if (firstData === -1) firstData = i;
+      lastData = i;
+    }
+  }
+
+  // Apply outer trim with one padding bin per side. Outer protected bins
+  // (bin 0, bin 10) need no padding on their outer side — there is no bin
+  // outside them in the schema.
+  const sliceStart = Math.max(0, firstData - 1);
+  const sliceEnd = Math.min(ALL_BINS.length - 1, lastData + 1);
+
+  const bins: HistogramBin[] = [];
+  for (let i = sliceStart; i <= sliceEnd; i++) {
+    const def = ALL_BINS[i];
+    if (def === undefined) break;
+    bins.push({ fromMs: def.fromMs, toMs: def.toMs, count: counts[i] ?? 0 });
+  }
+
   let maxCount = 0;
   for (const b of bins) if (b.count > maxCount) maxCount = b.count;
+
   return { bins, maxCount, total: oks.length };
 }
 
