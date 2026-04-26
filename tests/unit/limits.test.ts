@@ -103,7 +103,9 @@ describe('clampCap', () => {
   });
 
   it('maps undefined to MAX_CAP', () => {
-    expect(clampCap(undefined)).toBe(MAX_CAP);
+    // The `as unknown` cast avoids a redundant-undefined-arg lint flag while
+    // still exercising the contract that non-numeric inputs map to MAX_CAP.
+    expect(clampCap(undefined as unknown)).toBe(MAX_CAP);
   });
 
   it('maps plain object to MAX_CAP', () => {

@@ -258,9 +258,9 @@ describe('MeasurementEngine', () => {
 function createMockWorkerFactory(): WorkerFactory {
   return {
     create: () => ({
-      addEventListener: () => {},
-      postMessage: () => {},
-      terminate: () => {},
+      addEventListener: vi.fn(),
+      postMessage: vi.fn(),
+      terminate: vi.fn(),
     }) as unknown as Worker,
   };
 }
@@ -276,7 +276,7 @@ describe('MeasurementEngine — AC1: cap clamping at engine read', () => {
     settingsStore.set({ ...DEFAULT_SETTINGS, region: undefined });
     endpointStore.addEndpoint('https://example.com');
     engine = new MeasurementEngine(createMockWorkerFactory());
-    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
