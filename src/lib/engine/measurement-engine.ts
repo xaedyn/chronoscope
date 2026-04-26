@@ -12,6 +12,7 @@ import type { WorkerFactory } from './worker-factory';
 import type { Endpoint } from '../types';
 import type { MainToWorkerMessage, WorkerToMainMessage } from '../types';
 import { isSafeProbeUrl } from '../utils/url-safety';
+import { clampCap } from '../limits';
 
 interface ManagedWorker {
   worker: Worker;
@@ -29,6 +30,10 @@ export class MeasurementEngine {
   private lastFlushedRound = -1;
   _paused = false;
   private _visibilityHandler: (() => void) | null = null;
+  // Engine-side cap clamp regression detector. Reset per session in start().
+  // Once-per-session cadence prevents 3600× warn spam if a parse-path bypass
+  // ever puts cap > MAX_CAP into settingsStore.
+  private _capWarnEmitted = false;
 
   constructor(workerFactory?: WorkerFactory) {
     this.workerFactory = workerFactory ?? defaultWorkerFactory;
@@ -49,6 +54,7 @@ export class MeasurementEngine {
     // Step 1: increment epoch and transition lifecycle — always happens.
     measurementStore.incrementEpoch();
     measurementStore.setLifecycle('starting');
+    this._capWarnEmitted = false;
 
     // Preserve startedAt across stop/start cycles so elapsed time is cumulative.
     // Only set on first start (idle → running).
@@ -331,7 +337,12 @@ export class MeasurementEngine {
     const { timeout, corsMode, cap } = get(settingsStore);
     const { epoch, roundCounter } = get(measurementStore);
 
-    if (cap > 0 && roundCounter >= cap) {
+    const effectiveCap = clampCap(cap);
+    if (cap !== effectiveCap && !this._capWarnEmitted) {
+      console.warn(`[Chronoscope] settings.cap (${cap}) was out of range at engine read — parse-path bypass suspected`);
+      this._capWarnEmitted = true;
+    }
+    if (roundCounter >= effectiveCap) {
       measurementStore.setLifecycle('completed');
       return;
     }
