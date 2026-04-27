@@ -308,7 +308,9 @@ export const measurementStore = createMeasurementStore();
 // measurement store with synthesized samples; statisticsStore derives p99
 // from these naturally. Not present in production builds (import.meta.env.DEV
 // is statically false in production, so the entire block is dead-stripped).
-if (import.meta.env.DEV) {
+// `typeof window !== 'undefined'` defends against SSR contexts (none today, but
+// chronoscope is a Vite-only SPA — keep the hook robust if SSR is ever introduced).
+if (import.meta.env.DEV && typeof window !== 'undefined') {
   interface InjectArgs {
     readonly endpointId: string;
     readonly count: number;
@@ -323,8 +325,10 @@ if (import.meta.env.DEV) {
     const round0 = 100_000;
     const now = Date.now();
     for (const { endpointId, count, latencyMs, jitterMs = 0 } of specs) {
-      // Initialize endpoint if not already present — addSamples drops samples
-      // for uninitialized endpoints (measurements.ts:158).
+      // initEndpoint resets the endpoint's RingBuffer — intentional clean-slate
+      // semantics so each test scenario starts from a known state. Tests that
+      // need to accumulate samples across calls should use a single call with
+      // larger `count`, not multiple calls.
       measurementStore.initEndpoint(endpointId);
       // Build N synthetic OK samples and push via the public addSamples API.
       const entries = Array.from({ length: count }, (_, i) => ({

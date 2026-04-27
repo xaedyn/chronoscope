@@ -70,6 +70,13 @@
     for (let ms = 0; ms <= maxMs; ms += minorStep) {
       lines.push({ ms, y: yOf(ms), major: majorSet.has(ms) });
     }
+    // Ensure the top boundary always has a grid line. The loop step rarely lands
+    // exactly at maxMs (e.g., minorStep=150 misses maxMs=960), so append explicitly
+    // when the last pushed line isn't at maxMs.
+    const last = lines[lines.length - 1];
+    if (last && last.ms !== maxMs) {
+      lines.push({ ms: maxMs, y: yOf(maxMs), major: true });
+    }
     return lines;
   });
 

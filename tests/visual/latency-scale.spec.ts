@@ -68,11 +68,18 @@ async function injectHighBaselineStats(
     },
     { ids: endpointIds, latency: targetLatency, count: sampleCount }
   );
+  // Wait until the rendered ceiling reflects the injected target. Comparing to
+  // the AC4 formula (ceil(latency*1.2/30)*30) guarantees we don't return early
+  // because the startup state happened to be != 150 (e.g., 300 from a prior run).
+  const expectedMin = Math.ceil((targetLatency * 1.2) / 30) * 30;
   await page.waitForFunction(
-    () => {
-      const el = document.querySelector('[data-role="axis-label-max"]');
-      return el?.textContent && el.textContent !== '150';
+    (min) => {
+      const vals = Array.from(document.querySelectorAll('[data-role="axis-label-max"]'))
+        .map((el) => Number(el.textContent))
+        .filter((v) => Number.isFinite(v));
+      return vals.length > 0 && vals.some((v) => v >= min);
     },
+    expectedMin,
     { timeout: 3000 }
   );
 }
@@ -93,9 +100,10 @@ for (const vp of VIEWPORTS) {
 
     test('AC5 baseline scenario: maxMs in [150, 300]', async ({ page }) => {
       const labels = page.locator('[data-role="axis-label-max"]');
-      const count = await labels.count();
-      if (count === 0) test.skip();
+      // Fail loudly if labels aren't rendered (was `test.skip()` — that hid regressions).
+      await expect(labels.first()).toBeVisible({ timeout: 3000 });
       const texts = await labels.allTextContents();
+      expect(texts.length).toBeGreaterThan(0);
       for (const text of texts) {
         const val = Number(text);
         expect(val).toBeGreaterThanOrEqual(150);
@@ -121,10 +129,10 @@ for (const vp of VIEWPORTS) {
 
       const dialLabels = page.locator('.dial text').filter({ hasText: /^\d+$/ });
       const count = await dialLabels.count();
-      if (count > 0) {
-        expect(count).toBeGreaterThanOrEqual(4);
-        expect(count).toBeLessThanOrEqual(8);
-      }
+      // Fail loudly if no dial labels are rendered (was a silent guard — hid regressions).
+      expect(count).toBeGreaterThan(0);
+      expect(count).toBeGreaterThanOrEqual(4);
+      expect(count).toBeLessThanOrEqual(8);
     });
   });
 }
@@ -173,7 +181,12 @@ test.describe('AC8: axis-label-max parity', () => {
     const endpointIds = await page
       .locator('[data-endpoint-id]')
       .evaluateAll((els) =>
-        els.map((el) => el.getAttribute('data-endpoint-id')).filter((id): id is string => Boolean(id))
+        // Deduplicate — same endpoint ID appears at multiple component locations
+        // (rail row, settings drawer, racing-row, footer chip). Without dedup,
+        // slowIds could contain fastId, diluting the mixed-baseline scenario.
+        [...new Set(
+          els.map((el) => el.getAttribute('data-endpoint-id')).filter((id): id is string => Boolean(id))
+        )]
       );
     expect(endpointIds.length).toBeGreaterThanOrEqual(2);
     const [fastId, ...slowIds] = endpointIds;
