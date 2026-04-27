@@ -272,6 +272,7 @@
 <section class="overview" aria-label="Overview">
   <div class="overview-grid">
     <div class="overview-left">
+      <!-- TODO Task 5: replace placeholder 0 with $derived(Math.max(0, ...monitored.map(ep => stats[ep.id]?.p99 ?? 0))) -->
       <ChronographDial
         {score}
         {liveMedian}
@@ -281,6 +282,7 @@
         {paused}
         {scoreHistory}
         {baseline}
+        p99Across={0}
       />
       <CausalVerdictStrip
         verdict={enrichedVerdict}
