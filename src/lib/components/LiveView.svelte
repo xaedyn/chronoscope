@@ -135,6 +135,7 @@
   {#if mode === 'split'}
     <div class="scope-stack">
       {#each visibleEndpoints as ep (ep.id)}
+        <!-- TODO Task 5: replace p99Across={0} with $derived(Math.max(0, ...monitored.map(ep => stats[ep.id]?.p99 ?? 0))) -->
         <ScopeCanvas
           endpoints={[ep]}
           samplesByEndpoint={{ [ep.id]: samplesByEndpoint[ep.id] ?? [] }}
@@ -142,11 +143,13 @@
           {currentRound}
           height={scopeHeight}
           focusedEndpointId={null}
+          p99Across={0}
           onDrill={handleDrill}
         />
       {/each}
     </div>
   {:else}
+    <!-- TODO Task 5: replace p99Across={0} with $derived(Math.max(0, ...monitored.map(ep => stats[ep.id]?.p99 ?? 0))) -->
     <ScopeCanvas
       endpoints={visibleEndpoints}
       {samplesByEndpoint}
@@ -154,6 +157,7 @@
       {currentRound}
       height={scopeHeight}
       focusedEndpointId={soloEndpoint ? null : focusedId}
+      p99Across={0}
       onDrill={handleDrill}
     />
   {/if}
