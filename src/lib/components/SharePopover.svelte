@@ -233,7 +233,7 @@
         <div class="action-info">
           <span class="action-label">Results link</span>
           <span class="action-desc">
-            {hasResults ? 'Shares measurement results' : 'Run a test first to share results'}
+            {hasResults ? 'Shares samples so the diagnostic answer opens with the link' : 'Run a test first to share results'}
           </span>
         </div>
         <button

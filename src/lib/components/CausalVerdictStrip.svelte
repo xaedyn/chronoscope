@@ -1,12 +1,12 @@
 <!-- src/lib/components/CausalVerdictStrip.svelte -->
 <!-- Single-sentence diagnosis with backing triptych + drill CTA. Pure render  -->
-<!-- — verdict is computed in the parent via verdict.ts and passed in whole.   -->
+<!-- — diagnosis is computed in the parent and passed in whole.                -->
 <script lang="ts">
-  import type { Verdict } from '$lib/utils/verdict';
+  import type { DiagnosticNarrative } from '$lib/utils/diagnostic-narrative';
   import type { Endpoint } from '$lib/types';
 
   interface Props {
-    verdict: Verdict;
+    diagnosis: DiagnosticNarrative;
     avgP50: number | null;
     avgJitter: number | null;
     avgLoss: number | null;
@@ -14,7 +14,10 @@
     onDrill: (epId: string) => void;
   }
 
-  let { verdict, avgP50, avgJitter, avgLoss, drillEndpoint, onDrill }: Props = $props();
+  let { diagnosis, avgP50, avgJitter, avgLoss, drillEndpoint, onDrill }: Props = $props();
+  const verdict = $derived(diagnosis.verdict);
+  const primaryLimitation = $derived(diagnosis.limitations[0] ?? null);
+  const primaryNextStep = $derived(diagnosis.nextSteps[0] ?? null);
 
   const fmtInt = (n: number | null): string => (n == null ? '—' : String(Math.round(n)));
   const fmt1 = (n: number | null): string => (n == null ? '—' : n.toFixed(1));
@@ -30,7 +33,17 @@
   <div class="verdict-main">
     <span class="verdict-dot" aria-hidden="true"></span>
     <h2 class="verdict-headline">{verdict.headline}</h2>
+    <span
+      class="verdict-confidence"
+      class:low={diagnosis.confidence === 'low'}
+      class:medium={diagnosis.confidence === 'medium'}
+      class:high={diagnosis.confidence === 'high'}
+      title={diagnosis.confidenceReason}
+    >{diagnosis.confidenceLabel}</span>
   </div>
+  {#if diagnosis.kind !== 'collecting'}
+    <p class="verdict-explanation">{diagnosis.explanation}</p>
+  {/if}
 
   <dl class="verdict-metrics">
     <div class="verdict-metric">
@@ -68,6 +81,23 @@
       <span class="verdict-drill-arrow" aria-hidden="true">→</span>
     </button>
   {/if}
+
+  {#if diagnosis.kind !== 'collecting'}
+    <div class="verdict-extra">
+      {#if primaryLimitation}
+        <p class="verdict-limit">
+          <span class="verdict-extra-label">Limit</span>
+          <span>{primaryLimitation.headline}</span>
+        </p>
+      {/if}
+      {#if primaryNextStep}
+        <p class="verdict-next">
+          <span class="verdict-extra-label">Next</span>
+          <span>{primaryNextStep}</span>
+        </p>
+      {/if}
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -97,6 +127,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
   }
   .verdict-dot {
     width: 8px; height: 8px;
@@ -126,6 +157,41 @@
     font-size: var(--ts-base);
     font-weight: 500;
     letter-spacing: var(--tr-tight);
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+  .verdict-confidence {
+    flex: 0 0 auto;
+    padding: 3px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border-mid);
+    color: var(--t2);
+    background: rgba(255, 255, 255, 0.035);
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+    letter-spacing: var(--tr-kicker);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .verdict-confidence.high {
+    color: var(--accent-green);
+    border-color: rgba(134, 239, 172, 0.24);
+    background: rgba(134, 239, 172, 0.06);
+  }
+  .verdict-confidence.medium {
+    color: var(--accent-cyan);
+    border-color: rgba(103, 232, 249, 0.24);
+    background: rgba(103, 232, 249, 0.05);
+  }
+  .verdict-confidence.low {
+    color: var(--t3);
+  }
+  .verdict-explanation {
+    grid-column: 1 / -1;
+    margin: -4px 0 0 18px;
+    color: var(--t3);
+    font-size: var(--ts-sm);
+    line-height: 1.35;
   }
 
   .verdict-metrics {
@@ -204,10 +270,53 @@
   }
   .verdict-drill-arrow { color: var(--accent-cyan); }
 
+  .verdict-extra {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    padding-top: 9px;
+    border-top: 1px solid var(--border-mid);
+  }
+  .verdict-limit,
+  .verdict-next {
+    margin: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+    color: var(--t3);
+    font-size: var(--ts-xs);
+    line-height: 1.35;
+  }
+  .verdict-limit span:last-child,
+  .verdict-next span:last-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .verdict-extra-label {
+    flex: 0 0 auto;
+    font-family: var(--mono);
+    color: var(--t4);
+    letter-spacing: var(--tr-kicker);
+    text-transform: uppercase;
+  }
+
   @media (max-width: 767px) {
     .verdict { grid-template-columns: 1fr; padding: 10px 12px; gap: 8px 14px; }
+    .verdict-main { gap: 8px; }
+    .verdict-confidence { padding: 2px 6px; }
+    .verdict-explanation {
+      margin-left: 0;
+      font-size: var(--ts-xs);
+      line-height: 1.25;
+    }
     .verdict-metrics { flex-wrap: wrap; gap: 10px 14px; padding-top: 6px; }
     .verdict-metric-num { font-size: var(--ts-lg); }
+    .verdict-extra { display: none; }
     .verdict-drill {
       /* Reset the desktop placement (grid-column: 2; grid-row: 2;
          justify-self: end) so the button sits under the metrics row
