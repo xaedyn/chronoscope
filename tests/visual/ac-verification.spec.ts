@@ -1,4 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
+import { encodeSharePayload } from '../../src/lib/share/share-manager';
+import { MAX_CAP } from '../../src/lib/limits';
+import type { SharePayload } from '../../src/lib/types';
 
 async function uniqueEndpointIds(page: Page): Promise<string[]> {
   await page.waitForSelector('[data-endpoint-id]', { state: 'attached', timeout: 3000 });
@@ -24,6 +27,46 @@ async function injectVisibleSamples(page: Page): Promise<void> {
       jitterMs: 3,
     })));
   }, ids);
+}
+
+function sharedReportUrl(): string {
+  const endpoints = [
+    { url: 'https://api.example.com', enabled: true },
+    { url: 'https://www.google.com', enabled: true },
+    { url: 'https://www.cloudflare.com', enabled: true },
+  ];
+  const results = [240, 45, 38].map((latency) => ({
+    samples: Array.from({ length: 35 }, (_, i) => ({
+      round: i + 1,
+      latency,
+      status: 'ok' as const,
+    })),
+  }));
+  const payload: SharePayload = {
+    v: 2,
+    mode: 'results',
+    endpoints,
+    settings: {
+      timeout: 5000,
+      delay: 0,
+      burstRounds: 50,
+      monitorDelay: 1000,
+      cap: MAX_CAP,
+      corsMode: 'no-cors',
+    },
+    report: {
+      createdAt: 1778352000000,
+      healthThreshold: 120,
+      corsMode: 'no-cors',
+      roundCount: 35,
+      totalSampleCount: 105,
+      keptSampleCount: 105,
+      truncated: false,
+    },
+    results,
+  };
+
+  return `/#s=${encodeSharePayload(payload)}`;
 }
 
 test.describe('Acceptance criteria verification', () => {
@@ -108,6 +151,19 @@ test.describe('Acceptance criteria verification', () => {
 
     await expect(page.locator('section[aria-label="Diagnostic answer"]')).toBeVisible();
     await expect(page.locator('section[aria-label="Browser visibility"]')).toBeVisible();
+    await expect(page.getByText(/Timing-Allow-Origin/i)).toBeVisible();
+  });
+
+  test('shared result link opens as a diagnostic report', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(sharedReportUrl());
+    await page.waitForSelector('#chronoscope-root');
+
+    await expect(page.getByText('Shared diagnostic report').first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Only api\.example\.com looks slow/i })).toBeVisible();
+    await expect(page.getByText(/medium confidence|high confidence/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: /Open Interactive Analysis/i })).toBeVisible();
+    await expect(page.getByRole('table', { name: /Endpoint report table/i })).toContainText('likely source');
     await expect(page.getByText(/Timing-Allow-Origin/i)).toBeVisible();
   });
 });

@@ -8,11 +8,14 @@
   import { endpointStore } from '$lib/stores/endpoints';
   import { settingsStore } from '$lib/stores/settings';
   import { measurementStore } from '$lib/stores/measurements';
-  import { buildShareURL, estimateShareSize, truncatePayload, toSharedSettings } from '$lib/share/share-manager';
+  import { buildShareURL } from '$lib/share/share-manager';
+  import {
+    buildConfigSharePayload,
+    buildResultsSharePayload,
+    MAX_SHARE_URL_CHARS,
+  } from '$lib/share/share-payload-builder';
   import { tokens } from '$lib/tokens';
   import type { SharePayload } from '$lib/types';
-
-  const MAX_URL_CHARS = 8000;
 
   let popoverEl: HTMLDivElement;
   let copiedConfig = $state(false);
@@ -26,52 +29,21 @@
   );
 
   let configPayload = $derived(buildConfigPayload());
-  let resultsPayload = $derived(hasResults ? buildResultsPayload() : null);
-  let resultsSize = $derived(resultsPayload ? estimateShareSize(resultsPayload) : 0);
-  let resultsTruncated = $derived(resultsSize > MAX_URL_CHARS);
+  let builtResults = $derived(hasResults ? buildResultsPayload() : null);
+  let resultsPayload = $derived(builtResults?.payload ?? null);
+  let resultsTruncated = $derived(builtResults?.truncated ?? false);
 
   function buildConfigPayload(): SharePayload {
-    const endpoints = get(endpointStore);
-    const settings = get(settingsStore);
-    return {
-      v: 1,
-      mode: 'config',
-      endpoints: endpoints.map(ep => ({ url: ep.url, enabled: ep.enabled })),
-      settings: toSharedSettings(settings),
-    };
+    return buildConfigSharePayload(get(endpointStore), get(settingsStore));
   }
 
-  function buildResultsPayload(): SharePayload {
-    const endpoints = get(endpointStore);
-    const settings = get(settingsStore);
-    const mstate = get(measurementStore);
-
-    const results = endpoints.map(ep => {
-      const epState = mstate.endpoints[ep.id];
-      return {
-        samples: (epState?.samples ?? []).map(s => ({
-          round: s.round,
-          latency: s.latency,
-          status: s.status,
-          ...(s.tier2 ? { tier2: s.tier2 } : {}),
-        })),
-      };
-    });
-
-    const payload: SharePayload = {
-      v: 1,
-      mode: 'results',
-      endpoints: endpoints.map(ep => ({ url: ep.url, enabled: ep.enabled })),
-      settings: toSharedSettings(settings),
-      results,
-    };
-
-    // Auto-truncate if too large
-    if (estimateShareSize(payload) > MAX_URL_CHARS) {
-      return truncatePayload(payload, MAX_URL_CHARS);
-    }
-
-    return payload;
+  function buildResultsPayload() {
+    return buildResultsSharePayload(
+      get(endpointStore),
+      get(settingsStore),
+      get(measurementStore),
+      MAX_SHARE_URL_CHARS,
+    );
   }
 
   async function handleCopyConfig(): Promise<void> {
