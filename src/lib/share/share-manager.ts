@@ -57,7 +57,7 @@ function validateSharePayload(data: unknown): SharePayload | null {
   if (data === null || typeof data !== 'object') return null;
   const obj = data as Record<string, unknown>;
 
-  if (obj['v'] !== 1) return null;
+  if (obj['v'] !== 1 && obj['v'] !== 2) return null;
   if (obj['mode'] !== 'config' && obj['mode'] !== 'results') return null;
   if (!Array.isArray(obj['endpoints'])) return null;
   if ((obj['endpoints'] as unknown[]).length > 50) return null;
@@ -91,8 +91,36 @@ function validateSharePayload(data: unknown): SharePayload | null {
   if (s['monitorDelay'] !== undefined && (!isNonNegativeFiniteNumber(s['monitorDelay']) || (s['monitorDelay'] as number) > 60000)) return null;
   if (s['corsMode'] !== 'no-cors' && s['corsMode'] !== 'cors') return null;
 
-  // Reject unknown top-level keys. Allowlist: v, mode, endpoints, settings, results. Symmetric with per-entry — closes future round-trip footgun.
-  const ALLOWED_TOP_LEVEL = new Set(['v', 'mode', 'endpoints', 'settings', 'results']);
+  if (obj['report'] !== undefined) {
+    if (obj['mode'] !== 'results') return null;
+    if (obj['v'] !== 2) return null;
+    const report = obj['report'];
+    if (report === null || typeof report !== 'object') return null;
+    const r = report as Record<string, unknown>;
+    const allowedReportKeys = new Set([
+      'createdAt',
+      'healthThreshold',
+      'corsMode',
+      'roundCount',
+      'totalSampleCount',
+      'keptSampleCount',
+      'truncated',
+    ]);
+    for (const key of Object.keys(r)) {
+      if (!allowedReportKeys.has(key)) return null;
+    }
+    if (!isNonNegativeFiniteNumber(r['createdAt'])) return null;
+    if (!isNonNegativeFiniteNumber(r['healthThreshold']) || (r['healthThreshold'] as number) > 15000) return null;
+    if (r['corsMode'] !== 'no-cors' && r['corsMode'] !== 'cors') return null;
+    if (!isNonNegativeFiniteNumber(r['roundCount']) || (r['roundCount'] as number) > 1_000_000) return null;
+    if (!isNonNegativeFiniteNumber(r['totalSampleCount']) || (r['totalSampleCount'] as number) > 500_000) return null;
+    if (!isNonNegativeFiniteNumber(r['keptSampleCount']) || (r['keptSampleCount'] as number) > 500_000) return null;
+    if ((r['keptSampleCount'] as number) > (r['totalSampleCount'] as number)) return null;
+    if (typeof r['truncated'] !== 'boolean') return null;
+  }
+
+  // Reject unknown top-level keys. Allowlist: v, mode, endpoints, settings, results, report. Symmetric with per-entry.
+  const ALLOWED_TOP_LEVEL = new Set(['v', 'mode', 'endpoints', 'settings', 'results', 'report']);
   for (const key of Object.keys(obj)) {
     if (!ALLOWED_TOP_LEVEL.has(key)) return null;
   }

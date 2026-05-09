@@ -3,7 +3,7 @@
 // and panel visibility. No side effects; all state is local to this module.
 
 import { writable } from 'svelte/store';
-import type { LiveTimeRange, PendingShare, TerminalEventType, UIState } from '../types';
+import type { LiveTimeRange, PendingShare, SharedReportContext, TerminalEventType, UIState } from '../types';
 
 const initialState = (): UIState => ({
   // 'overview' is the v2 default. Phase 7 migration (v6→v7) collapses any
@@ -15,6 +15,8 @@ const initialState = (): UIState => ({
   showShare: false,
   showKeyboardHelp: false,
   isSharedView: false,
+  sharedReportMode: false,
+  sharedReportContext: null,
   pendingShare: null,
   showEndpoints: false,
   focusedEndpointId: null,
@@ -57,7 +59,18 @@ function createUiStore() {
       update((s) => ({ ...s, isSharedView: isShared }));
     },
     clearSharedView(): void {
-      update((s) => ({ ...s, isSharedView: false }));
+      update((s) => ({
+        ...s,
+        isSharedView: false,
+        sharedReportMode: false,
+        sharedReportContext: null,
+      }));
+    },
+    setSharedReportMode(enabled: boolean): void {
+      update((s) => ({ ...s, sharedReportMode: enabled }));
+    },
+    setSharedReportContext(context: SharedReportContext | null): void {
+      update((s) => ({ ...s, sharedReportContext: context }));
     },
     setPendingShare(pending: PendingShare): void {
       update((s) => ({ ...s, pendingShare: pending }));
