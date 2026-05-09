@@ -12,7 +12,8 @@
   import { settingsStore } from '$lib/stores/settings';
   import { uiStore } from '$lib/stores/ui';
   import { networkQualityStore, monitoredEndpointsStore } from '$lib/stores/derived';
-  import { computeCausalVerdict, type Verdict, type VerdictRow } from '$lib/utils/verdict';
+  import { buildDiagnosticNarrative, type DiagnosticNarrative } from '$lib/utils/diagnostic-narrative';
+  import type { VerdictRow } from '$lib/utils/verdict';
   import { tokens } from '$lib/tokens';
   import ChronographDial from './ChronographDial.svelte';
   import CausalVerdictStrip from './CausalVerdictStrip.svelte';
@@ -28,13 +29,14 @@
   // disagree about who's being measured. See PATTERNS.md §3.
   const monitored = $derived($monitoredEndpointsStore);
   const stats = $derived($statisticsStore);
+  const settings = $derived($settingsStore);
 
   // Cross-endpoint p99 — drives unified y-axis ceiling for Dial and RacingStrip.
   // Computed across ALL monitored endpoints (not just visible or focused).
   // Math.max(0, ...empty) === 0, which is the correct sentinel for "no data yet".
   const p99Across = $derived(Math.max(0, ...monitored.map((ep) => stats[ep.id]?.p99 ?? 0)));
   const measurements = $derived($measurementStore);
-  const threshold = $derived($settingsStore.healthThreshold);
+  const threshold = $derived(settings.healthThreshold);
   const score = $derived($networkQualityStore);
   const paused = $derived(
     measurements.lifecycle === 'stopped' || measurements.lifecycle === 'completed',
@@ -211,7 +213,13 @@
     }
     return rows;
   });
-  const enrichedVerdict: Verdict = $derived(computeCausalVerdict(verdictRows, threshold));
+  const diagnosticNarrative: DiagnosticNarrative = $derived(buildDiagnosticNarrative({
+    rows: verdictRows,
+    threshold,
+    corsMode: settings.corsMode,
+    samplesByEndpoint,
+    monitoredEndpointCount: monitored.length,
+  }));
 
   // Average metrics for the verdict strip triptych (backing evidence).
   const avgP50 = $derived.by(() => {
@@ -236,8 +244,8 @@
   // Drill target for the verdict strip — worstEpId wins; fall back to the
   // overall worst-p95 endpoint. null when all-healthy (no drill shown).
   const drillEndpoint: Endpoint | null = $derived.by(() => {
-    if (enrichedVerdict.tone !== 'warn') return null;
-    const targetId = enrichedVerdict.worstEpId ?? worst?.id ?? null;
+    if (diagnosticNarrative.verdict.tone !== 'warn') return null;
+    const targetId = diagnosticNarrative.verdict.worstEpId ?? worst?.id ?? null;
     if (targetId === null) return null;
     return monitored.find((ep) => ep.id === targetId) ?? null;
   });
@@ -289,7 +297,7 @@
         {p99Across}
       />
       <CausalVerdictStrip
-        verdict={enrichedVerdict}
+        diagnosis={diagnosticNarrative}
         {avgP50}
         {avgJitter}
         {avgLoss}
