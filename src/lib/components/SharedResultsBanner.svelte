@@ -5,6 +5,12 @@
   import { uiStore } from '$lib/stores/ui';
   import { measurementStore } from '$lib/stores/measurements';
 
+  const reportMode = $derived($uiStore.sharedReportMode);
+
+  function handleToggleReport(): void {
+    uiStore.setSharedReportMode(!reportMode);
+  }
+
   function handleRunAgain(): void {
     uiStore.clearSharedView();
     measurementStore.reset();
@@ -18,15 +24,24 @@
 >
   <div class="banner-content">
     <span class="banner-icon" aria-hidden="true">↗</span>
-    <span class="banner-text">Shared results — read only. Run your own test to measure from your location.</span>
+    <span class="banner-text">Shared diagnostic report — read only. Run your own test to measure from your location.</span>
   </div>
-  <button
-    type="button"
-    class="btn-run-again"
-    onclick={handleRunAgain}
-  >
-    Run Your Own Test
-  </button>
+  <div class="banner-actions">
+    <button
+      type="button"
+      class="btn-banner"
+      onclick={handleToggleReport}
+    >
+      {reportMode ? 'Open Interactive Analysis' : 'View Report'}
+    </button>
+    <button
+      type="button"
+      class="btn-banner btn-run-again"
+      onclick={handleRunAgain}
+    >
+      Run Your Own Test
+    </button>
+  </div>
 </div>
 
 <style>
@@ -71,7 +86,14 @@
     text-overflow: ellipsis;
   }
 
-  .btn-run-again {
+  .banner-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    flex-shrink: 0;
+  }
+
+  .btn-banner {
     flex-shrink: 0;
     padding: var(--spacing-xs) var(--spacing-sm);
     border: 1px solid var(--accent-cyan);
@@ -89,7 +111,7 @@
     align-items: center;
   }
 
-  .btn-run-again:hover {
+  .btn-banner:hover {
     background: var(--accent-cyan);
     color: var(--bg-base);
   }
@@ -99,6 +121,11 @@
     .shared-banner {
       flex-direction: column;
       align-items: flex-start;
+    }
+
+    .banner-actions {
+      width: 100%;
+      flex-wrap: wrap;
     }
 
     .banner-text {

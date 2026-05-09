@@ -230,7 +230,7 @@
 <div id="chronoscope-root">
   {#if $uiStore.pendingShare}
     <ConfigStagingBanner />
-  {:else if $uiStore.isSharedView}
+  {:else if $uiStore.isSharedView && !$uiStore.sharedReportMode}
     <SharedResultsBanner />
   {/if}
   <Layout onStart={handleStart} onStop={handleStop} />

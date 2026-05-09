@@ -19,7 +19,13 @@ import { parseShareURL } from './share-manager';
 import { endpointStore, MAX_ENDPOINTS } from '../stores/endpoints';
 import { measurementStore } from '../stores/measurements';
 import { uiStore } from '../stores/ui';
-import type { SharePayload, MeasurementSample, SampleStatus, Endpoint } from '../types';
+import type {
+  SharePayload,
+  MeasurementSample,
+  SampleStatus,
+  Endpoint,
+  SharedReportContext,
+} from '../types';
 import { tokens } from '../tokens';
 import { get } from 'svelte/store';
 import { displayLabel } from '../endpoint/displayLabel';
@@ -76,6 +82,51 @@ function buildEndpoints(
   }));
 }
 
+function countResultSamples(results: NonNullable<SharePayload['results']>): number {
+  let count = 0;
+  for (const result of results) count += result.samples.length;
+  return count;
+}
+
+function inferRoundCounter(results: NonNullable<SharePayload['results']>): number {
+  let maxRound = 0;
+  for (const result of results) {
+    for (const sample of result.samples) {
+      if (sample.round > maxRound) maxRound = sample.round;
+    }
+  }
+  return maxRound;
+}
+
+function buildSharedReportContext(payload: SharePayload): SharedReportContext | null {
+  if (payload.mode !== 'results' || !payload.results) return null;
+
+  const keptSampleCount = countResultSamples(payload.results);
+  if (payload.v === 2 && payload.report) {
+    return {
+      createdAt: payload.report.createdAt,
+      healthThreshold: payload.report.healthThreshold,
+      corsMode: payload.report.corsMode,
+      roundCount: payload.report.roundCount,
+      totalSampleCount: payload.report.totalSampleCount,
+      keptSampleCount: payload.report.keptSampleCount,
+      truncated: payload.report.truncated,
+      sourceVersion: 2,
+    };
+  }
+
+  return {
+    createdAt: null,
+    healthThreshold: null,
+    corsMode: payload.settings.corsMode,
+    roundCount: inferRoundCounter(payload.results),
+    totalSampleCount: keptSampleCount,
+    keptSampleCount,
+    truncated: false,
+    sourceVersion: 1,
+  };
+}
+
 /**
  * Apply a decoded SharePayload.
  *
@@ -99,6 +150,8 @@ export function applySharePayload(payload: SharePayload): string[] {
       mode: 'config',
       endpoints: uniqueEndpoints(payload.endpoints),
     });
+    uiStore.setSharedReportMode(false);
+    uiStore.setSharedReportContext(null);
     return [];
   }
 
@@ -172,9 +225,13 @@ export function applySharePayload(payload: SharePayload): string[] {
 
     measurementStore.loadSnapshot(snapshot);
 
+    uiStore.setSharedReportContext(buildSharedReportContext(payload));
     uiStore.setSharedView(true);
+    uiStore.setSharedReportMode(true);
   } else {
     uiStore.setSharedView(false);
+    uiStore.setSharedReportMode(false);
+    uiStore.setSharedReportContext(null);
   }
 
   return ids;

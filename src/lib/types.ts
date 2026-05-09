@@ -250,6 +250,8 @@ export interface UIState {
   showShare: boolean;
   showKeyboardHelp: boolean;
   isSharedView: boolean;
+  sharedReportMode: boolean;
+  sharedReportContext: SharedReportContext | null;
   pendingShare: PendingShare | null;
   showEndpoints: boolean;
 
@@ -274,8 +276,29 @@ export interface UIState {
 }
 
 // ── Share payload ──────────────────────────────────────────────────────────
+export interface ShareReportMetadata {
+  readonly createdAt: number;
+  readonly healthThreshold: number;
+  readonly corsMode: 'no-cors' | 'cors';
+  readonly roundCount: number;
+  readonly totalSampleCount: number;
+  readonly keptSampleCount: number;
+  readonly truncated: boolean;
+}
+
+export interface SharedReportContext {
+  readonly createdAt: number | null;
+  readonly healthThreshold: number | null;
+  readonly corsMode: 'no-cors' | 'cors' | null;
+  readonly roundCount: number;
+  readonly totalSampleCount: number;
+  readonly keptSampleCount: number;
+  readonly truncated: boolean;
+  readonly sourceVersion: 1 | 2;
+}
+
 export interface SharePayload {
-  readonly v: 1;
+  readonly v: 1 | 2;
   readonly mode: 'config' | 'results';
   readonly endpoints: readonly { url: string; enabled: boolean }[];
   readonly settings: {
@@ -286,6 +309,7 @@ export interface SharePayload {
     readonly cap: number;
     readonly corsMode: 'no-cors' | 'cors';
   };
+  readonly report?: ShareReportMetadata;
   readonly results?: readonly {
     readonly samples: readonly {
       readonly round: number;
@@ -318,4 +342,3 @@ export interface PersistedSettings {
     terminalFilters?: TerminalEventType[];
   };
 }
-

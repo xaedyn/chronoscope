@@ -75,12 +75,33 @@ describe('share-manager', () => {
     expect(decodeSharePayload('')).toBeNull();
   });
 
-  it('returns null for wrong schema version', async () => {
-    const badPayload = { v: 2, mode: 'config', endpoints: [], settings: {} };
+  it('returns null for unsupported schema version', async () => {
+    const badPayload = { v: 3, mode: 'config', endpoints: [], settings: {} };
     // Manually encode so we bypass our own encodeSharePayload typed guard
     const { default: LZString } = await import('lz-string');
     const manualEncoded = LZString.compressToEncodedURIComponent(JSON.stringify(badPayload));
     expect(decodeSharePayload(manualEncoded)).toBeNull();
+  });
+
+  it('round-trips v2 report metadata for result payloads', () => {
+    const payload: SharePayload = {
+      ...resultsPayload,
+      v: 2,
+      report: {
+        createdAt: 1778352000000,
+        healthThreshold: 120,
+        corsMode: 'no-cors',
+        roundCount: 50,
+        totalSampleCount: 100,
+        keptSampleCount: 100,
+        truncated: false,
+      },
+    };
+
+    const decoded = decodeSharePayload(encodeSharePayload(payload));
+    expect(decoded?.v).toBe(2);
+    expect(decoded?.report?.healthThreshold).toBe(120);
+    expect(decoded?.report?.keptSampleCount).toBe(100);
   });
 
   it('config-only payload is small', () => {

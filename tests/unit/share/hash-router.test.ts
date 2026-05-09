@@ -75,6 +75,22 @@ function resultsPayload(): SharePayload {
   };
 }
 
+function reportPayload(): SharePayload {
+  return {
+    ...resultsPayload(),
+    v: 2,
+    report: {
+      createdAt: 1778352000000,
+      healthThreshold: 140,
+      corsMode: 'cors',
+      roundCount: 10,
+      totalSampleCount: 20,
+      keptSampleCount: 20,
+      truncated: false,
+    },
+  };
+}
+
 beforeEach(() => {
   endpointStore.setEndpoints([]);
   settingsStore.reset();
@@ -330,5 +346,32 @@ describe('hash-router: results-mode application', () => {
     applySharePayload(resultsPayload());
     const m = get(measurementStore);
     expect(m.lifecycle).toBe('completed');
+  });
+
+  it('opens result links in shared report mode', () => {
+    applySharePayload(resultsPayload());
+    expect(get(uiStore).sharedReportMode).toBe(true);
+  });
+
+  it('stores v2 report metadata without writing runtime settings', () => {
+    applySharePayload(reportPayload());
+
+    const ui = get(uiStore);
+    expect(ui.sharedReportContext?.healthThreshold).toBe(140);
+    expect(ui.sharedReportContext?.corsMode).toBe('cors');
+    expect(ui.sharedReportContext?.sourceVersion).toBe(2);
+
+    const s = get(settingsStore);
+    expect(s.healthThreshold).toBe(DEFAULT_SETTINGS.healthThreshold);
+    expect(s.corsMode).toBe(DEFAULT_SETTINGS.corsMode);
+  });
+
+  it('infers legacy v1 report context from results without threshold metadata', () => {
+    applySharePayload(resultsPayload());
+    const context = get(uiStore).sharedReportContext;
+    expect(context?.sourceVersion).toBe(1);
+    expect(context?.healthThreshold).toBeNull();
+    expect(context?.corsMode).toBe(MALICIOUS_CADENCE.corsMode);
+    expect(context?.keptSampleCount).toBe(20);
   });
 });
