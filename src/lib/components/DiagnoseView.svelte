@@ -8,8 +8,10 @@
 <script lang="ts">
   import { monitoredEndpointsStore } from '$lib/stores/derived';
   import { measurementStore } from '$lib/stores/measurements';
+  import { settingsStore } from '$lib/stores/settings';
   import { statisticsStore } from '$lib/stores/statistics';
   import { uiStore } from '$lib/stores/ui';
+  import { describeTimingVisibility, type DiagnosticConfidence } from '$lib/utils/diagnostic-narrative';
   import { phaseHypothesis, PHASE_LABELS, type PhaseBreakdown, type Tier2Phase } from '$lib/utils/verdict';
   import { buildHistogram, buildCorrelation } from '$lib/utils/diagnose-stats';
   import { fmt, axisEdgeLabel, binLabel } from '$lib/utils/format';
@@ -19,6 +21,7 @@
   const monitored = $derived($monitoredEndpointsStore);
   const stats = $derived($statisticsStore);
   const measurements = $derived($measurementStore);
+  const settings = $derived($settingsStore);
   const focusedId = $derived($uiStore.focusedEndpointId);
 
   const focusedEndpoint = $derived(
@@ -145,6 +148,21 @@
     );
   });
 
+  const timingVisibility = $derived(describeTimingVisibility(focusedAllSamples, settings.corsMode));
+  const diagnoseConfidence: DiagnosticConfidence = $derived.by(() => {
+    if (!focusedEndpoint || !distroStats) return 'low';
+    if (distroStats.n < 8) return 'low';
+    if (monitored.length >= 3 && distroStats.n >= 16) return 'high';
+    return 'medium';
+  });
+  const diagnoseConfidenceReason = $derived.by(() => {
+    if (!focusedEndpoint || !distroStats) return 'Waiting for successful samples on the focused endpoint.';
+    const comparatorCount = Math.max(0, monitored.length - 1);
+    if (distroStats.n < 8) return `${distroStats.n} successful samples so far; spike comparison needs more history.`;
+    if (comparatorCount < 2) return `Only ${comparatorCount} comparison endpoint${comparatorCount === 1 ? '' : 's'} enabled.`;
+    return `${distroStats.n} focused samples with ${comparatorCount} comparison endpoints.`;
+  });
+
   interface SampleRow { round: number; total: number; segs: { phase: Tier2Phase; pctWidth: number; color: string; }[]; status: 'ok' | 'timeout' | 'error' | 'no-tier2'; }
   const sampleRows: readonly SampleRow[] = $derived.by(() => {
     return recentSamples.map((s) => {
@@ -267,6 +285,45 @@
         </div>
       {:else}
         <p class="distro-empty">Need at least 2 samples with different latencies before a distribution chart is meaningful. Run for a few more rounds.</p>
+      {/if}
+    </section>
+
+    <section class="diagnose-answer" aria-label="Diagnostic answer">
+      <div class="diagnose-section-kicker">Diagnostic answer</div>
+      <div class="diagnose-answer-top">
+        <span
+          class="diagnose-confidence"
+          class:low={diagnoseConfidence === 'low'}
+          class:medium={diagnoseConfidence === 'medium'}
+          class:high={diagnoseConfidence === 'high'}
+          title={diagnoseConfidenceReason}
+        >{diagnoseConfidence} confidence</span>
+        <p class="diagnose-answer-headline">
+          {correlation?.verdict.headline ?? 'Collecting comparison data for this endpoint.'}
+        </p>
+      </div>
+      <dl class="diagnose-answer-evidence">
+        <div>
+          <dt>Samples</dt>
+          <dd>{distroStats?.n ?? 0}</dd>
+        </div>
+        <div>
+          <dt>Comparators</dt>
+          <dd>{Math.max(0, monitored.length - 1)}</dd>
+        </div>
+        <div>
+          <dt>Visibility</dt>
+          <dd>{timingVisibility.headline}</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="diagnose-visibility" aria-label="Browser visibility">
+      <div class="diagnose-section-kicker">Browser visibility</div>
+      <p class="visibility-headline">{timingVisibility.headline}</p>
+      <p class="visibility-detail">{timingVisibility.detail}</p>
+      {#if timingVisibility.action}
+        <p class="visibility-action">{timingVisibility.action}</p>
       {/if}
     </section>
 
@@ -515,6 +572,104 @@
     font-size: var(--ts-sm);
     margin: 0;
     padding: 8px 0;
+  }
+
+  /* ── Diagnostic answer + browser visibility ───────────────────────────── */
+  .diagnose-answer,
+  .diagnose-visibility {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.025);
+    border: 1px solid var(--border-mid);
+    border-radius: 10px;
+  }
+  .diagnose-answer-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .diagnose-answer-headline,
+  .visibility-headline,
+  .visibility-detail,
+  .visibility-action {
+    margin: 0;
+  }
+  .diagnose-answer-headline {
+    flex: 1 1 240px;
+    min-width: 0;
+    color: var(--t1);
+    font-size: var(--ts-md);
+    line-height: 1.4;
+  }
+  .diagnose-confidence {
+    flex: 0 0 auto;
+    padding: 3px 7px;
+    border-radius: 999px;
+    border: 1px solid var(--border-mid);
+    color: var(--t2);
+    background: rgba(255, 255, 255, 0.035);
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+    letter-spacing: var(--tr-kicker);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .diagnose-confidence.high {
+    color: var(--accent-green);
+    border-color: rgba(134, 239, 172, 0.24);
+    background: rgba(134, 239, 172, 0.06);
+  }
+  .diagnose-confidence.medium {
+    color: var(--accent-cyan);
+    border-color: rgba(103, 232, 249, 0.24);
+    background: rgba(103, 232, 249, 0.05);
+  }
+  .diagnose-confidence.low {
+    color: var(--t3);
+  }
+  .diagnose-answer-evidence {
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .diagnose-answer-evidence div {
+    min-width: 0;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-mid);
+  }
+  .diagnose-answer-evidence dt {
+    margin: 0 0 3px;
+    color: var(--t4);
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+    letter-spacing: var(--tr-kicker);
+    text-transform: uppercase;
+  }
+  .diagnose-answer-evidence dd {
+    margin: 0;
+    color: var(--t1);
+    font-family: var(--mono);
+    font-size: var(--ts-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .visibility-headline {
+    color: var(--t1);
+    font-size: var(--ts-md);
+  }
+  .visibility-detail,
+  .visibility-action {
+    color: var(--t3);
+    font-size: var(--ts-sm);
+    line-height: 1.45;
+  }
+  .visibility-action {
+    color: var(--accent-cyan);
   }
 
   /* ── Cross-endpoint correlation ────────────────────────────────────────── */
@@ -928,6 +1083,7 @@
   @media (max-width: 767px) {
     .diagnose { padding: 12px; gap: 12px; }
     .diagnose-header { flex-direction: column; align-items: flex-start; }
+    .diagnose-answer-evidence { grid-template-columns: 1fr; }
     .diagnose-evidence-row { grid-template-columns: 10px 110px 70px 1fr 40px; }
   }
 </style>

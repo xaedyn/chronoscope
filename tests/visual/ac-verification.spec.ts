@@ -94,6 +94,22 @@ test.describe('Acceptance criteria verification', () => {
     await expect(page.locator('section[aria-label="Per-endpoint comparison"]')).toBeVisible();
     await expect(page.locator('section[aria-label="Recent events"]')).toBeAttached();
   });
+
+  test('diagnostic narrative exposes confidence and browser timing limits', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('/');
+    await page.waitForSelector('#chronoscope-root');
+    await injectVisibleSamples(page);
+
+    await expect(page.locator('.verdict-confidence')).toContainText(/confidence/i);
+
+    await page.locator('button[data-endpoint-id]').first().click();
+    await page.getByRole('button', { name: /^Diagnose/ }).click();
+
+    await expect(page.locator('section[aria-label="Diagnostic answer"]')).toBeVisible();
+    await expect(page.locator('section[aria-label="Browser visibility"]')).toBeVisible();
+    await expect(page.getByText(/Timing-Allow-Origin/i)).toBeVisible();
+  });
 });
 
 const VIEWPORTS = [
