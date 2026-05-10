@@ -16,6 +16,7 @@ Implement a first PR called "Verdict-First Chronoscope" with these changes:
 - Rename the primary view from `Overview` to `Status`.
 - Rename `Diagnose` to `Investigate`.
 - Hide disabled `Strata` and `Terminal` tabs from the visible view switcher.
+- Make default, non-shared sessions feel live immediately through safe auto-start or a strong ready-to-measure state.
 - Promote the plain-language diagnostic answer above the dial on the first screen.
 - Keep the live dial and per-endpoint comparison visible as the S80 inheritance.
 - Auto-select the most useful endpoint when entering `Investigate`.
@@ -56,6 +57,29 @@ The dial remains important, but it becomes the live instrument that supports the
 
 The per-endpoint comparison stays prominent because this is the direct S80 lineage: multiple endpoints measured together, with current latency and tail behavior visible at a glance.
 
+## Open-and-Alive Behavior
+
+S80's strongest product lesson is that measurement starts without ceremony. Chronoscope should adopt that feeling without weakening its safety model.
+
+Default behavior:
+
+- On a normal app visit where every enabled endpoint is public and no shared payload is pending, Chronoscope should begin measuring automatically after bootstrap.
+- Auto-start should not run in shared report mode.
+- Auto-start should not run while a config-mode shared payload is staged for user acceptance.
+- Auto-start should not run when every endpoint is disabled.
+- Auto-start should not run when any enabled endpoint is private, loopback, link-local, or otherwise local-only; those sessions remain explicit-start unless the user has already saved a future opt-in setting. This PR does not need to add that opt-in.
+
+If auto-start is suppressed, the first answer surface must say why in plain language and offer a single obvious Start action. The product should never open with a vague `Halted` label that makes a healthy idle state feel broken.
+
+Topbar lifecycle language should become more human:
+
+- `Ready` before a run starts.
+- `Measuring` while running.
+- `Paused` or `Stopped` only after the user explicitly stops a run.
+- `Complete` after a capped run finishes.
+
+This protects the S80 immediacy without making shared links or sensitive local endpoints unexpectedly generate traffic.
+
 ## Investigate Auto-Selection
 
 When the user opens `Investigate` and no endpoint is focused, Chronoscope should choose a sensible endpoint automatically.
@@ -72,6 +96,8 @@ The view may still show an empty state only when there are no monitored endpoint
 
 This auto-selection should set `uiStore.focusedEndpointId` so the rail, Live, and Investigate remain consistent.
 
+Implementation should use one shared pure helper, not view-local duplicate logic, so Status CTAs, rail focus, and Investigate agree on the same recommended target.
+
 ## Diagnostic Answer
 
 The answer surface should include:
@@ -82,6 +108,7 @@ The answer surface should include:
 - Baseline chip when history evidence exists.
 - Median, jitter, and loss summary.
 - A clear next action, preferably a single primary "Investigate ..." CTA when there is a target endpoint.
+- A collecting-progress state that says how many samples are needed before Chronoscope can make a stronger call.
 
 The tone should be direct and human:
 
@@ -89,6 +116,7 @@ The tone should be direct and human:
 - Shared problem: "Multiple endpoints slowed together, so this looks local to your network or shared path."
 - Isolated problem: "Google is slow while comparison endpoints are normal, so this looks endpoint-specific."
 - Collecting: "Collecting enough samples to make a call."
+- Auto-start suppressed: "Ready to measure. Start when you want Chronoscope to probe your saved endpoints."
 
 ## Mobile Behavior
 
@@ -118,6 +146,9 @@ Unit/component tests should cover:
 
 - View switcher visible labels: Status, Live, Investigate.
 - Disabled Strata/Terminal tabs are not rendered in the visible navigation.
+- Default public-endpoint sessions auto-start after bootstrap.
+- Shared report, staged shared config, all-disabled endpoint, and local-only endpoint states do not auto-start.
+- Idle topbar/status copy says Ready rather than Halted.
 - Investigate auto-selects `worstEpId` when available.
 - Investigate falls back to highest p95 when no explicit worst endpoint exists.
 - Investigate preserves an existing focused endpoint.
@@ -127,6 +158,7 @@ Visual/browser checks should cover:
 
 - Desktop Status first paint at 1440x900: answer visible above the dial.
 - Mobile Status first paint around 390x844: verdict visible before large charts dominate.
+- Default desktop/mobile visits show live measurement progress without requiring the user to discover the Start button.
 - Desktop Investigate with data and no prior focus: endpoint detail appears without manual rail selection.
 - Mobile Investigate with data and no prior focus: endpoint detail appears without a blank picker state.
 
