@@ -18,9 +18,12 @@ function isTransitioning(lifecycle: TestLifecycleState): boolean {
   return lifecycle === 'starting' || lifecycle === 'stopping';
 }
 
-// Replicates button modifier class logic from Topbar.svelte (single node, class toggle)
-function getStartStopModifier(lifecycle: TestLifecycleState): 'start' | 'stop' {
-  return isStartLifecycle(lifecycle) ? 'start' : 'stop';
+// Replicates Topbar.svelte's class:start and class:stop boolean bindings.
+function getStartStopClasses(lifecycle: TestLifecycleState): { start: boolean; stop: boolean } {
+  return {
+    start: isStartLifecycle(lifecycle),
+    stop: lifecycle === 'running',
+  };
 }
 
 describe('Topbar', () => {
@@ -115,27 +118,27 @@ describe('Topbar', () => {
   // ── Button hierarchy: start / stop / btn-ghost ─────────────────────
 
   it('applies start class when idle', () => {
-    expect(getStartStopModifier('idle')).toBe('start');
+    expect(getStartStopClasses('idle')).toEqual({ start: true, stop: false });
   });
 
   it('applies start class when stopped', () => {
-    expect(getStartStopModifier('stopped')).toBe('start');
+    expect(getStartStopClasses('stopped')).toEqual({ start: true, stop: false });
   });
 
   it('applies start class when completed', () => {
-    expect(getStartStopModifier('completed')).toBe('start');
+    expect(getStartStopClasses('completed')).toEqual({ start: true, stop: false });
   });
 
   it('applies stop class when running', () => {
-    expect(getStartStopModifier('running')).toBe('stop');
+    expect(getStartStopClasses('running')).toEqual({ start: false, stop: true });
   });
 
-  it('applies stop class during starting transition', () => {
-    expect(getStartStopModifier('starting')).toBe('stop');
+  it('does not apply start or stop class during starting transition', () => {
+    expect(getStartStopClasses('starting')).toEqual({ start: false, stop: false });
   });
 
-  it('applies stop class during stopping transition', () => {
-    expect(getStartStopModifier('stopping')).toBe('stop');
+  it('does not apply start or stop class during stopping transition', () => {
+    expect(getStartStopClasses('stopping')).toEqual({ start: false, stop: false });
   });
 
   // Secondary buttons are always btn-ghost (verified by template — class is static)
