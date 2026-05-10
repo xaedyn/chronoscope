@@ -25,7 +25,7 @@ describe('remoteVantageStore', () => {
   it('runs remote probes only for enabled endpoints and stores edge evidence', async () => {
     const client: RemoteVantageClient = {
       checkHealth: vi.fn(),
-      runProbe: vi.fn(async () => ({
+      runProbe: vi.fn(() => Promise.resolve({
         ok: true,
         generatedAt: 1778352000000,
         edge: { colo: 'IAD', country: 'US' },
@@ -64,7 +64,7 @@ describe('remoteVantageStore', () => {
     const client: RemoteVantageClient = {
       checkHealth: vi.fn(),
       runProbe: vi.fn(),
-      createHostedReport: vi.fn(async () => ({
+      createHostedReport: vi.fn(() => Promise.resolve({
         ok: false,
         fallback: 'hash',
         error: 'Report persistence is not configured.',
