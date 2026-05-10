@@ -2,9 +2,8 @@
 <!-- Investigate view surface; internal diagnose route/component names remain. -->
 <!-- For the rail-focused endpoint: horizontal phase-bar waterfall (dns /     -->
 <!-- tcp / tls / ttfb / transfer) in P50 or P95 mode, a one-sentence phase    -->
-<!-- hypothesis, and the last 8 samples as mini phase bars. Empty-state       -->
-<!-- prompt when no endpoint is focused — the rail is the only endpoint       -->
-<!-- picker (Phase 1 non-negotiable).                                          -->
+<!-- hypothesis, and the last 8 samples as mini phase bars. Direct entry       -->
+<!-- auto-selects an investigation target when focus is missing or stale.       -->
 <script lang="ts">
   import { monitoredEndpointsStore } from '$lib/stores/derived';
   import { measurementStore } from '$lib/stores/measurements';
@@ -17,6 +16,7 @@
   import { phaseHypothesis, PHASE_LABELS, type PhaseBreakdown, type Tier2Phase } from '$lib/utils/verdict';
   import { buildHistogram, buildCorrelation } from '$lib/utils/diagnose-stats';
   import { fmt, axisEdgeLabel, binLabel } from '$lib/utils/format';
+  import { selectInvestigationEndpointId } from '$lib/utils/status-intent';
   import { tokens } from '$lib/tokens';
   import type { MeasurementSample } from '$lib/types';
 
@@ -30,6 +30,20 @@
   const focusedEndpoint = $derived(
     focusedId === null ? null : monitored.find((ep) => ep.id === focusedId) ?? null,
   );
+
+  $effect(() => {
+    if ($uiStore.activeView !== 'diagnose') return;
+    const next = selectInvestigationEndpointId({
+      monitored,
+      stats,
+      measurements,
+      currentFocusedId: focusedId,
+    });
+    if (next !== null && next !== focusedId) {
+      uiStore.setFocusedEndpoint(next);
+    }
+  });
+
   const focusedStats = $derived(focusedEndpoint ? stats[focusedEndpoint.id] : undefined);
   const remoteInsight = $derived(buildRemoteVantageInsight({
     endpoint: focusedEndpoint,
@@ -243,10 +257,14 @@
     {/if}
   </header>
 
-  {#if !focusedEndpoint}
+  {#if monitored.length === 0}
     <div class="diagnose-empty" role="note">
-      <p class="diagnose-empty-title">Pick an endpoint from the left rail to look at it closely.</p>
-      <p class="diagnose-empty-hint">Detail shows you the latency distribution and whether spikes line up across other endpoints.</p>
+      <p class="diagnose-empty-title">Enable an endpoint to investigate it closely.</p>
+      <p class="diagnose-empty-hint">Chronoscope needs at least one monitored endpoint before it can compare distribution and correlation evidence.</p>
+    </div>
+  {:else if !focusedEndpoint}
+    <div class="diagnose-empty" role="note">
+      <p class="diagnose-empty-title">Choosing the best endpoint to investigate...</p>
     </div>
   {:else}
     <!-- Distribution histogram — answers "what's this endpoint's typical latency,
