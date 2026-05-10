@@ -8,7 +8,7 @@
   import { statisticsStore } from '$lib/stores/statistics';
   import { settingsStore } from '$lib/stores/settings';
   import { classify, HEALTH_STYLES, type HealthBucket } from '$lib/utils/classify';
-  import { fmtParts } from '$lib/utils/format';
+  import { compactUrlLabel, fmtParts } from '$lib/utils/format';
 
   const endpoints = $derived($endpointStore);
   const stats = $derived($statisticsStore);
@@ -60,6 +60,7 @@
       {@const parts = epStats?.ready ? fmtParts(epStats.p50) : { num: '—', unit: '' }}
       {@const focused = focusedId === ep.id}
       {@const epColor = ep.color || tokens.color.endpoint[0]}
+      {@const compactUrl = compactUrlLabel(ep.url)}
       <button
         type="button"
         class="rail-row"
@@ -86,7 +87,7 @@
                with the aria-label dedup on line 70. -->
           <span class="rail-row-label">{ep.label.trim() === '' ? ep.url : ep.label}</span>
           {#if ep.label.trim() !== '' && ep.label !== ep.url}
-            <span class="rail-row-url">{ep.url}</span>
+            <span class="rail-row-url" title={ep.url}>{compactUrl}</span>
           {/if}
         </span>
         <span class="rail-row-metric">
