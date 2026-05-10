@@ -54,4 +54,15 @@ describe('ViewSwitcher', () => {
     expect(investigate.getAttribute('aria-current')).toBe('page');
     expect(investigate.getAttribute('aria-pressed')).toBe('true');
   });
+
+  it.each(['strata', 'terminal'] as const)('normalizes hidden active view %s so Status remains active', (view) => {
+    uiStore.setActiveView(view);
+
+    const { getByText } = render(ViewSwitcher);
+    const status = buttonFor(getByText('Status'));
+
+    expect(get(uiStore).activeView).toBe('overview');
+    expect(status.getAttribute('aria-current')).toBe('page');
+    expect(status.getAttribute('aria-pressed')).toBe('true');
+  });
 });

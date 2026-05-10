@@ -79,6 +79,19 @@ describe('persistence', () => {
     expect(loaded?.ui.activeView).toBe('overview');
   });
 
+  it.each(['strata', 'terminal'] as const)('v11 payload with hidden activeView %s coerces to overview', (activeView) => {
+    const hidden = {
+      version: 11,
+      endpoints: [],
+      settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: MAX_CAP, corsMode: 'no-cors', healthThreshold: 120 },
+      ui: { expandedCards: [], activeView, focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
+    };
+    localStorageMock.setItem(PRIMARY_KEY, JSON.stringify(hidden));
+    const loaded = loadPersistedSettings();
+    expect(loaded).not.toBeNull();
+    expect(loaded?.ui.activeView).toBe('overview');
+  });
+
   // ── Reset behavior: pre-v10 payloads → null + both keys cleared ──────────
 
   it('pre-v10 payload (version 9) → returns null AND both storage keys are cleared', () => {
