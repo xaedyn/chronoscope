@@ -427,7 +427,12 @@
     .overview-right[data-subtab="events"] .card-slot--racing { display: none; }
   }
   @media (max-width: 767px) {
-    .overview { padding: 8px 12px; }
+    .overview {
+      padding: 8px 12px;
+      overflow-x: hidden;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
     .status-shell { gap: 10px; }
     .overview-grid { grid-template-columns: 1fr; gap: 10px; }
     .overview-left, .overview-right { gap: 8px; }
