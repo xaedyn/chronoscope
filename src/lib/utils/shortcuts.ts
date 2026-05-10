@@ -1,6 +1,7 @@
 // src/lib/utils/shortcuts.ts
 // Global keyboard shortcut handling. Registered once at app boot.
-// Ignored when focus is in text input or modifier keys are held.
+// Ignored when focus is in text input or system modifiers are held.
+// Alt+digit is reserved for endpoint visibility toggles.
 
 import { endpointStore } from '../stores/endpoints';
 import { uiStore } from '../stores/ui';
@@ -79,6 +80,7 @@ function handleKeydown(e: KeyboardEvent): void {
     default: {
       const digit = digitFromEvent(e);
       if (digit === null) return;
+      if (e.shiftKey) return;
 
       if (e.altKey) {
         toggleEndpointAtIndex(digitIndexFromDigit(digit));
