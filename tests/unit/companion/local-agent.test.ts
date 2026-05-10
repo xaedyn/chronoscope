@@ -16,7 +16,7 @@ interface AgentHistoryStore {
   close(): void;
 }
 
-const agent = await import(pathToFileURL(path.resolve('companion/local-agent.mjs')).href) as {
+const agent = await import(pathToFileURL(path.resolve('companion/local-agent.js')).href) as {
   canonicalSignedRequest(input: {
     method: string;
     path: string;

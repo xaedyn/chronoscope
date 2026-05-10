@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// companion/local-agent.mjs
+// companion/local-agent.js
 // Optional Chronoscope localhost companion. Binds to loopback only and requires
 // signed requests for diagnostics.
 
