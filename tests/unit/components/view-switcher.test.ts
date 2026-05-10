@@ -42,11 +42,15 @@ describe('ViewSwitcher', () => {
 
     await fireEvent.click(live);
     expect(get(uiStore).activeView).toBe('live');
+    expect(status.hasAttribute('aria-current')).toBe(false);
+    expect(status.getAttribute('aria-pressed')).toBe('false');
     expect(live.getAttribute('aria-current')).toBe('page');
     expect(live.getAttribute('aria-pressed')).toBe('true');
 
     await fireEvent.click(investigate);
     expect(get(uiStore).activeView).toBe('diagnose');
+    expect(live.hasAttribute('aria-current')).toBe(false);
+    expect(live.getAttribute('aria-pressed')).toBe('false');
     expect(investigate.getAttribute('aria-current')).toBe('page');
     expect(investigate.getAttribute('aria-pressed')).toBe('true');
   });

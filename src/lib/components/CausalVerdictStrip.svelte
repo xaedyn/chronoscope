@@ -96,9 +96,9 @@
       type="button"
       class="verdict-drill"
       onclick={() => onDrill(drillEndpoint.id)}
-      aria-label="Diagnose {drillEndpoint.label}, route to diagnose view"
+      aria-label="Investigate {drillEndpoint.label}, route to investigation view"
     >
-      <span class="verdict-drill-text">Diagnose</span>
+      <span class="verdict-drill-text">Investigate</span>
       <span class="verdict-drill-ep" style:color={drillEndpoint.color}>{drillEndpoint.label}</span>
       <span class="verdict-drill-arrow" aria-hidden="true">→</span>
     </button>
@@ -281,7 +281,7 @@
     letter-spacing: var(--tr-label);
   }
 
-  /* Drill button: sans "Diagnose" + mono endpoint chip + cyan arrow. Matches
+  /* Drill button: sans "Investigate" + mono endpoint chip + cyan arrow. Matches
      v2 prototype .v2-verdict-drill — mixed typography (sans label, mono name)
      signals "act on this specific endpoint" without shouting. */
   .verdict-drill {

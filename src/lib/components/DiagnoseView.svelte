@@ -1,5 +1,5 @@
 <!-- src/lib/components/DiagnoseView.svelte -->
-<!-- Diagnose view (renamed from Atlas at v9 to match the v2 prototype).       -->
+<!-- Investigate view surface; internal diagnose route/component names remain. -->
 <!-- For the rail-focused endpoint: horizontal phase-bar waterfall (dns /     -->
 <!-- tcp / tls / ttfb / transfer) in P50 or P95 mode, a one-sentence phase    -->
 <!-- hypothesis, and the last 8 samples as mini phase bars. Empty-state       -->
@@ -217,10 +217,10 @@
   );
 </script>
 
-<section class="diagnose" aria-label="Diagnose">
+<section class="diagnose" aria-label="Investigate">
   <header class="diagnose-header">
     <div class="diagnose-title-block">
-      <div class="diagnose-kicker">Diagnose · Distribution and correlation</div>
+      <div class="diagnose-kicker">Investigate · Distribution and correlation</div>
       <h1 class="diagnose-title">
         {#if focusedEndpoint}
           <span class="diagnose-title-pip" style:background={focusedEndpoint.color || tokens.color.endpoint[0]} aria-hidden="true"></span>

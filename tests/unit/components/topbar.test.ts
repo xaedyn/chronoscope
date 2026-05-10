@@ -150,7 +150,7 @@ describe('Topbar', () => {
   });
 
   // statTransition / dotEntrance / dotExit removed in Phase 7 — the surviving
-  // views (Overview / Live / Diagnose) don't consume them.
+  // views (Status / Live / Investigate) don't consume them.
 
   it('btnHover timing token is at least 100ms', () => {
     expect(tokens.timing.btnHover).toBeGreaterThanOrEqual(100);
