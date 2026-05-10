@@ -291,7 +291,7 @@
   });
 </script>
 
-<section class="overview" aria-label="Overview">
+<section class="overview" aria-label="Status">
   <div class="overview-grid">
     <div class="overview-left">
       <ChronographDial

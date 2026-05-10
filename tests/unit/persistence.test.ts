@@ -79,9 +79,14 @@ describe('persistence', () => {
     expect(loaded?.ui.activeView).toBe('overview');
   });
 
-  it.each(['strata', 'terminal'] as const)('v11 payload with hidden activeView %s coerces to overview', (activeView) => {
+  it.each([
+    { version: 10, activeView: 'strata' },
+    { version: 10, activeView: 'terminal' },
+    { version: 11, activeView: 'strata' },
+    { version: 11, activeView: 'terminal' },
+  ] as const)('v$version payload with hidden activeView $activeView coerces to overview', ({ version, activeView }) => {
     const hidden = {
-      version: 11,
+      version,
       endpoints: [],
       settings: { timeout: 5000, delay: 0, burstRounds: 50, monitorDelay: 1000, cap: MAX_CAP, corsMode: 'no-cors', healthThreshold: 120 },
       ui: { expandedCards: [], activeView, focusedEndpointId: null, liveOptions: { split: false, timeRange: '5m' }, terminalFilters: [] },
