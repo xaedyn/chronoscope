@@ -87,6 +87,15 @@ describe('CausalVerdictStrip start CTA', () => {
     expect(queryByRole('button', { name: /start measuring/i })).toBeNull();
   });
 
+  it('hides Start Measuring for shared report suppression even when onStart is callable', () => {
+    const { queryByRole } = renderStrip({
+      autoStartSuppressionReason: 'shared-report',
+      onStart: vi.fn(),
+    });
+
+    expect(queryByRole('button', { name: /start measuring/i })).toBeNull();
+  });
+
   it('hides Start Measuring outside collecting states', () => {
     const { queryByRole } = renderStrip({
       diagnosis: degradedDiagnosis,
