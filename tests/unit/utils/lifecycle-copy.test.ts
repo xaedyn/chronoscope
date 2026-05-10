@@ -30,6 +30,7 @@ describe('lifecycle-copy', () => {
   it('keeps the button action short and predictable', () => {
     expect(startStopButtonLabel('idle')).toBe('Start');
     expect(startStopButtonLabel('running')).toBe('Stop');
+    expect(startStopButtonLabel('stopped')).toBe('Start');
     expect(startStopButtonLabel('completed')).toBe('Start');
   });
 

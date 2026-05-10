@@ -1,21 +1,40 @@
 import type { TestLifecycleState } from '../types';
 
+const RUN_STATUS_TEXT: Record<TestLifecycleState, string> = {
+  idle: 'Ready',
+  starting: 'Starting...',
+  running: 'Measuring',
+  stopping: 'Stopping...',
+  stopped: 'Stopped',
+  completed: 'Complete',
+};
+
+const START_STOP_BUTTON_LABEL: Record<TestLifecycleState, string> = {
+  idle: 'Start',
+  starting: 'Starting...',
+  running: 'Stop',
+  stopping: 'Stopping...',
+  stopped: 'Start',
+  completed: 'Start',
+};
+
+const IS_START_LIFECYCLE: Record<TestLifecycleState, boolean> = {
+  idle: true,
+  starting: false,
+  running: false,
+  stopping: false,
+  stopped: true,
+  completed: true,
+};
+
 export function runStatusText(lifecycle: TestLifecycleState): string {
-  if (lifecycle === 'running') return 'Measuring';
-  if (lifecycle === 'starting') return 'Starting...';
-  if (lifecycle === 'stopping') return 'Stopping...';
-  if (lifecycle === 'stopped') return 'Stopped';
-  if (lifecycle === 'completed') return 'Complete';
-  return 'Ready';
+  return RUN_STATUS_TEXT[lifecycle];
 }
 
 export function startStopButtonLabel(lifecycle: TestLifecycleState): string {
-  if (lifecycle === 'running') return 'Stop';
-  if (lifecycle === 'starting') return 'Starting...';
-  if (lifecycle === 'stopping') return 'Stopping...';
-  return 'Start';
+  return START_STOP_BUTTON_LABEL[lifecycle];
 }
 
 export function isStartLifecycle(lifecycle: TestLifecycleState): boolean {
-  return lifecycle === 'idle' || lifecycle === 'stopped' || lifecycle === 'completed';
+  return IS_START_LIFECYCLE[lifecycle];
 }
