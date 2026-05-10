@@ -56,6 +56,14 @@ describe('global shortcuts', () => {
     expect(get(uiStore).activeView).toBe('live');
   });
 
+  it('ignores shifted top-row symbols for view tabs', () => {
+    uiStore.setActiveView('live');
+
+    expect(press('!', { code: 'Digit1', shiftKey: true })).toBe(false);
+
+    expect(get(uiStore).activeView).toBe('live');
+  });
+
   it('does not toggle endpoints when users press disabled view numbers', () => {
     const before = get(endpointStore).map((ep) => ep.enabled);
 

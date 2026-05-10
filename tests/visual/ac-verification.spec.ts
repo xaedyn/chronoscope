@@ -132,7 +132,7 @@ test.describe('Acceptance criteria verification', () => {
     await page.goto('/');
     await page.waitForSelector('#chronoscope-root');
 
-    await expect(page.locator('section[aria-label="Overview"]')).toBeVisible();
+    await expect(page.locator('section[aria-label="Status"]')).toBeVisible();
     await expect(page.locator('svg.dial')).toBeVisible();
     await expect(page.locator('section[aria-label="Per-endpoint comparison"]')).toBeVisible();
     await expect(page.locator('section[aria-label="Recent events"]')).toBeAttached();
