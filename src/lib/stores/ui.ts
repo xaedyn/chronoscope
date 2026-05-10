@@ -5,6 +5,10 @@
 import { writable } from 'svelte/store';
 import type { LiveTimeRange, PendingShare, SharedReportContext, TerminalEventType, UIState } from '../types';
 
+function normalizeActiveView(view: UIState['activeView']): UIState['activeView'] {
+  return view === 'strata' || view === 'terminal' ? 'overview' : view;
+}
+
 const initialState = (): UIState => ({
   // 'overview' is the v2 default. Phase 7 migration (v6→v7) collapses any
   // persisted Lanes-family view ('lanes'/'timeline'/'heatmap'/'split') to
@@ -36,7 +40,7 @@ function createUiStore() {
   return {
     subscribe,
     setActiveView(view: UIState['activeView']): void {
-      update((s) => ({ ...s, activeView: view }));
+      update((s) => ({ ...s, activeView: normalizeActiveView(view) }));
     },
     toggleCard(endpointId: string): void {
       update((s) => {

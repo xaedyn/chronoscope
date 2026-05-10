@@ -114,9 +114,7 @@ test.describe('AC5 — no raw URL in primary identifiers', () => {
         // Deterministic wait: sweep runs only after primary-identifier content mounts.
         await page.waitForSelector('.rail-row-label, .feed-name', { state: 'attached' });
 
-        // Navigate to the Live view via the ViewSwitcher button.
-        // Anchored regex avoids matching aria-labels like "Investigate endpoint X…"
-        // on CausalVerdictStrip drill buttons.
+        // Navigate to the Live view via its ViewSwitcher tab.
         await page.getByRole('button', { name: /^Live/ }).click();
         // Assert the Live view section is mounted before sweeping.
         await page.waitForSelector('section[aria-label="Live latency trace"]');
