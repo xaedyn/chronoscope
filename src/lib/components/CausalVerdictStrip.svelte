@@ -119,7 +119,7 @@
     </button>
   {/if}
 
-  {#if autoStartSuppressionReason && diagnosis.kind === 'collecting' && onStart}
+  {#if autoStartSuppressionReason && autoStartSuppressionReason !== 'shared-report' && diagnosis.kind === 'collecting' && onStart}
     <button type="button" class="verdict-drill verdict-start" onclick={() => onStart?.()}>
       <span class="verdict-drill-text">Start Measuring</span>
       <span class="verdict-drill-arrow" aria-hidden="true">→</span>
@@ -347,7 +347,10 @@
     font-variant-numeric: tabular-nums;
   }
   .verdict-drill-arrow { color: var(--accent-cyan); }
-  .verdict-start { white-space: nowrap; }
+  .verdict-start {
+    min-height: 44px;
+    white-space: nowrap;
+  }
 
   .verdict-extra {
     grid-column: 1 / -1;
