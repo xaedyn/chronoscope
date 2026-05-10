@@ -20,12 +20,19 @@ async function injectVisibleSamples(page: Page): Promise<void> {
   await page.evaluate((endpointIds) => {
     const inject = window.__chronoscope_inject_samples;
     if (!inject) throw new Error('__chronoscope_inject_samples is unavailable');
-    inject(endpointIds.map((id, index) => ({
-      endpointId: id,
-      count: 12,
-      latencyMs: 40 + index * 20,
-      jitterMs: 3,
-    })));
+    const originalRandom = Math.random;
+    let randomStep = 0;
+    Math.random = () => ((randomStep++ % 12) + 0.5) / 12;
+    try {
+      inject(endpointIds.map((id, index) => ({
+        endpointId: id,
+        count: 12,
+        latencyMs: 40 + index * 20,
+        jitterMs: 3,
+      })));
+    } finally {
+      Math.random = originalRandom;
+    }
   }, ids);
 }
 
@@ -41,6 +48,15 @@ function runControl(page: Page): Locator {
 
 async function expectMeasuringStatus(page: Page): Promise<void> {
   await expect(page.locator('.run-status')).toHaveAttribute('aria-label', 'Measuring', { timeout: 3000 });
+}
+
+async function pauseRunForStableSamples(page: Page): Promise<void> {
+  const control = runControl(page);
+  await expect(control).toHaveAccessibleName(/^(?:Start|Stop)$/i, { timeout: 5000 });
+  if ((await control.getAttribute('aria-label')) === 'Stop') {
+    await control.click();
+    await expect(runControl(page)).toHaveAccessibleName(/^Start$/i, { timeout: 3000 });
+  }
 }
 
 async function assertVerdictBeforeDial(page: Page): Promise<void> {
@@ -181,6 +197,7 @@ test.describe('Acceptance criteria verification', () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await page.goto('/');
       await page.waitForSelector('#chronoscope-root');
+      await pauseRunForStableSamples(page);
       await injectVisibleSamples(page);
 
       await page.getByRole('group', { name: 'Views' }).getByRole('button', { name: /^Investigate/ }).click();
@@ -191,6 +208,24 @@ test.describe('Acceptance criteria verification', () => {
       await expect(investigate.locator('section[aria-label="Diagnostic answer"]')).toBeVisible();
       await expect(investigate.getByText(/pick an endpoint from the left rail/i)).toHaveCount(0);
       await expect(investigate.locator('.diagnose-empty')).toHaveCount(0);
+
+      const distribution = investigate.locator('.diagnose-distro');
+      await expect(distribution).toBeVisible();
+      await expect(distribution).toContainText(/p50\s+\d+(?:\.\d+)?\s*ms/i);
+      await expect(distribution).toContainText(/p95\s+\d+(?:\.\d+)?\s*ms/i);
+      await expect(distribution.locator('.distro-stat-meta')).toHaveText(/over last 12 samples/i);
+
+      const comparison = investigate.locator('section[aria-label="Cross-endpoint comparison"]');
+      await expect(comparison).toBeVisible();
+      await expect(comparison.locator('.correlation-headline')).toContainText(/has been steady.*no notable spikes/i);
+      await expect(comparison.locator('.correlation-grid')).toBeVisible();
+
+      const recentSamples = investigate.locator('section[aria-label="Recent samples"]');
+      await expect(recentSamples).toBeVisible();
+      await expect(recentSamples.locator('.diagnose-hypothesis-kicker')).toHaveText(/Last 8 samples/i);
+      await expect(recentSamples.locator('.diagnose-sample-row')).toHaveCount(8);
+      await expect(investigate.locator('section[aria-label="Browser visibility"]')).toBeVisible();
+      await expect(investigate).toHaveScreenshot(`investigate-data-${vp.name}.png`);
     });
   }
 
