@@ -119,7 +119,7 @@
     </button>
   {/if}
 
-  {#if autoStartSuppressionReason && diagnosis.kind === 'collecting'}
+  {#if autoStartSuppressionReason && diagnosis.kind === 'collecting' && onStart}
     <button type="button" class="verdict-drill verdict-start" onclick={() => onStart?.()}>
       <span class="verdict-drill-text">Start Measuring</span>
       <span class="verdict-drill-arrow" aria-hidden="true">→</span>
