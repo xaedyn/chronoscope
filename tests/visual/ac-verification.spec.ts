@@ -147,7 +147,7 @@ test.describe('Acceptance criteria verification', () => {
     await expect(page.locator('.verdict-confidence')).toContainText(/confidence/i);
 
     await page.locator('button[data-endpoint-id]').first().click();
-    await page.getByRole('button', { name: /^Diagnose/ }).click();
+    await page.getByRole('button', { name: /^Investigate/ }).click();
 
     await expect(page.locator('section[aria-label="Diagnostic answer"]')).toBeVisible();
     await expect(page.locator('section[aria-label="Browser visibility"]')).toBeVisible();
@@ -198,9 +198,9 @@ for (const vp of VIEWPORTS) {
 
     test('enabled view shortcuts match the shipped views', async ({ page }) => {
       await expect(page.locator('.view-switcher-trailing')).toContainText('1·2·3');
-      await expect(page.getByRole('button', { name: /^Overview/ })).toBeEnabled();
+      await expect(page.getByRole('button', { name: /^Status/ })).toBeEnabled();
       await expect(page.getByRole('button', { name: /^Live/ })).toBeEnabled();
-      await expect(page.getByRole('button', { name: /^Diagnose/ })).toBeEnabled();
+      await expect(page.getByRole('button', { name: /^Investigate/ })).toBeEnabled();
     });
 
     test('Start button has a background transition for hover feedback', async ({ page }) => {

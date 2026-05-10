@@ -86,6 +86,16 @@ describe('global shortcuts', () => {
     expect(get(uiStore).activeView).toBe('overview');
   });
 
+  it('keeps Alt plus shifted top-row symbols available for endpoint visibility toggles', () => {
+    const first = get(endpointStore)[0];
+    expect(first?.enabled).toBe(true);
+
+    expect(press('!', { code: 'Digit1', altKey: true, shiftKey: true })).toBe(true);
+
+    expect(get(endpointStore)[0]?.enabled).toBe(false);
+    expect(get(uiStore).activeView).toBe('overview');
+  });
+
   it('keeps shifted question mark available for keyboard help', () => {
     expect(get(uiStore).showKeyboardHelp).toBe(false);
 
