@@ -3,7 +3,7 @@
 // Optional Chronoscope localhost companion. Binds to loopback only and requires
 // signed requests for diagnostics.
 
-const crypto = require('node:crypto');
+const nodeCrypto = require('node:crypto');
 const dns = require('node:dns/promises');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -68,7 +68,7 @@ function canonicalSignedRequest(input) {
 }
 
 function signAgentRequest(secret, message) {
-  return crypto.createHmac('sha256', secret).update(message).digest('hex');
+  return nodeCrypto.createHmac('sha256', secret).update(message).digest('hex');
 }
 
 function timingSafeEqualHex(a, b) {
@@ -80,7 +80,7 @@ function timingSafeEqualHex(a, b) {
   ) return false;
   const left = Buffer.from(a, 'hex');
   const right = Buffer.from(b, 'hex');
-  return left.length === right.length && crypto.timingSafeEqual(left, right);
+  return left.length === right.length && nodeCrypto.timingSafeEqual(left, right);
 }
 
 function verifySignedRequest(input) {
@@ -155,7 +155,7 @@ async function timed(label, fn) {
   }
 }
 
-async function dnsTrace(hostname) {
+function dnsTrace(hostname) {
   return timed('DNS trace', async () => {
     const [lookup, a, aaaa, cname] = await Promise.allSettled([
       dns.lookup(hostname, { all: true }),
@@ -173,7 +173,7 @@ async function dnsTrace(hostname) {
   });
 }
 
-async function tlsCheck(hostname, port) {
+function tlsCheck(hostname, port) {
   return timed('TLS check', () => new Promise((resolve, reject) => {
     const socket = tls.connect({
       host: hostname,
@@ -389,7 +389,7 @@ async function runProbe(payload) {
   const createdAt = Date.now();
   return {
     ok: true,
-    id: `probe_${createdAt}_${crypto.randomBytes(4).toString('hex')}`,
+    id: `probe_${createdAt}_${nodeCrypto.randomBytes(4).toString('hex')}`,
     targetHost: target.hostname,
     createdAt,
     summary: summarizeProbe(results),
@@ -405,7 +405,7 @@ function parseAllowedOrigins() {
 }
 
 function createServer(options = {}) {
-  const secret = options.secret ?? process.env.CHRONOSCOPE_AGENT_SECRET ?? crypto.randomBytes(24).toString('base64url');
+  const secret = options.secret ?? process.env.CHRONOSCOPE_AGENT_SECRET ?? nodeCrypto.randomBytes(24).toString('base64url');
   const allowedOrigins = options.allowedOrigins ?? parseAllowedOrigins();
   const seenNonces = new Set();
   const history = options.history ?? createHistoryStore(options.historyPath ?? process.env.CHRONOSCOPE_AGENT_DB ?? defaultHistoryPath());
@@ -495,9 +495,9 @@ function main() {
   const { server, secret } = createServer();
   server.listen(port, '127.0.0.1', () => {
     const tokenPath = writePairingToken(secret);
-    console.log(`Chronoscope local companion listening on http://127.0.0.1:${port}`);
-    console.log(`Pairing token written to ${tokenPath}`);
-    console.log('Keep this file private; paste its token into Chronoscope Settings to enable signed probes.');
+    process.stdout.write(`Chronoscope local companion listening on http://127.0.0.1:${port}\n`);
+    process.stdout.write(`Pairing token written to ${tokenPath}\n`);
+    process.stdout.write('Keep this file private; paste its token into Chronoscope Settings to enable signed probes.\n');
   });
 }
 
