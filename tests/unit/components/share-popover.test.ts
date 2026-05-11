@@ -76,7 +76,7 @@ describe('SharePopover hosted support reports', () => {
     uiStore.toggleShare();
     Object.assign(navigator, {
       clipboard: {
-        writeText: vi.fn().mockResolvedValue(undefined),
+        writeText: vi.fn().mockResolvedValue(),
       },
     });
   });
