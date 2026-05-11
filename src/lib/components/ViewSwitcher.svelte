@@ -31,7 +31,7 @@
   }
 </script>
 
-<nav class="view-switcher" role="group" aria-label="Views">
+<nav class="view-switcher" aria-label="Views">
   {#each VIEWS as view (view.id)}
     {@const active = isActive(view.id)}
     <button

@@ -238,7 +238,7 @@ test.describe('Acceptance criteria verification', () => {
       await pauseRunForStableSamples(page);
       const expectedTarget = await injectReadyInvestigationSamples(page);
 
-      await page.getByRole('group', { name: 'Views' }).getByRole('button', { name: /^Investigate/ }).click();
+      await page.getByRole('navigation', { name: 'Views' }).getByRole('button', { name: /^Investigate/ }).click();
 
       const investigate = page.locator('section[aria-label="Investigate"]');
       await expect(investigate).toBeVisible();

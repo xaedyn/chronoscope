@@ -16,6 +16,7 @@
   role="img"
   aria-label="Latency color scale: cyan is fast, red is slow"
   style:--mono={tokens.typography.mono.fontFamily}
+  style:--t2={tokens.color.text.t2}
   style:--t3={tokens.color.text.t3}
   style:--t4={tokens.color.text.t4}
 >
@@ -43,7 +44,7 @@
     font-family: var(--mono);
     font-size: 9px;
     font-weight: 300;
-    color: var(--t4);
+    color: var(--t2);
     letter-spacing: 0.04em;
   }
 </style>
