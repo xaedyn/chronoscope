@@ -809,7 +809,7 @@
   .remote-evidence {
     margin: 0;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(7.25rem, 1.2fr) minmax(4rem, 0.8fr) minmax(5rem, 1fr);
     gap: 10px;
   }
   .remote-evidence div {

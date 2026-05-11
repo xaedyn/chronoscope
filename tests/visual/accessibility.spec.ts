@@ -208,6 +208,28 @@ test.describe('Accessibility', () => {
     }
   });
 
+  test('remote vantage values fit on mobile without truncation', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/');
+    await page.waitForSelector('#chronoscope-root');
+    await seedVisibleSamples(page);
+
+    await page.getByRole('button', { name: /^Investigate/ }).click();
+    await page.waitForSelector('.remote-evidence dd');
+
+    const clippedValues = await page.locator('.remote-evidence dd').evaluateAll((elements) => {
+      return elements
+        .map((element) => ({
+          text: element.textContent?.trim(),
+          scrollWidth: element.scrollWidth,
+          clientWidth: element.clientWidth,
+        }))
+        .filter((element) => element.scrollWidth > element.clientWidth + 1);
+    });
+
+    expect(clippedValues).toEqual([]);
+  });
+
   test('skip link is keyboard-accessible', async ({ page }) => {
     await page.goto('/');
     await page.keyboard.press('Tab');
