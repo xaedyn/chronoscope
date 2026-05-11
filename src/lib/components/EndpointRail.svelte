@@ -232,7 +232,7 @@
   }
   .rail-row-unit {
     font-size: var(--ts-xs);
-    color: var(--t4);
+    color: var(--t2);
     letter-spacing: var(--tr-label);
   }
 
