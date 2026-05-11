@@ -629,7 +629,7 @@
     margin-right: 6px;
   }
   .distro-stat-meta {
-    color: var(--t4);
+    color: var(--t2);
     font-size: var(--ts-xs);
     margin-left: auto;
   }
@@ -659,7 +659,7 @@
     justify-content: space-between;
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--t4);
+    color: var(--t2);
   }
   .distro-empty {
     color: var(--t3);
@@ -738,7 +738,7 @@
   }
   .diagnose-answer-evidence dt {
     margin: 0 0 3px;
-    color: var(--t4);
+    color: var(--t2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);

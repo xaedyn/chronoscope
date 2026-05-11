@@ -305,7 +305,7 @@
   .verdict-context {
     grid-column: 1 / -1;
     margin: -6px 0 0 18px;
-    color: var(--t4);
+    color: var(--t2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-label);

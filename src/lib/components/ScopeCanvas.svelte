@@ -288,7 +288,7 @@
     class="scope-svg"
     viewBox="0 0 {VB_W} {VB_H}"
     preserveAspectRatio="none"
-    role="img"
+    role="group"
     aria-label={ariaLabel}
     onmousemove={handleMouseMove}
     onmouseleave={handleMouseLeave}
