@@ -357,7 +357,6 @@ function primaryAnswerFor(input: {
   readonly timingVisibility: TimingVisibility;
 }): DiagnosticClaim {
   const { kind, confidence, rows, threshold, verdict, timingVisibility } = input;
-  const overRows = rows.filter((row) => row.stats.p50 > threshold);
   const text = explanationFor(kind, rows, threshold, verdict);
   const evidenceIds: string[] = ['ready-endpoints', 'slow-endpoints', 'timing-visibility'];
 
@@ -365,14 +364,13 @@ function primaryAnswerFor(input: {
   if (verdict.phase !== undefined) evidenceIds.push('shared-signal');
   if (kind === 'packet-loss') evidenceIds.push('failed-requests');
   if (kind === 'jitter') evidenceIds.push('average-jitter');
-  if (overRows.length > 1) evidenceIds.push('slow-endpoints');
 
   return {
     id: kind,
     kind: claimKindFor(kind),
     strength: confidence,
     text,
-    evidenceIds: [...new Set(evidenceIds)],
+    evidenceIds,
     requiredEvidence: requiredEvidenceFor(kind, timingVisibility),
   };
 }
@@ -501,6 +499,11 @@ function successfulSampleCount(samples: readonly MeasurementSample[] | undefined
   return samples.filter((sample) => sample.status === 'ok').length;
 }
 
+function estimatedSuccessfulSampleCount(stats: VerdictRow['stats']): number {
+  const lossRatio = Math.max(0, Math.min(100, stats.lossPercent)) / 100;
+  return Math.round(stats.sampleCount * (1 - lossRatio));
+}
+
 function sampleReadiness(
   rows: readonly VerdictRow[],
   monitoredEndpointCount: number,
@@ -513,7 +516,7 @@ function sampleReadiness(
 } {
   const counts = rows.map((row) => {
     const actualOkCount = successfulSampleCount(samplesByEndpoint[row.ep.id]);
-    return actualOkCount ?? row.stats.sampleCount;
+    return actualOkCount ?? estimatedSuccessfulSampleCount(row.stats);
   });
   const minSamples = counts.length === 0 ? 0 : Math.min(...counts);
   const allEnabled = monitoredEndpointCount > 0 && rows.length === monitoredEndpointCount;
@@ -585,6 +588,8 @@ function primaryValidationFor(input: {
   const { kind, rows, monitoredEndpointCount, timingVisibility, verdict, claim, snapshotEligibility, readiness } = input;
   const minSamples = readiness.minSamples;
 
+  // Priority 1: sample readiness outranks every other action so the UI does not
+  // turn sparse data into a diagnostic recommendation.
   if (!readiness.allEnabledActionable) {
     const missingEndpoints = Math.max(monitoredEndpointCount - rows.length, 0);
     const reason = missingEndpoints > 0
@@ -598,6 +603,8 @@ function primaryValidationFor(input: {
     };
   }
 
+  // Priority 2: a clean, mature run can be shared as measured results before
+  // falling through to support-oriented guidance.
   if (snapshotEligibility.eligible) {
     return {
       id: 'share-snapshot',
@@ -607,6 +614,8 @@ function primaryValidationFor(input: {
     };
   }
 
+  // Priority 3: hidden browser timing phases limit what the product can claim,
+  // so explain visibility before suggesting stronger validation.
   if (timingVisibility.level === 'total-only' || timingVisibility.level === 'mixed') {
     return {
       id: 'explain-browser-visibility',
@@ -617,6 +626,8 @@ function primaryValidationFor(input: {
     };
   }
 
+  // Priority 4: one endpoint above threshold needs outside-vantage validation
+  // before Chronoscope implies anything about origin, CDN, or local path.
   if (verdict.worstEpId !== undefined) {
     return {
       id: 'run-remote-check',
@@ -627,6 +638,8 @@ function primaryValidationFor(input: {
     };
   }
 
+  // Priority 5: shared browser-visible symptoms need a second network or the
+  // local agent to narrow where the symptom appears.
   if (kind === 'shared-network' || kind === 'multiple-slow' || kind === 'jitter' || kind === 'packet-loss') {
     return {
       id: 'compare-network',

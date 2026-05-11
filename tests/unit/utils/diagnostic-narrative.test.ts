@@ -183,6 +183,24 @@ describe('buildDiagnosticNarrative', () => {
     expect(narrative.confidenceReason).toContain('12');
   });
 
+  it('estimates successful samples from loss when raw samples are unavailable', () => {
+    const narrative = buildDiagnosticNarrative({
+      rows: [
+        row('google', { sampleCount: 30, lossPercent: 80 }),
+        row('cloudflare', { sampleCount: 30, lossPercent: 80 }),
+      ],
+      threshold: 120,
+      corsMode: 'no-cors',
+      samplesByEndpoint: {},
+      monitoredEndpointCount: 2,
+    });
+
+    expect(narrative.confidence).toBe('low');
+    expect(narrative.primaryValidation.id).toBe('collect-more-samples');
+    expect(narrative.primaryValidation.reason).toContain('6 samples');
+    expect(narrative.snapshotEligibility.eligible).toBe(false);
+  });
+
   it('names browser sandbox limits for shared-network calls', () => {
     const dominantDns = {
       dnsLookup: 120,
@@ -212,7 +230,7 @@ describe('buildDiagnosticNarrative', () => {
     expect(narrative.limitations.some((limit) => limit.id === 'browser-sandbox')).toBe(true);
     expect(narrative.limitations.find((limit) => limit.id === 'browser-sandbox')?.detail).toContain('traceroute');
     expect(narrative.primaryAnswer.text).toContain('Multiple endpoints are slow');
-    expect(narrative.primaryAnswer.text).not.toMatch(/likely|ISP|VPN|Wi-Fi/i);
+    expect(narrative.primaryAnswer.text).not.toMatch(/\b(?:likely|ISP|VPN|Wi[- ]?Fi)\b/i);
     expect(narrative.primaryValidation.reason).toContain('browser');
     expect(narrative.nextSteps.join(' ')).toContain('Timing-Allow-Origin');
   });
