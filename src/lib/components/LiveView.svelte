@@ -240,7 +240,7 @@
     font-family: var(--mono);
     font-size: 8.5px;
     letter-spacing: 0.2em;
-    color: var(--t4);
+    color: var(--t2);
     text-transform: uppercase;
   }
   .live-segment {
@@ -377,7 +377,7 @@
     margin-left: 3px;
   }
   .live-footer-p95 {
-    color: var(--t4);
+    color: var(--t2);
     margin-left: 6px;
     font-variant-numeric: tabular-nums;
   }
