@@ -165,7 +165,7 @@ function buildCopySummary(report: Omit<DiagnosticReport, 'copySummary'>): string
 
   return [
     `Chronoscope diagnostic report: ${report.diagnosis.primaryAnswer.text} (${report.diagnosis.confidenceLabel}).`,
-    report.diagnosis.safeSummary,
+    `Trust: ${report.diagnosis.supportingSummary}`,
     slowLine,
     `Evidence: ${report.keptSampleCount} samples kept across ${report.endpointRows.length} endpoints; threshold ${fmtMs(report.threshold)}; browser visibility: ${visibility.headline}.`,
     limitation ? `Caveat: ${limitation.detail}` : '',

@@ -294,10 +294,10 @@ test.describe('Acceptance criteria verification', () => {
     await page.waitForSelector('#chronoscope-root');
 
     await expect(page.getByText('Shared diagnostic report').first()).toBeVisible();
-    await expect(page.getByRole('heading', { name: /Only api\.example\.com looks slow/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /api\.example\.com is slower than the others in this test/i })).toBeVisible();
     await expect(page.getByText(/medium confidence|high confidence/i)).toBeVisible();
     await expect(page.getByRole('button', { name: /Open Interactive Analysis/i })).toBeVisible();
-    await expect(page.getByRole('table', { name: /Endpoint report table/i })).toContainText('likely source');
+    await expect(page.getByRole('table', { name: /Endpoint report table/i })).toContainText('inspect');
     await expect(page.getByText(/Timing-Allow-Origin/i)).toBeVisible();
   });
 });

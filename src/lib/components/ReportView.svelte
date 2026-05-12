@@ -143,7 +143,7 @@
         title={report.diagnosis.confidenceReason}
       >{report.diagnosis.confidenceLabel}</span>
     </div>
-    <p class="report-lede">{report.diagnosis.safeSummary}</p>
+    <p class="report-lede">{report.diagnosis.supportingSummary}</p>
 
     <div class="report-actions" aria-label="Report actions">
       <button type="button" class="action action-primary" onclick={handleInteractive}>
