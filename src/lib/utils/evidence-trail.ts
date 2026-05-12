@@ -73,8 +73,8 @@ function confidenceStatus(confidence: DiagnosticReport['diagnosis']['confidence'
   return confidence.charAt(0).toUpperCase() + confidence.slice(1);
 }
 
-function staleProofDetail(source: 'outside check' | 'local agent'): string {
-  return `This ${source} was captured before the report snapshot. Run it again to refresh the proof.`;
+function staleEvidenceDetail(source: 'outside check' | 'local agent'): string {
+  return `This ${source} was captured before the report snapshot. Run it again to refresh the evidence.`;
 }
 
 function remoteTrail(
@@ -98,7 +98,7 @@ function remoteTrail(
         : summary.text),
       status: stale ? freshness : summary.status,
       tone: stale ? 'watch' : summary.tone,
-      detail: stale ? staleProofDetail('outside check') : `Checked from ${edge}.`,
+      detail: stale ? staleEvidenceDetail('outside check') : `Checked from ${edge}.`,
     };
   }
 
@@ -149,7 +149,7 @@ function companionTrail(
       fact: truncateFact(summary.text),
       status: stale ? freshness : summary.status,
       tone: stale ? 'watch' : summary.tone,
-      detail: stale ? staleProofDetail('local agent') : undefined,
+      detail: stale ? staleEvidenceDetail('local agent') : undefined,
     };
   }
 
@@ -177,7 +177,7 @@ function companionTrail(
     return {
       id: 'local-agent',
       source: 'Local agent',
-      fact: 'Local agent proof is not captured.',
+      fact: 'Local agent evidence is not captured.',
       status: companion.hasSecret ? 'Needs check' : 'Needs setup',
       tone: 'watch',
       detail: truncateFact(companion.error),

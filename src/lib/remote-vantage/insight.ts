@@ -78,7 +78,7 @@ export function buildRemoteVantageInsight(input: RemoteVantageInsightInput): Rem
       status: 'local-path',
       headline: `This outside check reached ${label} within threshold`,
       detail: `${edge} measured ${fmtMs(result.durationMs)} while your browser p50 measured ${fmtMs(browserP50 ?? 0)}.`,
-      action: 'Use the local companion agent or another network to add local-path evidence.',
+      action: 'Run the local agent or compare another network to test whether the slowdown follows this connection.',
       edgeLabel: edge,
       result,
     };
@@ -100,7 +100,7 @@ export function buildRemoteVantageInsight(input: RemoteVantageInsightInput): Rem
       status: 'remote-slow-only',
       headline: `${label} is slow from ${edge}, but not your browser`,
       detail: `Only the outside check was elevated in this snapshot${browserP50 !== null ? `; your browser p50 measured ${fmtMs(browserP50)}` : ''}.`,
-      action: 'Run the check again or compare another outside vantage before deciding what to inspect next.',
+      action: 'Run the outside check again, or compare another outside vantage, before choosing the next test.',
       edgeLabel: edge,
       result,
     };

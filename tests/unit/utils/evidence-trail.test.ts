@@ -183,6 +183,7 @@ describe('buildEvidenceTrail', () => {
       expect(item.status.length).toBeLessThanOrEqual(18);
       expect(item.fact.length).toBeLessThanOrEqual(96);
       expect(item.fact).not.toMatch(/likely|probably|wild goose chase|router|ISP/i);
+      expect(`${item.fact} ${item.detail ?? ''}`).not.toMatch(/\bproof\b/i);
     }
   });
 
@@ -269,6 +270,7 @@ describe('buildEvidenceTrail', () => {
     expect(trail.find((item) => item.id === 'outside-check')).toMatchObject({
       status: 'Stale',
       tone: 'watch',
+      detail: 'This outside check was captured before the report snapshot. Run it again to refresh the evidence.',
     });
   });
 
@@ -293,6 +295,7 @@ describe('buildEvidenceTrail', () => {
     expect(trail.find((item) => item.id === 'local-agent')).toMatchObject({
       status: 'Stale',
       tone: 'watch',
+      detail: 'This local agent was captured before the report snapshot. Run it again to refresh the evidence.',
     });
   });
 });

@@ -71,7 +71,9 @@ describe('buildRemoteVantageInsight', () => {
     expect(insight.status).toBe('local-path');
     expect(insight.headline).toContain('outside check reached API within threshold');
     expect(insight.detail).toContain('browser p50 measured');
+    expect(insight.action).toBe('Run the local agent or compare another network to test whether the slowdown follows this connection.');
     expect(insight.detail).not.toMatch(/ISP|VPN|WiFi|local network/i);
+    expect(insightCopy(insight)).not.toMatch(/local-path evidence|cause|likely/i);
   });
 
   it('calls out shared outside trouble when both local and remote vantage are slow', () => {
@@ -97,6 +99,7 @@ describe('buildRemoteVantageInsight', () => {
 
     expect(insight.status).toBe('remote-slow-only');
     expect(insight.detail).toContain('Only the outside check was elevated');
+    expect(insight.action).toBe('Run the outside check again, or compare another outside vantage, before choosing the next test.');
     expect(insight.action).not.toMatch(/blaming|likely/i);
   });
 
