@@ -287,7 +287,7 @@
   style:--accent-pink={tokens.color.accent.pink}
 >
   <header class="report-hero">
-    <div class="report-kicker">Shared diagnostic report</div>
+    <div class="report-kicker">{report.modeKicker}</div>
     <div class="report-title-row">
       <h1>{report.diagnosis.primaryAnswer.text}</h1>
       <span
@@ -298,14 +298,14 @@
         title={report.diagnosis.confidenceReason}
       >{report.diagnosis.confidenceLabel}</span>
     </div>
-    <p class="report-lede">{report.diagnosis.supportingSummary}</p>
+    <p class="report-lede">{report.modeLede}</p>
 
     <div class="report-actions" aria-label="Report actions">
       <button type="button" class="action action-primary" onclick={handleInteractive}>
         Open Interactive Analysis
       </button>
       <button type="button" class="action" onclick={handleCopySummary}>
-        {copyError === 'summary' ? 'Copy Failed' : copiedSummary ? 'Summary Copied' : 'Copy Summary'}
+        {copyError === 'summary' ? 'Copy Failed' : copiedSummary ? 'Summary Copied' : report.copySummaryLabel}
       </button>
       <button type="button" class="action" onclick={handleCopyLink}>
         {copyError === 'link' ? 'Copy Failed' : copiedLink ? 'Link Copied' : 'Copy Report Link'}

@@ -81,7 +81,7 @@ describe('shared run-own reset', () => {
     });
     const { getByRole, queryByRole } = render(ReportView);
 
-    await fireEvent.click(getByRole('button', { name: /copy summary/i }));
+    await fireEvent.click(getByRole('button', { name: /copy support summary/i }));
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledTimes(1);
