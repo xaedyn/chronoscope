@@ -59,8 +59,10 @@ function validateReport(report: unknown, obj: Record<string, unknown>): boolean 
   if (obj['mode'] !== 'results' || obj['v'] !== 2) return false;
   if (!isRecord(report)) return false;
   if (!hasOnlyKeys(report, ALLOWED_REPORT_KEYS)) return false;
+  if (report['reportKind'] === undefined) {
+    report['reportKind'] = 'support';
+  }
   if (
-    report['reportKind'] !== undefined &&
     report['reportKind'] !== 'support' &&
     report['reportKind'] !== 'snapshot'
   ) return false;
