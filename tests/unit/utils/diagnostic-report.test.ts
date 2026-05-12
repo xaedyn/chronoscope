@@ -140,6 +140,9 @@ describe('buildDiagnosticReport', () => {
     expect(report.copySummary).not.toMatch(/likely (affected|source|site|network|your network)/i);
     expect(report.copySummary).not.toContain(report.diagnosis.verdict.headline);
     expect(report.copySummary).toContain(report.diagnosis.primaryAnswer.text);
+    expect(report.copySummary).toContain('Trust: Evidence: 30+ successful checks across 3 sites; total timing only.');
+    expect(report.copySummary.match(new RegExp(report.diagnosis.primaryAnswer.text, 'g'))).toHaveLength(1);
+    expect(report.copySummary).not.toMatch(/This browser test: .*This browser test:/s);
   });
 
   it('falls back to local defaults for legacy contexts without threshold metadata', () => {
