@@ -294,10 +294,11 @@ test.describe('Acceptance criteria verification', () => {
     await page.goto(sharedReportUrl());
     await page.waitForSelector('#chronoscope-root');
 
-    await expect(page.getByText('Shared diagnostic report').first()).toBeVisible();
+    await expect(page.getByText('Support report').first()).toBeVisible();
     await expect(page.getByRole('heading', { name: /api\.example\.com is slower than the others in this test/i })).toBeVisible();
-    await expect(page.getByText(/medium confidence|high confidence/i)).toBeVisible();
+    await expect(page.locator('.report-title-row .confidence')).toContainText(/medium confidence|high confidence/i);
     await expect(page.getByRole('button', { name: /Open Interactive Analysis/i })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Copy Support Summary/i })).toBeVisible();
     await expect(page.getByRole('table', { name: /Endpoint report table/i })).toContainText('inspect');
     await expect(page.getByRole('region', { name: /Evidence trail/i })).toContainText('Browser test');
     await expect(page.getByRole('region', { name: /Evidence trail/i })).toContainText('Outside check');

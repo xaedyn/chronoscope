@@ -101,7 +101,7 @@ const sharedContext: SharedReportContext = {
   sourceVersion: 2,
 };
 
-function seedIsolatedReport(): Endpoint[] {
+function seedIsolatedReport(reportKind: SharedReportContext['reportKind'] = 'support'): Endpoint[] {
   const endpoints = [
     endpoint('api', 'API'),
     endpoint('google', 'Google'),
@@ -146,7 +146,7 @@ function seedIsolatedReport(): Endpoint[] {
   } satisfies MeasurementState);
   uiStore.setSharedView(true);
   uiStore.setSharedReportMode(true);
-  uiStore.setSharedReportContext(sharedContext);
+  uiStore.setSharedReportContext({ ...sharedContext, reportKind });
   return endpoints;
 }
 
@@ -229,6 +229,24 @@ describe('ReportView triage actions', () => {
 
   afterEach(() => {
     cleanup();
+  });
+
+  it('renders support report mode copy from shared metadata', () => {
+    seedIsolatedReport('support');
+    const { getByRole, getByText, queryByText } = render(ReportView);
+
+    expect(getByText('Support report')).toBeTruthy();
+    expect(queryByText('Shared diagnostic report')).toBeNull();
+    expect(getByRole('button', { name: /copy support summary/i })).toBeTruthy();
+  });
+
+  it('renders snapshot report mode copy from shared metadata', () => {
+    seedIsolatedReport('snapshot');
+    const { getByRole, getByText, queryByText } = render(ReportView);
+
+    expect(getByText('Performance snapshot')).toBeTruthy();
+    expect(queryByText('Shared diagnostic report')).toBeNull();
+    expect(getByRole('button', { name: /copy snapshot summary/i })).toBeTruthy();
   });
 
   it('opens Investigate on the implicated endpoint from the triage card', async () => {
