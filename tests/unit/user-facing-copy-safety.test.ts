@@ -13,6 +13,11 @@ const forbiddenClaims: readonly RegExp[] = [
   /pointing toward your .*?(ISP|VPN|WiFi|Wi-Fi|local network)/i,
   /origin, CDN, or DNS path is the likely source/i,
   /endpoint, CDN, or a broad upstream path is implicated/i,
+  /perfect internet/i,
+  /best connection/i,
+  /ISP is clean/i,
+  /No network issue exists/i,
+  /inside the current thresholds/i,
 ];
 
 function sourceFiles(dir: string): string[] {

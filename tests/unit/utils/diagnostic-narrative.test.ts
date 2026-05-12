@@ -134,6 +134,7 @@ describe('buildDiagnosticNarrative', () => {
     expect(narrative.snapshotEligibility.eligible).toBe(true);
     expect(narrative.primaryValidation.id).toBe('share-snapshot');
     expect(narrative.safeSummary).toContain('This browser test: This test looks healthy.');
+    expect(narrative.supportingSummary).toBe('Clean browser-visible run: 35+ successful checks across 3 sites.');
   });
 
   it('explains isolated endpoint slowness with evidence-labeled endpoint and next validation step', () => {
@@ -162,6 +163,7 @@ describe('buildDiagnosticNarrative', () => {
     expect(narrative.primaryValidation.id).toBe('explain-browser-visibility');
     expect(narrative.evidence.some((item) => item.label === 'Site to inspect' && item.value === 'API')).toBe(true);
     expect(narrative.safeSummary).not.toMatch(/likely (source|site|network|your network)/i);
+    expect(narrative.supportingSummary).toBe('Evidence: 18+ successful checks across 3 sites; total timing only.');
     expect(narrative.nextSteps.join(' ')).toContain('Open Investigate');
   });
 
@@ -295,5 +297,72 @@ describe('buildDiagnosticNarrative', () => {
         multipleSlow.primaryAnswer.text,
       ].join(' '),
     ).not.toMatch(/elevated|browser-visible|root-cause|likely/i);
+  });
+
+  it('keeps the trust matrix concise and evidence-scoped across common scenarios', () => {
+    const scenarios = [
+      buildDiagnosticNarrative({
+        rows: [],
+        threshold: 120,
+        corsMode: 'no-cors',
+        samplesByEndpoint: {},
+        monitoredEndpointCount: 3,
+      }),
+      buildDiagnosticNarrative({
+        rows: [
+          row('api', { p50: 240, sampleCount: 18 }, 'API'),
+          row('google', { p50: 45, sampleCount: 18 }, 'Google'),
+          row('cloudflare', { p50: 38, sampleCount: 18 }, 'Cloudflare'),
+        ],
+        threshold: 120,
+        corsMode: 'no-cors',
+        samplesByEndpoint: {
+          api: samples(18, 240),
+          google: samples(18, 45),
+          cloudflare: samples(18, 38),
+        },
+        monitoredEndpointCount: 3,
+      }),
+      buildDiagnosticNarrative({
+        rows: [
+          row('google', { p50: 220, tier2Averages: { dnsLookup: 120, tcpConnect: 5, tlsHandshake: 5, ttfb: 10, contentTransfer: 10 } }),
+          row('cloudflare', { p50: 210, tier2Averages: { dnsLookup: 120, tcpConnect: 5, tlsHandshake: 5, ttfb: 10, contentTransfer: 10 } }),
+          row('aws', { p50: 40, tier2Averages: tier2 }),
+        ],
+        threshold: 120,
+        corsMode: 'cors',
+        samplesByEndpoint: {
+          google: samples(35, 220, true),
+          cloudflare: samples(35, 210, true),
+          aws: samples(35, 40, true),
+        },
+        monitoredEndpointCount: 3,
+      }),
+      buildDiagnosticNarrative({
+        rows: [
+          row('google', { lossPercent: 2, sampleCount: 18 }),
+          row('cloudflare', { lossPercent: 2, sampleCount: 18 }),
+        ],
+        threshold: 120,
+        corsMode: 'no-cors',
+        samplesByEndpoint: {
+          google: samples(18, 50),
+          cloudflare: samples(18, 55),
+        },
+        monitoredEndpointCount: 2,
+      }),
+    ];
+
+    for (const narrative of scenarios) {
+      const { supportingSummary } = narrative;
+      expect(supportingSummary).toBeTruthy();
+      expect(supportingSummary!.length).toBeLessThanOrEqual(120);
+      expect([
+        narrative.primaryAnswer.text,
+        supportingSummary,
+        narrative.primaryValidation.reason,
+        narrative.safeSummary,
+      ].join(' ')).not.toMatch(/perfect internet|best connection|ISP is clean|No network issue exists|root cause|likely (?:that site|your network|source)/i);
+    }
   });
 });

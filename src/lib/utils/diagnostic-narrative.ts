@@ -94,6 +94,7 @@ export interface DiagnosticNarrative {
   readonly claims: readonly DiagnosticClaim[];
   readonly primaryValidation: PrimaryValidationAction;
   readonly safeSummary: string;
+  readonly supportingSummary: string;
   readonly snapshotEligibility: SnapshotEligibility;
   readonly explanation: string;
   readonly evidence: readonly DiagnosticEvidence[];
@@ -656,6 +657,59 @@ function safeSummaryFor(claim: DiagnosticClaim, confidenceReasonText: string): s
   return `This browser test: ${claim.text} (${claim.strength} confidence; ${confidenceReasonText})`;
 }
 
+function timingSummaryFor(timingVisibility: TimingVisibility): string {
+  switch (timingVisibility.level) {
+    case 'none':
+      return 'no successful timing yet';
+    case 'total-only':
+      return 'total timing only';
+    case 'mixed':
+      return `${timingVisibility.phaseSampleCount}/${timingVisibility.okSampleCount} checks show detailed timing`;
+    case 'phase':
+      return 'detailed timing visible';
+  }
+}
+
+function sampleScopeFor(
+  rows: readonly VerdictRow[],
+  monitoredEndpointCount: number,
+  readiness: ReturnType<typeof sampleReadiness>,
+): string {
+  if (rows.length === 0) {
+    return monitoredEndpointCount === 0
+      ? 'no enabled sites'
+      : `waiting for checks across ${monitoredEndpointCount} ${plural(monitoredEndpointCount, 'site')}`;
+  }
+
+  if (rows.length < monitoredEndpointCount) {
+    return `${rows.length}/${monitoredEndpointCount} ${plural(monitoredEndpointCount, 'site')} ready`;
+  }
+
+  return `${readiness.minSamples}+ successful checks across ${rows.length} ${plural(rows.length, 'site')}`;
+}
+
+function supportingSummaryFor(input: {
+  readonly kind: DiagnosticKind;
+  readonly confidence: DiagnosticConfidence;
+  readonly rows: readonly VerdictRow[];
+  readonly monitoredEndpointCount: number;
+  readonly timingVisibility: TimingVisibility;
+  readonly readiness: ReturnType<typeof sampleReadiness>;
+}): string {
+  const { kind, confidence, rows, monitoredEndpointCount, timingVisibility, readiness } = input;
+  const sampleScope = sampleScopeFor(rows, monitoredEndpointCount, readiness);
+
+  if (kind === 'collecting') {
+    return `Collecting: ${sampleScope}.`;
+  }
+
+  if (kind === 'healthy' && confidence === 'high' && readiness.allEnabledMature) {
+    return `Clean browser-visible run: ${sampleScope}.`;
+  }
+
+  return `Evidence: ${sampleScope}; ${timingSummaryFor(timingVisibility)}.`;
+}
+
 export function buildDiagnosticNarrative(input: DiagnosticInput): DiagnosticNarrative {
   const verdict = computeCausalVerdict(input.rows, input.threshold);
   const samples = allSamples(input.samplesByEndpoint);
@@ -718,6 +772,14 @@ export function buildDiagnosticNarrative(input: DiagnosticInput): DiagnosticNarr
     claims: [primaryAnswer],
     primaryValidation,
     safeSummary: safeSummaryFor(primaryAnswer, confidenceReasonText),
+    supportingSummary: supportingSummaryFor({
+      kind,
+      confidence,
+      rows: input.rows,
+      monitoredEndpointCount: input.monitoredEndpointCount,
+      timingVisibility,
+      readiness,
+    }),
     snapshotEligibility,
     explanation: primaryAnswer.text,
     evidence,
