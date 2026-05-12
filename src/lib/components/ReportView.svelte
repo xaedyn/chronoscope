@@ -8,17 +8,21 @@
   import { settingsStore } from '$lib/stores/settings';
   import { statisticsStore } from '$lib/stores/statistics';
   import { uiStore } from '$lib/stores/ui';
+  import { companionStore } from '$lib/stores/companion';
   import { remoteVantageStore } from '$lib/stores/remote-vantage';
   import { buildShareURL } from '$lib/share/share-manager';
   import { buildResultsSharePayload, MAX_SHARE_URL_CHARS } from '$lib/share/share-payload-builder';
   import { buildDiagnosticReport, formatReportMetric } from '$lib/utils/diagnostic-report';
+  import { buildEvidenceTrail } from '$lib/utils/evidence-trail';
   import { buildHistoryBaselineInsight } from '$lib/utils/history-baseline';
   import { tokens } from '$lib/tokens';
+  import type { DiagnosticTriageAction } from '$lib/utils/diagnostic-narrative';
 
   const endpoints = $derived($endpointStore);
   const measurements = $derived($measurementStore);
   const history = $derived($historyStore);
   const remoteVantage = $derived($remoteVantageStore);
+  const companion = $derived($companionStore);
   const settings = $derived($settingsStore);
   const stats = $derived($statisticsStore);
   const context = $derived($uiStore.sharedReportContext);
@@ -44,10 +48,24 @@
       .filter((comparison) => comparison.status !== 'unready')
       .slice(0, 4),
   );
+  const evidenceTrail = $derived(buildEvidenceTrail({
+    report,
+    remoteVantage,
+    companion,
+  }));
+  const remoteBusy = $derived(remoteVantage.status === 'checking' || remoteVantage.status === 'probing');
+  const companionBusy = $derived(companion.status === 'checking' || companion.status === 'probing');
 
   let copiedSummary = $state(false);
   let copiedLink = $state(false);
   let copyError = $state<'summary' | 'link' | null>(null);
+  let browserVisibilityPanel = $state<HTMLElement | null>(null);
+
+  interface TriageOutcome {
+    readonly label: string;
+    readonly tone: 'good' | 'watch' | 'bad' | 'neutral';
+    readonly disabled?: boolean;
+  }
 
   function resetCopyState(): void {
     copiedSummary = false;
@@ -120,21 +138,109 @@
     });
   }
 
-  function handleInteractive(): void {
+  function openInteractive(targetEndpointId = report.diagnosis.verdict.worstEpId): void {
     uiStore.setSharedReportMode(false);
-    const target = report.diagnosis.verdict.worstEpId;
-    if (target) {
-      uiStore.setFocusedEndpoint(target);
+    if (targetEndpointId) {
+      uiStore.setFocusedEndpoint(targetEndpointId);
       uiStore.setActiveView('diagnose');
     } else {
       uiStore.setActiveView('overview');
     }
   }
 
+  function handleInteractive(): void {
+    openInteractive();
+  }
+
   function handleRunOwn(): void {
     uiStore.clearSharedView();
     uiStore.setAutoStartSuppressionReason(null);
     measurementStore.reset();
+  }
+
+  function scrollToBrowserVisibility(): void {
+    browserVisibilityPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    browserVisibilityPanel?.focus({ preventScroll: true });
+  }
+
+  function openSettingsWorkflow(action: DiagnosticTriageAction): void {
+    if (action.endpointId) uiStore.setFocusedEndpoint(action.endpointId);
+    if (!get(uiStore).showSettings) uiStore.toggleSettings();
+  }
+
+  function openShareWorkflow(): void {
+    if (!get(uiStore).showShare) uiStore.toggleShare();
+  }
+
+  async function handleTriageAction(action: DiagnosticTriageAction): Promise<void> {
+    switch (action.id) {
+      case 'review-browser-visibility':
+        scrollToBrowserVisibility();
+        return;
+      case 'open-investigate':
+        openInteractive(action.endpointId);
+        return;
+      case 'run-remote-check':
+        await remoteVantageStore.runProbe(get(endpointStore));
+        return;
+      case 'run-local-agent':
+        openSettingsWorkflow(action);
+        return;
+      case 'share-support-report':
+      case 'share-snapshot':
+      case 'compare-another-network':
+        openShareWorkflow();
+        return;
+      case 'collect-more-samples':
+      case 'keep-running':
+        handleRunOwn();
+        return;
+    }
+  }
+
+  function remoteOutcome(): TriageOutcome {
+    if (remoteBusy) return { label: 'Running', tone: 'watch', disabled: true };
+    if (remoteVantage.lastProbe) {
+      const hasProblem = remoteVantage.lastProbe.results.some((result) => (
+        result.verdict === 'slow' ||
+        result.verdict === 'http-error' ||
+        result.verdict === 'unreachable'
+      ));
+      return { label: 'Captured', tone: hasProblem ? 'bad' : 'good' };
+    }
+    if (remoteVantage.error) return { label: 'Failed', tone: 'watch' };
+    return { label: 'Not run', tone: 'neutral' };
+  }
+
+  function localAgentOutcome(): TriageOutcome {
+    if (companionBusy) return { label: 'Running', tone: 'watch', disabled: true };
+    if (companion.lastProbe) return { label: 'Captured', tone: companion.lastProbe.ok ? 'good' : 'watch' };
+    if (companion.status === 'connected') return { label: 'Ready', tone: 'neutral' };
+    if (companion.error) return { label: 'Needs setup', tone: 'watch' };
+    return { label: 'Not run', tone: 'neutral' };
+  }
+
+  function triageOutcome(action: DiagnosticTriageAction): TriageOutcome {
+    switch (action.id) {
+      case 'review-browser-visibility':
+        return { label: report.diagnosis.timingVisibility.level === 'phase' ? 'Detailed' : 'Review', tone: 'neutral' };
+      case 'open-investigate':
+        return { label: action.endpointId ? 'Ready' : 'No target', tone: action.endpointId ? 'good' : 'watch' };
+      case 'run-remote-check':
+        return remoteOutcome();
+      case 'run-local-agent':
+        return localAgentOutcome();
+      case 'share-support-report':
+      case 'share-snapshot':
+        if (copiedLink) return { label: 'Link copied', tone: 'good' };
+        if (copyError === 'link') return { label: 'Copy failed', tone: 'watch' };
+        return { label: 'Share', tone: 'neutral' };
+      case 'compare-another-network':
+        return { label: 'Share config', tone: 'neutral' };
+      case 'collect-more-samples':
+      case 'keep-running':
+        return { label: 'Run locally', tone: 'neutral' };
+    }
   }
 </script>
 
@@ -198,17 +304,41 @@
     </div>
   </section>
 
+  <section class="evidence-trail" aria-label="Evidence trail">
+    <div class="section-kicker">Evidence trail</div>
+    <div class="trail-list">
+      {#each evidenceTrail as item (item.id)}
+        <article class="trail-item" class:good={item.tone === 'good'} class:watch={item.tone === 'watch'} class:bad={item.tone === 'bad'}>
+          <div class="trail-source">{item.source}</div>
+          <p>{item.fact}</p>
+          <span>{item.status}</span>
+        </article>
+      {/each}
+    </div>
+  </section>
+
   <section class="next-steps" aria-label="Recommended next steps">
     <div class="section-kicker">What to try next</div>
     <div class="triage-grid">
       {#each report.diagnosis.triageActions as action, i (action.id)}
+        {@const outcome = triageOutcome(action)}
         <article class="triage-card">
           <div class="triage-index">{i + 1}</div>
-          <div>
-            <h2>{action.label}</h2>
+          <div class="triage-body">
+            <div class="triage-head">
+              <h2>{action.label}</h2>
+              <span class="triage-status" class:good={outcome.tone === 'good'} class:watch={outcome.tone === 'watch'} class:bad={outcome.tone === 'bad'}>{outcome.label}</span>
+            </div>
             <p class="triage-action">{action.action}</p>
             <p>{action.why}</p>
             <p class="triage-watch"><strong>Watch for:</strong> {action.watchFor}</p>
+            <button
+              type="button"
+              class="triage-button"
+              disabled={outcome.disabled}
+              aria-disabled={outcome.disabled}
+              onclick={() => handleTriageAction(action)}
+            >{action.label}</button>
           </div>
         </article>
       {/each}
@@ -231,7 +361,12 @@
       </div>
     </section>
 
-    <section class="report-panel" aria-label="Browser visibility">
+    <section
+      class="report-panel"
+      aria-label="Browser visibility"
+      bind:this={browserVisibilityPanel}
+      tabindex="-1"
+    >
       <div class="section-kicker">Browser visibility</div>
       <h2>{report.diagnosis.timingVisibility.headline}</h2>
       <p>{report.diagnosis.timingVisibility.detail}</p>
@@ -456,6 +591,68 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .evidence-trail {
+    margin-bottom: 18px;
+    border: 1px solid var(--border-mid);
+    border-radius: 8px;
+    background: rgba(12,10,20,.58);
+    padding: 14px;
+  }
+  .trail-list {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .trail-item {
+    min-width: 0;
+    display: grid;
+    grid-template-rows: auto minmax(42px, auto) auto;
+    gap: 6px;
+    padding: 10px;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 7px;
+    background: rgba(255,255,255,.03);
+  }
+  .trail-item.good {
+    border-color: rgba(74,222,128,.18);
+    background: rgba(74,222,128,.045);
+  }
+  .trail-item.watch {
+    border-color: rgba(251,191,36,.18);
+    background: rgba(251,191,36,.045);
+  }
+  .trail-item.bad {
+    border-color: rgba(249,168,212,.2);
+    background: rgba(249,168,212,.05);
+  }
+  .trail-source {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--t3);
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+    text-transform: uppercase;
+  }
+  .trail-item p {
+    margin: 0;
+    color: var(--t2);
+    font-size: var(--ts-sm);
+    line-height: 1.35;
+  }
+  .trail-item span {
+    justify-self: start;
+    padding: 3px 7px;
+    border: 1px solid rgba(255,255,255,.1);
+    border-radius: 999px;
+    color: var(--t3);
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+    white-space: nowrap;
+  }
+
   .report-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -676,6 +873,19 @@
     border: 1px solid rgba(255,255,255,.07);
     background: rgba(255,255,255,.035);
   }
+  .triage-body {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .triage-head {
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
   .triage-index {
     width: 24px;
     height: 24px;
@@ -693,6 +903,31 @@
     margin-top: 0;
     font-size: var(--ts-base);
   }
+  .triage-status {
+    flex: 0 0 auto;
+    padding: 3px 7px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,.1);
+    color: var(--t3);
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+    white-space: nowrap;
+  }
+  .triage-status.good {
+    color: var(--accent-green);
+    border-color: rgba(74,222,128,.25);
+    background: rgba(74,222,128,.07);
+  }
+  .triage-status.watch {
+    color: var(--accent-amber);
+    border-color: rgba(251,191,36,.25);
+    background: rgba(251,191,36,.07);
+  }
+  .triage-status.bad {
+    color: var(--accent-pink);
+    border-color: rgba(249,168,212,.28);
+    background: rgba(249,168,212,.08);
+  }
   .triage-card p {
     margin: 6px 0 0;
     color: var(--t3);
@@ -703,6 +938,32 @@
   }
   .triage-watch strong {
     color: var(--t2);
+  }
+  .triage-button {
+    align-self: flex-start;
+    min-height: 34px;
+    margin-top: 12px;
+    border-radius: 7px;
+    border: 1px solid rgba(103,232,249,.24);
+    background: rgba(103,232,249,.07);
+    color: var(--accent-cyan);
+    padding: 0 11px;
+    font-family: var(--sans);
+    font-size: var(--ts-sm);
+    cursor: pointer;
+  }
+  .triage-button:hover:not(:disabled) {
+    border-color: rgba(103,232,249,.42);
+    color: var(--t1);
+  }
+  .triage-button:disabled {
+    cursor: not-allowed;
+    opacity: .55;
+  }
+
+  [aria-label="Browser visibility"]:focus {
+    outline: 1px solid rgba(103,232,249,.45);
+    outline-offset: 3px;
   }
 
   @media (max-width: 900px) {
@@ -716,6 +977,9 @@
     .report-strip,
     .report-grid {
       grid-template-columns: 1fr;
+    }
+    .trail-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .evidence-grid {
       grid-template-columns: 1fr;
@@ -740,6 +1004,15 @@
       flex-direction: column;
     }
     .action {
+      width: 100%;
+    }
+    .trail-list {
+      grid-template-columns: 1fr;
+    }
+    .triage-head {
+      flex-direction: column;
+    }
+    .triage-button {
       width: 100%;
     }
     h1 {
