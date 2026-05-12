@@ -115,6 +115,9 @@ describe('history baseline insight', () => {
     expect(insight.status).toBe('severe');
     expect(insight.headline).toContain('API');
     expect(insight.detail).toContain('3.1x');
+    expect(insight.detail).toContain('prior local baseline');
+    expect(insight.detail).not.toMatch(/usual latency|cause|likely/i);
+    expect(insight.comparisons[0]?.summary).toContain('Current median');
     expect(insight.comparisons[0]?.status).toBe('severe');
   });
 

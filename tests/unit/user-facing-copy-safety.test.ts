@@ -25,6 +25,9 @@ const forbiddenClaims: readonly RegExp[] = [
   /your ISP is/i,
   /your router is/i,
   /the server is the cause/i,
+  /local-path evidence/i,
+  /usual latency/i,
+  /before deciding what to inspect/i,
 ];
 
 const reportModeTerms: readonly string[] = [

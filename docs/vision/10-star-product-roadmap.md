@@ -2,7 +2,7 @@
 
 **Status:** Living source of truth  
 **Created:** 2026-05-12  
-**Current production baseline:** `main` through PR #127, deployed to Cloudflare Pages
+**Current production baseline:** `main` through PR #128, deployed to Cloudflare Pages
 **Read this first in future sessions.**
 
 ---
@@ -82,6 +82,7 @@ Recent product spine:
 - PR #119-#121: Guided proof flow with remote proof loop, focused local proof, and stale proof refresh.
 - PR #122-#126: Share/report excellence with support versus snapshot report modes, mode-specific rendering, and copy/visual guardrails.
 - PR #127: Claim registry foundation for evidence-gated diagnostic language.
+- PR #128: Claim registry wired into diagnostic narrative validation and copied report summaries.
 
 ---
 
@@ -344,4 +345,4 @@ The assistant should then:
 - Created this roadmap after PR #116 shipped the compact evidence trail and executable report triage actions.
 - Decided the next phase should be **Guided Proof Flow**, not another visual redesign.
 - Decided the product's highest-order constraint remains trust: every diagnostic claim must be tied to measured evidence, known browser limits, or an explicit next validation step.
-- Shipped Phase 1 and Phase 2 through PR #126. Phase 3 began with PR #127's registry, then continues by wiring registry-gated language through narrative, reports, evidence trail, remote vantage, and history surfaces.
+- Shipped Phase 1 and Phase 2 through PR #126. Phase 3 began with PR #127's registry and PR #128's narrative/report wiring, then continues by extending registry-gated language and copy safety through evidence trail, remote vantage, and history surfaces.

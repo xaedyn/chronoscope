@@ -135,7 +135,7 @@ function classifyComparison(input: {
       status: 'severe',
       p50Ratio,
       p95Ratio,
-      summary: `Current p50 is ${fmtRatio(p50Ratio)} baseline (${fmtMs(current.p50)} vs ${fmtMs(baselineP50)}).`,
+      summary: `Current median is ${fmtRatio(p50Ratio)} baseline (${fmtMs(current.p50)} vs ${fmtMs(baselineP50)}).`,
     };
   }
 
@@ -144,7 +144,7 @@ function classifyComparison(input: {
       status: 'elevated',
       p50Ratio,
       p95Ratio,
-      summary: `Current p50 is ${fmtRatio(p50Ratio)} baseline (${fmtMs(current.p50)} vs ${fmtMs(baselineP50)}).`,
+      summary: `Current median is ${fmtRatio(p50Ratio)} baseline (${fmtMs(current.p50)} vs ${fmtMs(baselineP50)}).`,
     };
   }
 
@@ -152,7 +152,7 @@ function classifyComparison(input: {
     status: 'normal',
     p50Ratio,
     p95Ratio,
-    summary: `Current p50 is close to baseline (${fmtMs(current.p50)} vs ${fmtMs(baselineP50)}).`,
+    summary: `Current median is close to baseline (${fmtMs(current.p50)} vs ${fmtMs(baselineP50)}).`,
   };
 }
 
@@ -260,7 +260,7 @@ export function buildHistoryBaselineInsight(input: BuildHistoryBaselineInsightIn
     return {
       status: 'severe',
       headline: `${worst.label} is far above its local baseline.`,
-      detail: `${worst.label} is ${multiple} above its usual latency across ${worst.priorSessionCount} prior local runs. ${worst.summary}`,
+      detail: `${worst.label} is ${multiple} above its prior local baseline across ${worst.priorSessionCount} prior local runs. ${worst.summary}`,
       privacyNote: PRIVACY_NOTE,
       comparisons,
     };
@@ -271,7 +271,7 @@ export function buildHistoryBaselineInsight(input: BuildHistoryBaselineInsightIn
     return {
       status: 'elevated',
       headline: `${worst.label} is above its local baseline.`,
-      detail: `${worst.label} is ${multiple} above its usual latency across ${worst.priorSessionCount} prior local runs. ${worst.summary}`,
+      detail: `${worst.label} is ${multiple} above its prior local baseline across ${worst.priorSessionCount} prior local runs. ${worst.summary}`,
       privacyNote: PRIVACY_NOTE,
       comparisons,
     };
