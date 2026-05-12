@@ -1,7 +1,7 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { encodeSharePayload } from '../../src/lib/share/share-manager';
 import { MAX_CAP } from '../../src/lib/limits';
-import type { SharePayload } from '../../src/lib/types';
+import type { ReportKind, SharePayload } from '../../src/lib/types';
 
 interface VisibleEndpointTarget {
   readonly id: string;
@@ -113,13 +113,14 @@ async function assertVerdictBeforeDial(page: Page): Promise<void> {
   expect(verdictBox!.y).toBeLessThan(dialBox!.y);
 }
 
-function sharedReportUrl(): string {
+function sharedReportUrl(reportKind: ReportKind = 'support'): string {
   const endpoints = [
     { url: 'https://api.example.com', enabled: true },
     { url: 'https://www.google.com', enabled: true },
     { url: 'https://www.cloudflare.com', enabled: true },
   ];
-  const results = [240, 45, 38].map((latency) => ({
+  const latencies = reportKind === 'snapshot' ? [42, 45, 38] : [240, 45, 38];
+  const results = latencies.map((latency) => ({
     samples: Array.from({ length: 35 }, (_, i) => ({
       round: i + 1,
       latency,
@@ -139,7 +140,7 @@ function sharedReportUrl(): string {
       corsMode: 'no-cors',
     },
     report: {
-      reportKind: 'support',
+      reportKind,
       createdAt: 1778352000000,
       healthThreshold: 120,
       corsMode: 'no-cors',
@@ -309,6 +310,52 @@ test.describe('Acceptance criteria verification', () => {
     await expect(page.getByRole('button', { name: /Check visibility/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Inspect slow moments/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Run outside check/i })).toBeVisible();
+  });
+
+  for (const viewport of [
+    { name: 'desktop', width: 1440, height: 900 },
+    { name: 'mobile', width: 375, height: 812 },
+  ] as const) {
+    test(`support report visual remains fact-first at ${viewport.width}px`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto(sharedReportUrl('support'));
+      await page.waitForSelector('#chronoscope-root');
+
+      const report = page.getByRole('region', { name: 'Diagnostic report' });
+      await expect(report.getByText('Support report').first()).toBeVisible();
+      await expect(report.getByRole('button', { name: /Copy Support Summary/i })).toBeVisible();
+      await expect(report).toHaveScreenshot(`support-report-${viewport.name}.png`);
+    });
+
+    test(`snapshot report visual remains brag-friendly at ${viewport.width}px`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto(sharedReportUrl('snapshot'));
+      await page.waitForSelector('#chronoscope-root');
+
+      const report = page.getByRole('region', { name: 'Diagnostic report' });
+      await expect(report.getByText('Performance snapshot').first()).toBeVisible();
+      await expect(report.getByRole('heading', { name: /healthy/i })).toBeVisible();
+      await expect(report.getByRole('button', { name: /Copy Snapshot Summary/i })).toBeVisible();
+      await expect(report).toHaveScreenshot(`snapshot-report-${viewport.name}.png`);
+    });
+  }
+
+  test('mobile share popover exposes support, snapshot, and config modes', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto('/');
+    await page.waitForSelector('#chronoscope-root');
+    await injectVisibleSamples(page);
+
+    await page.getByRole('button', { name: /share results/i }).click();
+
+    const dialog = page.getByRole('dialog', { name: /Share Chronoscope/i });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator('.action-label', { hasText: /^Support report$/ })).toBeVisible();
+    await expect(dialog.locator('.action-label', { hasText: /^Snapshot link$/ })).toBeVisible();
+    await expect(dialog.locator('.action-label', { hasText: /^Configuration link$/ })).toBeVisible();
+    await expect(dialog.getByRole('button', { name: /Create Support Report/i })).toBeEnabled();
+    await expect(dialog.getByRole('button', { name: /Copy Snapshot Link/i })).toBeEnabled();
+    await expect(dialog).toHaveScreenshot('share-popover-mobile.png');
   });
 });
 
