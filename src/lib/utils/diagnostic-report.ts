@@ -7,11 +7,13 @@ import type {
   EndpointStatistics,
   MeasurementSample,
   MeasurementState,
+  ReportKind,
   Settings,
   SharedReportContext,
   StatisticsState,
 } from '../types';
 import { buildDiagnosticNarrative, type DiagnosticNarrative } from './diagnostic-narrative';
+import { reportModeCopy } from './report-mode';
 import type { VerdictRow } from './verdict';
 
 export interface ReportEndpointRow {
@@ -34,6 +36,10 @@ export interface ReportEndpointRow {
 }
 
 export interface DiagnosticReport {
+  readonly reportKind: ReportKind;
+  readonly modeKicker: string;
+  readonly modeLede: string;
+  readonly copySummaryLabel: string;
   readonly diagnosis: DiagnosticNarrative;
   readonly endpointRows: readonly ReportEndpointRow[];
   readonly threshold: number;
@@ -162,9 +168,12 @@ function buildCopySummary(report: Omit<DiagnosticReport, 'copySummary'>): string
   const visibility = report.diagnosis.timingVisibility;
   const limitation = report.diagnosis.limitations[0];
   const firstTriageAction = report.diagnosis.triageActions[0];
+  const reportLabel = report.reportKind === 'snapshot'
+    ? 'Chronoscope performance snapshot'
+    : 'Chronoscope support report';
 
   return [
-    `Chronoscope diagnostic report: ${report.diagnosis.primaryAnswer.text} (${report.diagnosis.confidenceLabel}).`,
+    `${reportLabel}: ${report.diagnosis.primaryAnswer.text} (${report.diagnosis.confidenceLabel}).`,
     `Trust: ${report.diagnosis.supportingSummary}`,
     slowLine,
     `Evidence: ${report.keptSampleCount} samples kept across ${report.endpointRows.length} endpoints; threshold ${fmtMs(report.threshold)}; browser visibility: ${visibility.headline}.`,
@@ -178,6 +187,7 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): DiagnosticR
   const threshold = input.context?.healthThreshold ?? input.settings.healthThreshold;
   const thresholdSource = input.context?.healthThreshold != null ? 'shared' : 'local-default';
   const corsMode = input.context?.corsMode ?? input.settings.corsMode;
+  const reportKind = input.context?.reportKind ?? 'support';
   const corsModeSource = input.context?.corsMode != null
     ? (input.context.sourceVersion === 2 ? 'shared' : 'payload-settings')
     : 'local-default';
@@ -203,7 +213,21 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): DiagnosticR
   });
 
   const fallbackSampleCount = sumSamples(samplesByEndpoint);
+  const totalSampleCount = input.context?.totalSampleCount ?? fallbackSampleCount;
+  const keptSampleCount = input.context?.keptSampleCount ?? fallbackSampleCount;
+  const modeCopy = reportModeCopy({
+    reportKind,
+    primaryAnswer: diagnosis.primaryAnswer.text,
+    confidenceLabel: diagnosis.confidenceLabel,
+    sampleCount: keptSampleCount,
+    endpointCount: input.endpoints.length,
+    timingHeadline: diagnosis.timingVisibility.headline,
+  });
   const reportWithoutSummary: Omit<DiagnosticReport, 'copySummary'> = {
+    reportKind,
+    modeKicker: modeCopy.kicker,
+    modeLede: modeCopy.lede,
+    copySummaryLabel: modeCopy.primaryActionLabel,
     diagnosis,
     endpointRows: buildEndpointRows({
       endpoints: input.endpoints,
@@ -217,8 +241,8 @@ export function buildDiagnosticReport(input: DiagnosticReportInput): DiagnosticR
     corsMode,
     corsModeSource,
     roundCount: input.context?.roundCount ?? input.measurements.roundCounter,
-    totalSampleCount: input.context?.totalSampleCount ?? fallbackSampleCount,
-    keptSampleCount: input.context?.keptSampleCount ?? fallbackSampleCount,
+    totalSampleCount,
+    keptSampleCount,
     truncated: input.context?.truncated ?? false,
     createdAt: input.context?.createdAt ?? null,
     createdLabel: defaultCreatedLabel(input.context?.createdAt ?? null),

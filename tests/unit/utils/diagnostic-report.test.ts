@@ -133,10 +133,15 @@ describe('buildDiagnosticReport', () => {
     expect(report.threshold).toBe(120);
     expect(report.thresholdSource).toBe('shared');
     expect(report.corsMode).toBe('no-cors');
+    expect(report.reportKind).toBe('support');
+    expect(report.modeKicker).toBe('Support report');
+    expect(report.modeLede).toContain(report.diagnosis.primaryAnswer.text);
+    expect(report.copySummaryLabel).toBe('Copy Support Summary');
     expect(report.diagnosis.kind).toBe('isolated-endpoint');
     expect(report.endpointRows.find((row) => row.endpointId === 'api')?.implicated).toBe(true);
     expect(report.endpointRows.find((row) => row.endpointId === 'api')?.statusLabel).toBe('inspect');
     expect(report.copySummary).toContain('API');
+    expect(report.copySummary).toContain('Chronoscope support report:');
     expect(report.copySummary).toContain('threshold 120 ms');
     expect(report.copySummary).not.toMatch(/likely (affected|source|site|network|your network)/i);
     expect(report.copySummary).not.toContain(report.diagnosis.verdict.headline);
@@ -164,6 +169,36 @@ describe('buildDiagnosticReport', () => {
     expect(report.threshold).toBe(90);
     expect(report.thresholdSource).toBe('local-default');
     expect(report.corsModeSource).toBe('payload-settings');
+  });
+
+  it('uses snapshot copy when the shared report context requests it', () => {
+    const endpoints = [
+      endpoint('api', 'API'),
+      endpoint('google', 'Google'),
+      endpoint('cloudflare', 'Cloudflare'),
+    ];
+    const report = buildDiagnosticReport({
+      endpoints,
+      stats: {
+        api: stats({ endpointId: 'api', p50: 42, p95: 55 }),
+        google: stats({ endpointId: 'google', p50: 45, p95: 60 }),
+        cloudflare: stats({ endpointId: 'cloudflare', p50: 38, p95: 52 }),
+      },
+      measurements: measurementState({
+        api: Array.from({ length: 30 }, (_, i) => ok(i + 1, 42)),
+        google: Array.from({ length: 30 }, (_, i) => ok(i + 1, 45)),
+        cloudflare: Array.from({ length: 30 }, (_, i) => ok(i + 1, 38)),
+      }),
+      settings: DEFAULT_SETTINGS,
+      context: { ...context, reportKind: 'snapshot' },
+    });
+
+    expect(report.reportKind).toBe('snapshot');
+    expect(report.modeKicker).toBe('Performance snapshot');
+    expect(report.copySummaryLabel).toBe('Copy Snapshot Summary');
+    expect(report.modeLede).toContain(report.diagnosis.primaryAnswer.text);
+    expect(report.copySummary).toContain('Chronoscope performance snapshot:');
+    expect(report.copySummary).not.toMatch(/guaranteed|perfect|will fix|your ISP is/i);
   });
 
   it('marks truncated reports and carries sample counts through the model', () => {
