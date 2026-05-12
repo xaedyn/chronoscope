@@ -19,9 +19,21 @@ const forbiddenClaims: readonly RegExp[] = [
   /No network issue exists/i,
   /inside the current thresholds/i,
   /will fix/i,
+  /this will fix/i,
   /restart your router/i,
   /the problem is your/i,
   /your ISP is/i,
+  /your router is/i,
+  /the server is the cause/i,
+];
+
+const reportModeTerms: readonly string[] = [
+  'Support report',
+  'Performance snapshot',
+  'Copy Support Summary',
+  'Copy Snapshot Summary',
+  'Snapshot link',
+  'Configuration link',
 ];
 
 function sourceFiles(dir: string): string[] {
@@ -43,5 +55,18 @@ describe('user-facing diagnostic copy safety', () => {
     });
 
     expect(offenders).toEqual([]);
+  });
+
+  it('keeps report-mode labels allowed while preserving cause-claim guardrails', () => {
+    const source = sourceFiles(sourceRoot)
+      .map((path) => readFileSync(path, 'utf-8'))
+      .join('\n');
+    const missingTerms = reportModeTerms.filter((term) => !source.includes(term));
+    const blockedTerms = reportModeTerms.filter((term) => (
+      forbiddenClaims.some((pattern) => pattern.test(term))
+    ));
+
+    expect(missingTerms).toEqual([]);
+    expect(blockedTerms).toEqual([]);
   });
 });
