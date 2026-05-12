@@ -40,6 +40,12 @@ function plural(count: number, singular: string, pluralForm = `${singular}s`): s
   return count === 1 ? singular : pluralForm;
 }
 
+function countPhrase(count: number, total: number, singular: string): string {
+  return total === 1
+    ? `${count}/${total} ${singular}`
+    : `${count} of ${total} ${plural(total, singular)}`;
+}
+
 export function summarizeRemoteProof(probe: RemoteVantageProbeResponse | null): ProofSummary {
   if (!probe) {
     return {
@@ -57,9 +63,10 @@ export function summarizeRemoteProof(probe: RemoteVantageProbeResponse | null): 
   const endpointLabel = plural(probe.results.length, 'endpoint');
 
   if (problemCount > 0) {
+    const verb = problemCount === 1 ? 'was' : 'were';
     return {
       status: 'Captured',
-      text: `${problemCount}/${probe.results.length} ${endpointLabel} were slow or failed from Cloudflare`,
+      text: `${countPhrase(problemCount, probe.results.length, 'endpoint')} ${verb} slow or failed from Cloudflare`,
       tone: 'bad',
     };
   }
@@ -92,6 +99,7 @@ export function buildProofActionState(input: {
   readonly status: RemoteVantageStatus | CompanionStatus;
   readonly hasProof: boolean;
   readonly hasError: boolean;
+  readonly hasSecret?: boolean;
 }): ProofActionState {
   if (input.status === 'checking' || input.status === 'probing') {
     return { label: 'Running', tone: 'watch', disabled: true };
@@ -99,7 +107,9 @@ export function buildProofActionState(input: {
   if (input.hasProof) return { label: 'Captured', tone: 'good', disabled: false };
   if (input.hasError) {
     return {
-      label: input.kind === 'local' ? 'Needs setup' : 'Failed',
+      label: input.kind === 'local'
+        ? (input.hasSecret ? 'Needs check' : 'Needs setup')
+        : 'Failed',
       tone: 'watch',
       disabled: false,
     };

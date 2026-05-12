@@ -25,6 +25,15 @@ const cleanProbe: RemoteVantageProbeResponse = {
   }],
 };
 
+const slowProbe: RemoteVantageProbeResponse = {
+  ...cleanProbe,
+  results: [{
+    ...cleanProbe.results[0],
+    durationMs: 310,
+    verdict: 'slow',
+  }],
+};
+
 describe('proof-flow', () => {
   it('marks proof as stale when a report is newer than the captured proof', () => {
     expect(isProofStale({ reportCreatedAt: 2000, proofGeneratedAt: 1000 })).toBe(true);
@@ -42,6 +51,11 @@ describe('proof-flow', () => {
       tone: 'good',
       status: 'Captured',
       text: 'Cloudflare reached 1 endpoint without slow or failed results',
+    });
+    expect(summarizeRemoteProof(slowProbe)).toMatchObject({
+      tone: 'bad',
+      status: 'Captured',
+      text: '1/1 endpoint was slow or failed from Cloudflare',
     });
   });
 
@@ -63,6 +77,28 @@ describe('proof-flow', () => {
       hasError: true,
     })).toMatchObject({
       label: 'Failed',
+      disabled: false,
+      tone: 'watch',
+    });
+    expect(buildProofActionState({
+      kind: 'local',
+      status: 'error',
+      hasProof: false,
+      hasError: true,
+      hasSecret: false,
+    })).toMatchObject({
+      label: 'Needs setup',
+      disabled: false,
+      tone: 'watch',
+    });
+    expect(buildProofActionState({
+      kind: 'local',
+      status: 'error',
+      hasProof: false,
+      hasError: true,
+      hasSecret: true,
+    })).toMatchObject({
+      label: 'Needs check',
       disabled: false,
       tone: 'watch',
     });

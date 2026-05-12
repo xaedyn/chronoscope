@@ -151,6 +151,12 @@ describe('buildRemoteVantageInsight', () => {
         threshold: 120,
         probe: remote({ durationMs: 48, verdict: 'reachable' }),
       }),
+      buildRemoteVantageInsight({
+        endpoint,
+        stats: slowStats,
+        threshold: 120,
+        probe: remote({ ok: false, status: null, verdict: 'unreachable', durationMs: 5000 }),
+      }),
     ];
 
     for (const insight of states) {

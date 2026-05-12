@@ -216,6 +216,7 @@
       status: companion.status,
       hasProof: Boolean(companion.lastProbe),
       hasError: Boolean(companion.error),
+      hasSecret: companion.hasSecret,
     });
     if (companionBusy || !companion.lastProbe) {
       if (companion.status === 'connected') return { label: 'Ready', tone: 'neutral' };

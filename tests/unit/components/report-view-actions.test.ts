@@ -214,7 +214,7 @@ describe('ReportView triage actions', () => {
       expect(mocks.runProbe).toHaveBeenCalledWith(endpoints);
     });
     expect((await findAllByText('Captured')).length).toBeGreaterThan(0);
-    expect(await findAllByText(/1\/3 endpoints were slow or failed/i)).toHaveLength(1);
+    expect(await findAllByText(/1 of 3 endpoints was slow or failed/i)).toHaveLength(1);
   });
 
   it('scrolls to browser visibility from the triage card', async () => {
