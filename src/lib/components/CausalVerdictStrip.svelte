@@ -107,7 +107,7 @@
     {/if}
   </div>
   {#if diagnosis.kind !== 'collecting'}
-    <p class="verdict-explanation">{diagnosis.confidenceReason}</p>
+    <p class="verdict-explanation">{diagnosis.supportingSummary}</p>
   {:else if suppressionMessage}
     <p class="verdict-explanation verdict-suppression">{suppressionMessage}</p>
   {/if}
