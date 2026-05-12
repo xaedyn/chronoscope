@@ -88,6 +88,7 @@ describe('share-manager', () => {
       ...resultsPayload,
       v: 2,
       report: {
+        reportKind: 'support',
         createdAt: 1778352000000,
         healthThreshold: 120,
         corsMode: 'no-cors',
