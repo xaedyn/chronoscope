@@ -2,7 +2,7 @@
 
 **Status:** Living source of truth  
 **Created:** 2026-05-12  
-**Current production baseline:** `main` through PR #128, deployed to Cloudflare Pages
+**Current production baseline:** `main` through PR #129, deployed to Cloudflare Pages
 **Read this first in future sessions.**
 
 ---
@@ -83,6 +83,7 @@ Recent product spine:
 - PR #122-#126: Share/report excellence with support versus snapshot report modes, mode-specific rendering, and copy/visual guardrails.
 - PR #127: Claim registry foundation for evidence-gated diagnostic language.
 - PR #128: Claim registry wired into diagnostic narrative validation and copied report summaries.
+- PR #129: Trust-copy hardening for remote vantage, evidence trail, and history baseline surfaces.
 
 ---
 
@@ -345,4 +346,4 @@ The assistant should then:
 - Created this roadmap after PR #116 shipped the compact evidence trail and executable report triage actions.
 - Decided the next phase should be **Guided Proof Flow**, not another visual redesign.
 - Decided the product's highest-order constraint remains trust: every diagnostic claim must be tied to measured evidence, known browser limits, or an explicit next validation step.
-- Shipped Phase 1 and Phase 2 through PR #126. Phase 3 began with PR #127's registry and PR #128's narrative/report wiring, then continues by extending registry-gated language and copy safety through evidence trail, remote vantage, and history surfaces.
+- Shipped Phase 1 and Phase 2 through PR #126. Phase 3 began with PR #127's registry and PR #128's narrative/report wiring, then PR #129 extended trust-copy guardrails through evidence trail, remote vantage, and history baseline surfaces. The current Phase 3 focus is plain-language metric copy that keeps engineering terms available in data models without exposing them as unexplained user-facing shorthand.

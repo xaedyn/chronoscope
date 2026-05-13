@@ -56,8 +56,8 @@ export function buildRemoteVantageInsight(input: RemoteVantageInsightInput): Rem
     };
   }
 
-  const browserP50 = input.stats?.ready ? input.stats.p50 : null;
-  const browserSlow = browserP50 !== null && browserP50 > input.threshold;
+  const browserMedian = input.stats?.ready ? input.stats.p50 : null;
+  const browserSlow = browserMedian !== null && browserMedian > input.threshold;
   const remoteSlow = result.verdict === 'slow' || result.durationMs > input.threshold;
 
   if (!result.ok || result.verdict === 'unreachable' || result.verdict === 'http-error') {
@@ -77,7 +77,7 @@ export function buildRemoteVantageInsight(input: RemoteVantageInsightInput): Rem
     return {
       status: 'local-path',
       headline: `This outside check reached ${label} within threshold`,
-      detail: `${edge} measured ${fmtMs(result.durationMs)} while your browser p50 measured ${fmtMs(browserP50 ?? 0)}.`,
+      detail: `${edge} measured ${fmtMs(result.durationMs)} while your browser median measured ${fmtMs(browserMedian ?? 0)}.`,
       action: 'Run the local agent or compare another network to test whether the slowdown follows this connection.',
       edgeLabel: edge,
       result,
@@ -88,7 +88,7 @@ export function buildRemoteVantageInsight(input: RemoteVantageInsightInput): Rem
     return {
       status: 'remote-confirms',
       headline: `${label} was also slow from Cloudflare`,
-      detail: `${edge} took ${fmtMs(result.durationMs)} and your browser p50 is ${fmtMs(browserP50 ?? 0)}; both vantage points observed elevated latency.`,
+      detail: `${edge} took ${fmtMs(result.durationMs)} and your browser median is ${fmtMs(browserMedian ?? 0)}; both checks measured this endpoint above the threshold.`,
       action: 'Share the report with the service owner; it now contains outside-vantage evidence.',
       edgeLabel: edge,
       result,
@@ -99,7 +99,7 @@ export function buildRemoteVantageInsight(input: RemoteVantageInsightInput): Rem
     return {
       status: 'remote-slow-only',
       headline: `${label} is slow from ${edge}, but not your browser`,
-      detail: `Only the outside check was elevated in this snapshot${browserP50 !== null ? `; your browser p50 measured ${fmtMs(browserP50)}` : ''}.`,
+      detail: `Only the outside check was above the threshold in this snapshot${browserMedian !== null ? `; your browser median measured ${fmtMs(browserMedian)}` : ''}.`,
       action: 'Run the outside check again, or compare another outside vantage, before choosing the next test.',
       edgeLabel: edge,
       result,
