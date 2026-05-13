@@ -36,17 +36,30 @@ export interface SaturationOptions {
   readonly bucket?: SaturationBucket;
 }
 
+export type DohDnsRecordType = 'A' | 'AAAA';
+
+export interface DohDnsOptions {
+  readonly fetcher?: typeof fetch;
+  readonly now?: () => number;
+  readonly performanceNow?: () => number;
+}
+
 const MAX_TARGETS = 8;
 const MAX_REPORT_BYTES = 120_000;
 const REPORT_TTL_SECONDS = 60 * 60 * 24 * 30;
 const REPORT_ID_PATTERN = /^[a-zA-Z0-9_-]{8,80}$/;
 const PROBE_TIMEOUT_MS = 4500;
+const DOH_TIMEOUT_MS = 3000;
 const SLOW_REMOTE_MS = 500;
 const DEFAULT_SATURATION_BYTES = 25 * 1024 * 1024;
 const MAX_SATURATION_BYTES = 100 * 1024 * 1024;
 const CHUNK_BYTES = 64 * 1024;
 const PUBLIC_PORTS = new Set(['', '80', '443']);
 const EXPOSED_HEADERS = ['content-type', 'server', 'cache-control', 'cf-cache-status'];
+const DNS_TYPE_NUMBERS: Record<DohDnsRecordType, number> = {
+  A: 1,
+  AAAA: 28,
+};
 
 function json(status: number, payload: unknown, extraHeaders: HeadersInit = {}): Response {
   return new Response(status === 204 ? null : JSON.stringify(payload), {
@@ -176,6 +189,39 @@ function parseTargets(payload: unknown): RemoteVantageTarget[] {
   });
 }
 
+function parseDnsHostname(raw: unknown): string {
+  if (typeof raw !== 'string' || raw.length > 253) {
+    throw new Error('DNS lookup requires a public hostname.');
+  }
+
+  const trimmed = raw.trim().replace(/\.$/, '').toLowerCase();
+  if (
+    trimmed.length === 0 ||
+    trimmed.includes('/') ||
+    trimmed.includes('@') ||
+    trimmed.includes(':') ||
+    parseIPv4(trimmed) !== null ||
+    isBlockedHostname(trimmed)
+  ) {
+    throw new Error('DNS lookup requires a public hostname.');
+  }
+
+  const labels = trimmed.split('.');
+  const validLabels = labels.length >= 2 && labels.every((label) => (
+    label.length >= 1 &&
+    label.length <= 63 &&
+    /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)
+  ));
+  if (!validLabels) throw new Error('DNS lookup requires a public hostname.');
+  return trimmed;
+}
+
+function parseDnsRecordType(raw: string | null): DohDnsRecordType {
+  const normalized = (raw ?? 'A').toUpperCase();
+  if (normalized === 'A' || normalized === 'AAAA') return normalized;
+  throw new Error('DNS lookup supports A and AAAA records.');
+}
+
 function edgeFrom(cf?: Partial<RemoteVantageEdge> | null): RemoteVantageEdge {
   return {
     ...(cf?.colo ? { colo: String(cf.colo) } : {}),
@@ -280,6 +326,98 @@ export async function handleRemoteProbe(request: Request, options: RemoteProbeOp
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+function parseDohRecords(payload: unknown, recordType: DohDnsRecordType): string[] {
+  if (!isRecord(payload) || !Array.isArray(payload.Answer)) return [];
+  const typeNumber = DNS_TYPE_NUMBERS[recordType];
+  return payload.Answer
+    .filter((answer): answer is Record<string, unknown> => isRecord(answer))
+    .filter((answer) => answer.type === typeNumber && typeof answer.data === 'string')
+    .map((answer) => String(answer.data).slice(0, 255))
+    .slice(0, 16);
+}
+
+async function runDohLookup(input: {
+  readonly hostname: string;
+  readonly recordType: DohDnsRecordType;
+  readonly fetcher: typeof fetch;
+  readonly now: () => number;
+  readonly performanceNow: () => number;
+}): Promise<Response> {
+  const endpoint = new URL('https://cloudflare-dns.com/dns-query');
+  endpoint.searchParams.set('name', input.hostname);
+  endpoint.searchParams.set('type', input.recordType);
+
+  const startedAt = input.performanceNow();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DOH_TIMEOUT_MS);
+
+  try {
+    const response = await input.fetcher(endpoint.toString(), {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/dns-json',
+      },
+      cf: {
+        cacheTtl: 0,
+        cacheEverything: false,
+      },
+    } as RequestInit & { cf: Record<string, unknown> });
+    const payload = await response.json() as unknown;
+    const durationMs = Math.max(0, Math.round(input.performanceNow() - startedAt));
+
+    if (!response.ok) {
+      return json(502, {
+        ok: false,
+        error: `Cloudflare DNS-over-HTTPS returned HTTP ${response.status}.`,
+      });
+    }
+
+    return json(200, {
+      ok: true,
+      resolver: 'cloudflare-doh',
+      hostname: input.hostname,
+      recordType: input.recordType,
+      records: parseDohRecords(payload, input.recordType),
+      durationMs,
+      checkedAt: input.now(),
+    });
+  } catch {
+    return json(502, {
+      ok: false,
+      error: 'Cloudflare DNS-over-HTTPS lookup did not complete.',
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export function handleDohDnsRequest(request: Request, options: DohDnsOptions = {}): Response | Promise<Response> {
+  if (request.method === 'OPTIONS') return json(204, {});
+  if (request.method !== 'GET') return json(405, { ok: false, error: 'Method not allowed.' });
+
+  let hostname: string;
+  let recordType: DohDnsRecordType;
+  try {
+    const url = new URL(request.url);
+    hostname = parseDnsHostname(url.searchParams.get('hostname'));
+    recordType = parseDnsRecordType(url.searchParams.get('type'));
+  } catch {
+    return json(400, {
+      ok: false,
+      error: 'DNS lookup requires a public hostname and A or AAAA record type.',
+    });
+  }
+
+  return runDohLookup({
+    hostname,
+    recordType,
+    fetcher: options.fetcher ?? globalThis.fetch.bind(globalThis),
+    now: options.now ?? Date.now,
+    performanceNow: options.performanceNow ?? performance.now.bind(performance),
+  });
 }
 
 function isSharePayloadLike(value: unknown): value is SharePayload {
