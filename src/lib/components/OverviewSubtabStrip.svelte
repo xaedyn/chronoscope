@@ -96,4 +96,10 @@
   @media (prefers-reduced-motion: reduce) {
     button[role="tab"], button[role="tab"]::after { transition: none; }
   }
+
+  @media (max-width: 767px) and (max-height: 760px) {
+    button[role="tab"] {
+      padding: 5px 9px 6px;
+    }
+  }
 </style>

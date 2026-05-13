@@ -22,6 +22,25 @@ const VIEWPORTS = [
 
 const RUNNING_OR_STARTING_CONTROL = /^(?:Starting\.\.\.|Stop)$/i;
 
+interface VisibleEndpointTarget {
+  readonly id: string;
+}
+
+interface LayoutBox {
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly bottom: number;
+}
+
+interface StatusLayoutMeasurement {
+  readonly main: LayoutBox | null;
+  readonly verdict: LayoutBox | null;
+  readonly grid: LayoutBox | null;
+  readonly dial: LayoutBox | null;
+  readonly racing: LayoutBox | null;
+}
+
 interface ScrollerReport {
   readonly tag: string;
   readonly className: string;
@@ -79,6 +98,72 @@ const scrollState = async (page: Page): Promise<ScrollCheck> => {
   });
 };
 
+const visibleEndpointTargets = async (page: Page): Promise<VisibleEndpointTarget[]> => {
+  await page.waitForSelector('[data-endpoint-id]', { state: 'attached', timeout: 3000 });
+  return await page.locator('[data-endpoint-id]').evaluateAll((els) => {
+    const seen = new Set<string>();
+    const targets: VisibleEndpointTarget[] = [];
+    for (const el of els) {
+      const id = el.getAttribute('data-endpoint-id');
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      targets.push({ id });
+    }
+    return targets;
+  });
+};
+
+const injectWarningSamples = async (page: Page): Promise<void> => {
+  await page.waitForFunction(() => typeof window.__chronoscope_inject_samples === 'function');
+  const targets = await visibleEndpointTargets(page);
+  expect(targets.length).toBeGreaterThan(1);
+  const slowIndex = Math.min(2, targets.length - 1);
+  await page.evaluate(
+    ({ seedTargets, targetIndex }) => {
+      const inject = window.__chronoscope_inject_samples;
+      if (!inject) throw new Error('__chronoscope_inject_samples is unavailable');
+      const originalRandom = Math.random;
+      let randomStep = 0;
+      Math.random = () => ((randomStep++ % 36) + 0.5) / 36;
+      try {
+        inject(seedTargets.map((target, index) => ({
+          endpointId: target.id,
+          count: 36,
+          latencyMs: index === targetIndex ? 360 : 42 + index * 8,
+          jitterMs: 3,
+        })));
+      } finally {
+        Math.random = originalRandom;
+      }
+    },
+    { seedTargets: targets, targetIndex: slowIndex },
+  );
+  await page.waitForTimeout(150);
+};
+
+const measureStatusLayout = async (page: Page): Promise<StatusLayoutMeasurement> => {
+  return await page.evaluate<StatusLayoutMeasurement>(() => {
+    const box = (selector: string): LayoutBox | null => {
+      const element = document.querySelector<HTMLElement | SVGElement>(selector);
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return {
+        y: Math.round(rect.y),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+        bottom: Math.round(rect.bottom),
+      };
+    };
+    return {
+      main: box('main#main-content'),
+      verdict: box('.verdict.hero'),
+      grid: box('.overview-grid'),
+      dial: box('svg.dial'),
+      racing: box('#overview-panel-racing'),
+    };
+  });
+};
+
 test.describe('Status — no scroll on first visit', () => {
   for (const vp of VIEWPORTS) {
     test(`cold state @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page }) => {
@@ -132,6 +217,37 @@ test.describe('Status — no scroll on first visit', () => {
     // The grid at 2560 must be materially wider than at 1440 — the whole
     // point of the fluid layout.
     expect(at2560.gridW).toBeGreaterThan(at1440.gridW + 600);
+  });
+
+  test('desktop warning copy does not resize or push the Status dial', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.goto('/');
+    await page.waitForSelector('#chronoscope-root');
+    await page.waitForTimeout(400);
+
+    const cold = await measureStatusLayout(page);
+    expect(cold.main).not.toBeNull();
+    expect(cold.verdict).not.toBeNull();
+    expect(cold.dial).not.toBeNull();
+
+    await injectWarningSamples(page);
+    const warning = await measureStatusLayout(page);
+    expect(warning.main).not.toBeNull();
+    expect(warning.verdict).not.toBeNull();
+    expect(warning.dial).not.toBeNull();
+
+    expect(
+      Math.abs(warning.verdict!.height - cold.verdict!.height),
+      `verdict height changed from ${cold.verdict!.height}px to ${warning.verdict!.height}px`,
+    ).toBeLessThanOrEqual(2);
+    expect(
+      Math.abs(warning.dial!.height - cold.dial!.height),
+      `dial height changed from ${cold.dial!.height}px to ${warning.dial!.height}px`,
+    ).toBeLessThanOrEqual(2);
+    expect(
+      warning.dial!.bottom,
+      `dial bottom (${warning.dial!.bottom}) should stay within main bottom (${warning.main!.bottom})`,
+    ).toBeLessThanOrEqual(warning.main!.bottom - 4);
   });
 
   test('lifecycle stability @ mobile-floor (no reflow after engine starts)', async ({ page }) => {
@@ -208,5 +324,27 @@ test.describe('Status — no scroll on first visit', () => {
     expect(reachability.horizontalOverflow, 'document should not overflow horizontally').toBe(false);
     expect(reachability.stripFullyVisible, 'Status subtab strip should fit in the first viewport').toBe(true);
     expect(reachability.panelFullyVisible, 'Status evidence panel should fit in the first viewport').toBe(true);
+  });
+
+  test('warning state keeps the Status dial and evidence visible on iPhone SE', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/');
+    await page.waitForSelector('#chronoscope-root');
+    await page.waitForTimeout(400);
+
+    await injectWarningSamples(page);
+    const warning = await measureStatusLayout(page);
+    expect(warning.main).not.toBeNull();
+    expect(warning.dial).not.toBeNull();
+    expect(warning.racing).not.toBeNull();
+
+    expect(
+      warning.dial!.bottom,
+      `dial bottom (${warning.dial!.bottom}) should stay within main bottom (${warning.main!.bottom})`,
+    ).toBeLessThanOrEqual(warning.main!.bottom);
+    expect(
+      warning.racing!.bottom,
+      `evidence bottom (${warning.racing!.bottom}) should stay within viewport (${page.viewportSize()?.height})`,
+    ).toBeLessThanOrEqual(page.viewportSize()!.height);
   });
 });
