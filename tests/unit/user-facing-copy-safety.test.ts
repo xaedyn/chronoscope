@@ -28,6 +28,9 @@ const forbiddenClaims: readonly RegExp[] = [
   /local-path evidence/i,
   /usual latency/i,
   /before deciding what to inspect/i,
+  /browser p50/i,
+  / p50\)/i,
+  /elevated latency/i,
 ];
 
 const reportModeTerms: readonly string[] = [
