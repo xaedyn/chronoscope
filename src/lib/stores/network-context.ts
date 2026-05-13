@@ -17,6 +17,7 @@ export interface NetworkContextState {
 
 export interface NetworkContextStoreOptions {
   readonly fetcher?: typeof fetch;
+  readonly timeoutMs?: number;
 }
 
 export interface NetworkContextStore {
@@ -50,6 +51,12 @@ const initialState: NetworkContextState = {
   error: null,
 };
 
+const DEFAULT_TIMEOUT_MS = 8_000;
+
+interface InFlightRun {
+  readonly controllers: Set<AbortController>;
+}
+
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -82,14 +89,68 @@ async function parseJsonResponse<T>(response: Response): Promise<T> {
   return payload as T;
 }
 
+function abortReason(reason: unknown): Error {
+  return reason instanceof Error ? reason : new Error('Network context request was cancelled.');
+}
+
 export function createNetworkContextStore(options: NetworkContextStoreOptions = {}): NetworkContextStore {
   const { subscribe, set } = writable<NetworkContextState>(initialState);
   const fetcher = options.fetcher ?? fetch;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   let runSerial = 0;
+  let inFlightRun: InFlightRun | null = null;
+
+  function abortInFlight(reason = new Error('Network context request was cancelled.')): void {
+    for (const controller of inFlightRun?.controllers ?? []) {
+      controller.abort(reason);
+    }
+    inFlightRun = null;
+  }
+
+  async function fetchContextJson<T>(
+    run: InFlightRun,
+    input: RequestInfo | URL,
+    init: RequestInit,
+  ): Promise<T> {
+    const controller = new AbortController();
+    run.controllers.add(controller);
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    let abortHandler: (() => void) | null = null;
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        const error = new Error('Network context request timed out.');
+        controller.abort(error);
+        reject(error);
+      }, timeoutMs);
+    });
+    const abortPromise = new Promise<never>((_, reject) => {
+      abortHandler = () => reject(abortReason(controller.signal.reason));
+      controller.signal.addEventListener('abort', abortHandler, { once: true });
+    });
+
+    try {
+      const response = await Promise.race([
+        fetcher(input, { ...init, signal: controller.signal }),
+        timeoutPromise,
+        abortPromise,
+      ]);
+      return await Promise.race([
+        parseJsonResponse<T>(response),
+        timeoutPromise,
+        abortPromise,
+      ]);
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      if (abortHandler) controller.signal.removeEventListener('abort', abortHandler);
+      run.controllers.delete(controller);
+    }
+  }
 
   async function run(endpoint: Endpoint): Promise<NetworkContextState> {
     const serial = runSerial + 1;
     runSerial = serial;
+    abortInFlight();
 
     let hostname: string;
     try {
@@ -111,11 +172,12 @@ export function createNetworkContextStore(options: NetworkContextStoreOptions = 
     });
 
     const encodedHostname = encodeURIComponent(hostname);
-    const dns = fetcher(`/api/vantage/dns?hostname=${encodedHostname}&type=A`, {
+    const currentRun: InFlightRun = { controllers: new Set() };
+    inFlightRun = currentRun;
+    const dns = fetchContextJson<DnsContextResponse>(currentRun, `/api/vantage/dns?hostname=${encodedHostname}&type=A`, {
       method: 'GET',
       cache: 'no-store',
     })
-      .then((response) => parseJsonResponse<DnsContextResponse>(response))
       .then((payload) => describeDohInsight({
         hostname: payload.hostname,
         resolver: payload.resolver,
@@ -123,11 +185,10 @@ export function createNetworkContextStore(options: NetworkContextStoreOptions = 
         durationMs: payload.durationMs,
       }));
 
-    const topology = fetcher(`/api/vantage/topology?hostname=${encodedHostname}`, {
+    const topology = fetchContextJson<TopologyContextResponse>(currentRun, `/api/vantage/topology?hostname=${encodedHostname}`, {
       method: 'GET',
       cache: 'no-store',
     })
-      .then((response) => parseJsonResponse<TopologyContextResponse>(response))
       .then((payload) => describeTopologyContext({
         hostname: payload.hostname,
         asn: payload.asn,
@@ -148,11 +209,13 @@ export function createNetworkContextStore(options: NetworkContextStoreOptions = 
     };
 
     if (serial === runSerial) set(next);
+    if (inFlightRun === currentRun) inFlightRun = null;
     return next;
   }
 
   function reset(): void {
     runSerial += 1;
+    abortInFlight();
     set(initialState);
   }
 

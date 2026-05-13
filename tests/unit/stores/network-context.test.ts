@@ -113,4 +113,56 @@ describe('networkContextStore', () => {
       error: 'Network context did not complete.',
     });
   });
+
+  it('times out dependency requests that do not settle', async () => {
+    vi.useFakeTimers();
+    const fetcher = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (signal) {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+      }
+    }));
+    const store = createNetworkContextStore({ fetcher, timeoutMs: 5 });
+
+    try {
+      const run = store.run(endpoint);
+      await vi.advanceTimersByTimeAsync(5);
+
+      await run;
+
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      expect(get(store)).toMatchObject({
+        status: 'error',
+        dnsError: 'Network context request timed out.',
+        topologyError: 'Network context request timed out.',
+        error: 'Network context did not complete.',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels in-flight requests when the store is reset', async () => {
+    let aborts = 0;
+    const fetcher = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (signal) {
+        signal.addEventListener('abort', () => {
+          aborts += 1;
+          reject(signal.reason);
+        }, { once: true });
+      }
+    }));
+    const store = createNetworkContextStore({ fetcher });
+
+    const run = store.run(endpoint);
+    store.reset();
+    await run;
+
+    expect(aborts).toBe(2);
+    expect(get(store)).toMatchObject({
+      status: 'idle',
+      hostname: null,
+    });
+  });
 });
