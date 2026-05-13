@@ -163,7 +163,7 @@ function buildEndpointRows(input: {
 function buildCopySummary(report: Omit<DiagnosticReport, 'copySummary'>): string {
   const slowRows = report.endpointRows.filter((row) => row.status === 'slow' || row.implicated);
   const slowLine = slowRows.length > 0
-    ? `Endpoints to inspect: ${slowRows.map((row) => `${row.label} (${fmtMs(row.p50)} p50)`).join(', ')}.`
+    ? `Endpoints to inspect: ${slowRows.map((row) => `${row.label} (${fmtMs(row.p50)} median)`).join(', ')}.`
     : 'No endpoint is currently above the report threshold.';
   const visibility = report.diagnosis.timingVisibility;
   const limitation = report.diagnosis.limitations[0];

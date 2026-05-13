@@ -70,7 +70,7 @@ describe('buildRemoteVantageInsight', () => {
 
     expect(insight.status).toBe('local-path');
     expect(insight.headline).toContain('outside check reached API within threshold');
-    expect(insight.detail).toContain('browser p50 measured');
+    expect(insight.detail).toContain('browser median measured');
     expect(insight.action).toBe('Run the local agent or compare another network to test whether the slowdown follows this connection.');
     expect(insight.detail).not.toMatch(/ISP|VPN|WiFi|local network/i);
     expect(insightCopy(insight)).not.toMatch(/local-path evidence|cause|likely/i);
@@ -86,6 +86,7 @@ describe('buildRemoteVantageInsight', () => {
 
     expect(insight.status).toBe('remote-confirms');
     expect(insight.headline).toContain('was also slow from Cloudflare');
+    expect(insight.detail).toContain('both checks measured this endpoint above the threshold');
     expect(insight.detail).not.toMatch(/implicated|likely/i);
   });
 
@@ -98,7 +99,7 @@ describe('buildRemoteVantageInsight', () => {
     });
 
     expect(insight.status).toBe('remote-slow-only');
-    expect(insight.detail).toContain('Only the outside check was elevated');
+    expect(insight.detail).toContain('Only the outside check was above the threshold');
     expect(insight.action).toBe('Run the outside check again, or compare another outside vantage, before choosing the next test.');
     expect(insight.action).not.toMatch(/blaming|likely/i);
   });
@@ -164,6 +165,7 @@ describe('buildRemoteVantageInsight', () => {
 
     for (const insight of states) {
       expect(insightCopy(insight)).not.toMatch(/origin|cause|likely|healthy|local network|ISP|VPN/i);
+      expect(insightCopy(insight)).not.toMatch(/\bp50\b|elevated latency/i);
       expect(insightCopy(insight)).not.toMatch(/reaches .* normally/i);
       expect(insightCopy(insight)).not.toMatch(/outside edge path/i);
     }
