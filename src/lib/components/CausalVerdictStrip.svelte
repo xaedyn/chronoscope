@@ -86,6 +86,7 @@
   class:hero={variant === 'hero'}
   class:warn={verdict.tone === 'warn'}
   class:good={verdict.tone === 'good'}
+  class:collecting={diagnosis.kind === 'collecting'}
   aria-live="polite"
   aria-atomic="true"
 >
@@ -400,6 +401,9 @@
     min-height: 44px;
     white-space: nowrap;
   }
+  .verdict:not(.collecting) .verdict-drill:not(.verdict-start) {
+    grid-row: 4;
+  }
 
   .verdict-extra {
     grid-column: 1 / -1;
@@ -427,6 +431,9 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .verdict.hero .verdict-extra {
+    display: none;
   }
   .verdict-extra-label {
     flex: 0 0 auto;

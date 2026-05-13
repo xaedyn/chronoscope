@@ -633,6 +633,8 @@
   .dial-wrap {
     position: relative;
     width: 100%;
+    height: 100%;
+    min-height: 0;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -674,14 +676,17 @@
   }
 
   .dial {
-    width: 100%;
+    width: min(
+      100%,
+      clamp(var(--dial-min-w, 520px), 90cqi, var(--dial-max-w, 720px)),
+      calc(100cqb - var(--status-dial-pad-y, 16px))
+    );
     /* Floor 520 px (original design size) on laptop, grows with the column
        via container query up to 720 px on wide displays. 90cqi = 90% of the
-       .overview-left column inline size, so the dial tracks its own column
-       and ignores the rail/viewport directly. Short viewports and mobile
-       are handled by the @media overrides below (laptop floor 1366×768,
-       mobile 767/375, short-height ≤820). */
-    max-width: clamp(var(--dial-min-w, 520px), 90cqi, var(--dial-max-w, 720px));
+       .overview-left column inline size, while 100cqb caps it against the
+       fixed Status instrument row. The dial now tracks a reserved layout
+       budget instead of shrinking or clipping when the verdict copy changes. */
+    max-width: none;
     height: auto;
     display: block;
     /* Breathing chrome — the five --vars transitions run in parallel.
@@ -760,32 +765,28 @@
     white-space: nowrap; border: 0;
   }
 
-  /* Short-viewport cap: laptop floor (≤820 px height). Holds the 300 px
-     legibility minimum. */
-  @media (max-height: 820px) {
-    .dial { max-width: min(440px, 68vw); }
+  @supports not (width: 1cqb) {
+    .dial {
+      width: 100%;
+      max-width: clamp(var(--dial-min-w, 520px), 90cqi, var(--dial-max-w, 720px));
+    }
+    /* Short-viewport cap: laptop floor (≤820 px height). Holds the 300 px
+       legibility minimum in browsers without container block query units. */
+    @media (max-height: 820px) {
+      .dial { max-width: min(440px, 68vw); }
+    }
   }
   /* Mobile cap — 320 px comfortably reads. */
   @media (max-width: 767px) {
-    .dial { max-width: min(320px, 88vw); }
-  }
-  /* Mobile floor (360 px) — drop to 300 px, the legibility minimum. Holds
-     the "no-scroll" invariant below the verdict. */
-  @media (max-width: 375px) {
-    .dial { max-width: min(300px, 86vw); }
+    .dial {
+      width: min(100%, var(--status-mobile-dial-size, 300px));
+      max-width: none;
+    }
   }
   @media (max-width: 767px) and (max-height: 860px) {
     .dial-wrap { padding: 4px 0; }
-    .dial { max-width: min(300px, 82vw); }
-  }
-  @media (max-width: 375px) and (max-height: 860px) {
-    .dial { max-width: min(280px, 80vw); }
   }
   @media (max-width: 767px) and (max-height: 760px) {
     .dial-wrap { padding: 2px 0; }
-    .dial { max-width: min(270px, 78vw); }
-  }
-  @media (max-width: 375px) and (max-height: 760px) {
-    .dial { max-width: min(260px, 76vw); }
   }
 </style>

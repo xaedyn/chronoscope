@@ -383,6 +383,12 @@
 
 <style>
   .overview {
+    --status-shell-gap: 14px;
+    --status-verdict-h: 138px;
+    --status-dial-pad-y: 16px;
+    --status-mobile-dial-size: 300px;
+    --status-mobile-dial-row-h: calc(var(--status-mobile-dial-size) + var(--status-dial-pad-y));
+    --status-mobile-detail-row-h: 167px;
     flex: 1;
     height: 100%;
     display: flex;
@@ -396,10 +402,15 @@
     width: 100%;
     max-width: min(92vw, var(--content-max-w));
     margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
+    display: grid;
+    grid-template-rows: var(--status-verdict-h) minmax(0, 1fr);
+    gap: var(--status-shell-gap);
     height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .status-shell :global(.verdict.hero) {
+    height: var(--status-verdict-h);
     min-height: 0;
     overflow: hidden;
   }
@@ -415,7 +426,7 @@
     display: grid;
     grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
     gap: 20px;
-    align-items: start;
+    align-items: stretch;
     min-height: 0;
     overflow: hidden;
   }
@@ -427,13 +438,16 @@
     flex-direction: column;
     gap: 12px;
     min-width: 0;
-    container-type: inline-size;
+    min-height: 0;
+    height: 100%;
+    container-type: size;
   }
   .overview-right {
     display: flex;
     flex-direction: column;
     gap: 12px;
     min-width: 0;
+    min-height: 0;
   }
   /* Desktop: both racing and events live side-by-side in the right column
      (the 2-col grid above stacks them vertically). The subtab strip is
@@ -441,7 +455,19 @@
   .overview-subtab-strip { display: none; }
 
   @media (max-width: 1023px) {
-    .overview-grid { grid-template-columns: 1fr; }
+    .overview-grid {
+      grid-template-columns: 1fr;
+      grid-template-rows: var(--status-mobile-dial-row-h) var(--status-mobile-detail-row-h);
+      gap: 10px;
+      align-content: start;
+    }
+    .overview-left {
+      height: var(--status-mobile-dial-row-h);
+    }
+    .overview-right {
+      height: var(--status-mobile-detail-row-h);
+      overflow: hidden;
+    }
     /* Narrow viewports: expose the subtab strip and render only the active
        card. The inactive card stays mounted in the DOM via CSS hide so its
        store subscriptions persist (no resubscribe jitter when toggling). */
@@ -450,28 +476,53 @@
     .overview-right[data-subtab="events"] .card-slot--racing { display: none; }
   }
   @media (max-width: 767px) {
+    .overview { --status-dial-pad-y: 8px; }
     .overview {
       padding: 8px 12px;
       overflow-x: hidden;
       overflow-y: hidden;
     }
-    .status-shell { gap: 10px; }
-    .overview-grid { grid-template-columns: 1fr; gap: 10px; align-content: start; }
+    .status-shell { gap: 6px; }
+    .overview-grid { grid-template-columns: 1fr; gap: 6px; align-content: start; }
     .overview-left, .overview-right { gap: 8px; }
   }
 
   @media (max-height: 900px) and (min-width: 768px) {
+    .overview { --status-shell-gap: 10px; }
     .overview { padding-block: 10px; }
-    .status-shell { gap: 10px; }
-    .overview-grid { gap: 16px; align-items: center; }
-    .overview-right[data-has-events="false"] .card-slot--events { display: none; }
+    .overview-grid { gap: 16px; }
+    .overview-right .card-slot--events { display: none; }
   }
 
   @media (max-width: 767px) and (max-height: 860px) {
+    .overview {
+      --status-mobile-dial-size: 300px;
+      --status-mobile-detail-row-h: 167px;
+    }
     .overview { padding-block: 6px; }
     .status-shell,
     .overview-grid,
     .overview-left,
     .overview-right { gap: 6px; }
+  }
+
+  @media (max-width: 375px) {
+    .overview {
+      --status-mobile-dial-size: 280px;
+    }
+  }
+
+  @media (max-width: 767px) and (max-height: 760px) {
+    .overview {
+      --status-dial-pad-y: 4px;
+      --status-mobile-dial-size: 270px;
+      --status-mobile-detail-row-h: 144px;
+    }
+  }
+
+  @media (max-width: 375px) and (max-height: 760px) {
+    .overview {
+      --status-mobile-dial-size: 252px;
+    }
   }
 </style>

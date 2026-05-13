@@ -363,4 +363,15 @@
     .racing-track { height: 16px; }
     .racing-stats { gap: 4px; }
   }
+
+  @media (max-width: 767px) and (max-height: 760px) {
+    .racing { padding: 4px 6px; }
+    .racing-header,
+    .racing-axis {
+      display: none;
+    }
+    .racing-row {
+      padding: 2px 5px;
+    }
+  }
 </style>
