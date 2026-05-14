@@ -11,6 +11,7 @@ const baseProps = {
   samplesByEndpoint: {},
   threshold: 120,
   focusedEndpointId: null,
+  p99Across: 0,
 };
 
 describe('RacingStrip — G5 hint copy', () => {
@@ -96,5 +97,23 @@ describe('RacingStrip — G4 unit suffix', () => {
     const row = container.querySelector('.racing-row');
     expect(row?.getAttribute('aria-label')).toContain('live no data');
     expect(row?.getAttribute('aria-label')).not.toContain('NaN');
+  });
+});
+
+describe('RacingStrip — threshold label placement', () => {
+  it('keeps the slow threshold label in the header, not floating inside the chart', () => {
+    const { container, getByText, queryByText } = render(RacingStrip, {
+      props: {
+        ...baseProps,
+        endpoints: [{ id: 'ep1', url: 'https://a.com', label: 'A', enabled: true, color: '#fff' }],
+        lastLatencies: { ep1: 80 },
+        samplesByEndpoint: { ep1: [] },
+      },
+    });
+
+    expect(getByText('Slow threshold: 120 ms')).toBeTruthy();
+    expect(queryByText('120 trigger')).toBeNull();
+    expect(container.querySelector('.racing-axis-threshold')).toBeNull();
+    expect(container.querySelector('.racing-threshtick')).not.toBeNull();
   });
 });
