@@ -72,7 +72,7 @@ describe('RunStorylineCard', () => {
   });
 
   it('renders readable time labels and a status legend', () => {
-    const { getByRole, getByText } = render(RunStorylineCard, {
+    const { container, getByRole, getByText } = render(RunStorylineCard, {
       props: {
         storyline: storyline(),
         onDrill: vi.fn(),
@@ -89,6 +89,7 @@ describe('RunStorylineCard', () => {
     expect(legend.getByText('elevated')).toBeTruthy();
     expect(legend.getByText('slow')).toBeTruthy();
     expect(legend.getByText('failed')).toBeTruthy();
+    expect(container.querySelector('.story-time-header')).not.toBeNull();
   });
 
   it('positions alert markers with proportional track coordinates', () => {

@@ -8,8 +8,11 @@
 <!-- that signal in a less expressive form.                                    -->
 <script lang="ts">
   import { measurementStore } from '$lib/stores/measurements';
+  import { endpointStore } from '$lib/stores/endpoints';
+  import { settingsStore } from '$lib/stores/settings';
   import { uiStore } from '$lib/stores/ui';
   import type { TestLifecycleState } from '$lib/types';
+  import { formatElapsed } from '$lib/utils/format';
   import { isStartLifecycle, runStatusText, startStopButtonLabel } from '$lib/utils/lifecycle-copy';
 
   let { onStart, onStop }: {
@@ -20,6 +23,17 @@
   const lifecycle: TestLifecycleState = $derived($measurementStore.lifecycle);
   const roundCounter: number = $derived($measurementStore.roundCounter);
   const isSharedView: boolean = $derived($uiStore.isSharedView);
+  const enabledEndpointCount = $derived($endpointStore.filter((ep) => ep.enabled).length);
+  const cap = $derived($settingsStore.cap);
+  const burstRounds = $derived($settingsStore.burstRounds);
+  const monitorDelay = $derived($settingsStore.monitorDelay);
+  const timeout = $derived($settingsStore.timeout);
+  const startedAt = $derived($measurementStore.startedAt);
+  const errorCount = $derived($measurementStore.errorCount);
+  const timeoutCount = $derived($measurementStore.timeoutCount);
+
+  let detailsOpen = $state(false);
+  let now = $state(Date.now());
 
   const isRunning = $derived(lifecycle === 'running');
   const isTransitioning = $derived(lifecycle === 'starting' || lifecycle === 'stopping');
@@ -27,10 +41,34 @@
   const runText = $derived(runStatusText(lifecycle));
 
   const tickText = $derived(`T+${String(roundCounter).padStart(4, '0')}`);
+  const endpointText = $derived(`${enabledEndpointCount} endpoint${enabledEndpointCount === 1 ? '' : 's'}`);
+  const timeoutText = $derived(`${Math.round(timeout / 1000)}s timeout`);
+  const progressText = $derived(`${roundCounter} of ${cap} samples`);
+  const elapsedText = $derived(startedAt === null ? 'Not started' : `${formatElapsed(Math.max(0, now - startedAt))} elapsed`);
+  const cadenceText = $derived(
+    roundCounter < burstRounds
+      ? `Burst ${Math.min(roundCounter, burstRounds)}/${burstRounds}`
+      : `${Math.round(monitorDelay / 1000)}s interval`
+  );
+  const issueText = $derived(
+    errorCount === 0 && timeoutCount === 0
+      ? 'No request errors'
+      : `${errorCount} error${errorCount === 1 ? '' : 's'} · ${timeoutCount} timeout${timeoutCount === 1 ? '' : 's'}`
+  );
+  const runSummaryText = $derived(`Browser test · ${endpointText} · ${timeoutText}`);
 
   const startStopLabel = $derived(startStopButtonLabel(lifecycle));
   const isStartButton = $derived(isStartLifecycle(lifecycle));
 
+  $effect(() => {
+    if (lifecycle !== 'running') return;
+    const id = setInterval(() => { now = Date.now(); }, 1000);
+    return () => clearInterval(id);
+  });
+
+  function handleRunDetails(): void {
+    detailsOpen = !detailsOpen;
+  }
   function handleStartStop(): void {
     if (lifecycle === 'running') onStop?.();
     else if (isStartButton) onStart?.();
@@ -68,10 +106,58 @@
     <span class="run-label">{runText}</span>
     <span class="run-tick" aria-hidden="true">{tickText}</span>
   </div>
+  <span class="run-summary">{runSummaryText}</span>
 
   <div class="spacer"></div>
 
   <nav class="actions" aria-label="Test controls">
+    <div class="run-details">
+      <button
+        type="button"
+        class="icon-btn run-details-btn"
+        aria-label="Run details"
+        aria-expanded={detailsOpen}
+        aria-controls="run-details-popover"
+        onclick={handleRunDetails}
+      >
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.3"/>
+          <path d="M8 7.25V11" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+          <circle cx="8" cy="4.75" r=".75" fill="currentColor"/>
+        </svg>
+      </button>
+      {#if detailsOpen}
+        <div id="run-details-popover" class="run-details-popover" role="dialog" aria-label="Run details">
+          <p class="run-details-title">Browser test</p>
+          <dl class="run-details-list">
+            <div>
+              <dt>Endpoints</dt>
+              <dd>{endpointText}</dd>
+            </div>
+            <div>
+              <dt>Progress</dt>
+              <dd>{progressText}</dd>
+            </div>
+            <div>
+              <dt>Cadence</dt>
+              <dd>{cadenceText}</dd>
+            </div>
+            <div>
+              <dt>Timeout</dt>
+              <dd>{timeoutText}</dd>
+            </div>
+            <div>
+              <dt>Elapsed</dt>
+              <dd>{elapsedText}</dd>
+            </div>
+            <div>
+              <dt>Requests</dt>
+              <dd>{issueText}</dd>
+            </div>
+          </dl>
+        </div>
+      {/if}
+    </div>
     {#if isSharedView}
       <button
         type="button" class="icon-btn"
@@ -138,6 +224,8 @@
 
 <style>
   .topbar {
+    position: relative;
+    z-index: 50;
     height: var(--topbar-height);
     padding: 0 18px;
     display: flex;
@@ -217,10 +305,65 @@
     font-variant-numeric: tabular-nums;
     margin-left: 2px;
   }
+  .run-summary {
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+    color: var(--t3);
+    letter-spacing: var(--tr-label);
+    white-space: nowrap;
+  }
 
   .spacer { flex: 1; }
 
   .actions { display: flex; align-items: center; gap: 8px; }
+  .run-details {
+    position: relative;
+    display: flex;
+  }
+  .run-details-popover {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 80;
+    width: 260px;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border-bright);
+    background: #0a0913;
+    box-shadow: 0 18px 60px rgba(0,0,0,.42);
+    backdrop-filter: blur(18px) saturate(1.2);
+    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  }
+  .run-details-title {
+    margin: 0 0 9px;
+    font-family: var(--sans);
+    font-size: var(--ts-md);
+    font-weight: 600;
+    color: var(--t1);
+  }
+  .run-details-list {
+    margin: 0;
+    display: grid;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+    font-variant-numeric: tabular-nums;
+  }
+  .run-details-list div {
+    display: flex;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .run-details-list dt {
+    color: var(--t3);
+    text-transform: uppercase;
+    letter-spacing: var(--tr-kicker);
+  }
+  .run-details-list dd {
+    margin: 0;
+    color: var(--t1);
+    text-align: right;
+  }
 
   .icon-btn {
     width: 44px; height: 44px;
@@ -277,7 +420,7 @@
   }
 
   @media (max-width: 767px) {
-    .brand-sub, .run-tick { display: none; }
+    .brand-sub, .run-tick, .run-summary, .run-details { display: none; }
     .brand-name { font-size: var(--ts-sm); }
     .run-label { font-size: var(--ts-xs); }
     .topbar { gap: 8px; padding: 0 12px; }
