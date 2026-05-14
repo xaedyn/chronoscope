@@ -168,6 +168,17 @@ const measureStatusLayout = async (page: Page): Promise<StatusLayoutMeasurement>
   });
 };
 
+const measureMinTimelineRowHeight = async (page: Page): Promise<number> => {
+  const timelineRows = page.locator('#overview-panel-events .story-row');
+  await expect(
+    timelineRows,
+    'Timeline should render endpoint rows before checking touch targets',
+  ).not.toHaveCount(0);
+  return await timelineRows.evaluateAll((rows) => (
+    Math.min(...rows.map((row) => row.getBoundingClientRect().height))
+  ));
+};
+
 test.describe('Status — no scroll on first visit', () => {
   for (const vp of VIEWPORTS) {
     test(`cold state @ ${vp.name} (${vp.width}×${vp.height})`, async ({ page }) => {
@@ -454,9 +465,7 @@ test.describe('Status — no scroll on first visit', () => {
     expect(activeTabVisual.timelineBackground, 'Timeline tab should have a visible selected background').not.toBe('rgba(0, 0, 0, 0)');
     expect(activeTabVisual.perEndpointBackground, 'Per-endpoint tab should remain visually inactive').toBe('rgba(0, 0, 0, 0)');
 
-    const minTimelineRowHeight = await page.locator('#overview-panel-events .story-row').evaluateAll((rows) => (
-      Math.min(...rows.map((row) => row.getBoundingClientRect().height))
-    ));
+    const minTimelineRowHeight = await measureMinTimelineRowHeight(page);
     expect(minTimelineRowHeight, 'Timeline endpoint rows should preserve the 24px touch-target floor').toBeGreaterThanOrEqual(24);
 
     const warning = await measureStatusLayout(page);
@@ -485,9 +494,7 @@ test.describe('Status — no scroll on first visit', () => {
     await page.getByRole('tab', { name: 'Timeline' }).click();
     await expect(page.getByRole('heading', { name: 'What happened' })).toBeVisible();
 
-    const minTimelineRowHeight = await page.locator('#overview-panel-events .story-row').evaluateAll((rows) => (
-      Math.min(...rows.map((row) => row.getBoundingClientRect().height))
-    ));
+    const minTimelineRowHeight = await measureMinTimelineRowHeight(page);
     expect(minTimelineRowHeight, 'Timeline endpoint rows should preserve the 24px touch-target floor').toBeGreaterThanOrEqual(24);
 
     const warning = await measureStatusLayout(page);
