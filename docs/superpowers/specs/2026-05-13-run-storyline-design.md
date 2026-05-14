@@ -41,6 +41,7 @@ The card contains:
    - Rows share the same time axis as the story rail.
    - Each row renders a tiny waveform/sparkline, not blocky status pips.
    - Normal latency stays visually flat.
+   - Elevated below-threshold samples render as subtle amber points or rings with tooltip text such as `Elevated: higher than recent median but below the slow trigger`; they must not change phase color or use `slow` wording.
    - Spikes rise visibly.
    - Failed samples create a small failure marker.
    - Missing or unknown samples create a muted break, not a scary state.
@@ -77,7 +78,7 @@ The card must match the current Chronoscope aesthetic:
   - Unknown/collecting: muted gray.
 - The card should fit in the same approximate footprint as the current event feed.
 - Short-height desktop mode may reduce row height, hide optional labels, or show a single combined story rail, but it must preserve the timeline summary and at least one path to the endpoint rows.
-- Endpoint rows should show up to four visible endpoints by default. Prioritize endpoints with recent events, then focused endpoint, then current endpoint order. If more than four endpoints have recent events, show the four most severe or most recent eventful rows and make the overflow summary explicit, such as `3 more paths also changed`. If hidden endpoints are steady, use compact text such as `2 more paths steady` or `2 more paths had no events`.
+- Endpoint rows should show up to four visible endpoints by default. Prioritize endpoints with recent events, then focused endpoint, then current endpoint order. If more than four endpoints have recent events, keep the four-row display cap, show the four most severe or most recent eventful rows, and make the overflow summary explicit by event type, such as `1 more path failed, 2 more paths slowed`. If hidden endpoints are steady, use compact text such as `2 more paths steady` or `2 more paths had no events`.
 - No new decorative background treatment.
 - No large explanatory text block.
 
@@ -158,7 +159,7 @@ The first version should stay conservative.
 
 - Use the current run window only; do not mix prior saved history into the storyline.
 - Use `windowEnd = latest sample timestamp` and `windowStart = max(runStart, windowEnd - 5 minutes)`.
-- Cap rendering density to the most recent 120 synchronized rounds. If more rounds are present in the five-minute window, downsample for drawing only; marker and summary derivation must still use the full five-minute window.
+- Cap rendering density to the most recent 120 synchronized rounds. A synchronized round means samples sharing Chronoscope's measurement `round` sequence id; samples are raw endpoint observations, rounds are aligned batches from the browser measurement loop, and the five-minute window is the aggregation timespan. If more rounds are present in the five-minute window, downsample for drawing only; marker and summary derivation must still use the full five-minute window.
 - Use `collecting` until at least one ready endpoint has eight samples in the window. With only one ready endpoint, render the row but keep confidence `low` and avoid correlation language.
 - Mark an individual ok sample as `slow` only when `latency > threshold`.
 - Mark an individual ok sample as `elevated`, not `slow`, when it is below threshold but meets both of these gates:
@@ -170,11 +171,11 @@ The first version should stay conservative.
 - Create a slowdown marker only after at least two of the last three samples for that endpoint are `slow`.
 - Create a failure marker on any timeout/error sample, but phrase single failures as `had a failed request`, not `is failing`.
 - Create a recovery marker only after a marked slow/failure period is followed by at least three consecutive ok samples at or below threshold.
-- Identify isolated slowdown only when at least two endpoints are ready, exactly one ready endpoint has a slowdown marker in a 15-second window, and at least half of the other ready endpoints have ok samples at or below threshold in that same window.
+- Identify isolated slowdown only when at least two endpoints are ready, exactly one ready endpoint has a slowdown marker in a 15-second window, and at least `ceil(N / 2)` of the other ready endpoints have ok samples at or below threshold in that same window.
 - Identify shared slowdown only when at least two ready endpoints have slowdown markers within the same 15-second window.
 - Use `low` confidence when the run has enough samples to render but fewer than 16 samples per ready endpoint, or when only one ready endpoint is usable.
 - Use `medium` confidence when at least two ready endpoints have 16 or more samples each.
-- Use `high` confidence when at least three ready endpoints have 24 or more samples each and the relevant pattern repeats across at least two adjacent sample windows.
+- Use `high` confidence when at least three ready endpoints have 24 or more samples each and the relevant pattern repeats across at least two adjacent 15-second correlation buckets. Adjacent buckets are consecutive, non-overlapping 15-second windows derived from sample timestamps.
 - Prefer saying `slowed`, `failed`, `recovered`, or `stayed clean` over diagnosis language such as `ISP`, `WiFi`, `DNS`, or `server issue`.
 
 Confidence must change copy:
@@ -208,7 +209,7 @@ Tooltip and marker text must be generated from the proof-carrying model, not fro
 - Too few samples: `Collecting enough samples to show what changed.`
 - No events: show flat traces and summary `No meaningful changes in the current window.`
 - All endpoints disabled or unready: use existing endpoint readiness language where possible.
-- More than four monitored endpoints: show the four highest-priority rows and an overflow summary. The summary must not hide the existence of any slow/failure marker on an omitted endpoint.
+- More than four monitored endpoints: show the four highest-priority rows and an overflow summary while preserving the four-row cap. The summary must enumerate omitted slow/failure event types and counts, such as `1 more path failed, 2 more paths slowed`, so omitted endpoint problems are not hidden.
 - Paused run: keep the last timeline visible and indicate that it is paused only if the surrounding UI does not already make that clear.
 
 ## Accessibility

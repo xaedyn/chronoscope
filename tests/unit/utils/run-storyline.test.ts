@@ -26,7 +26,7 @@ function sample(round: number, latency: number, over: Partial<MeasurementSample>
 
 function series(
   latencies: readonly number[],
-  statusFor: (index: number) => SampleStatus = () => 'ok',
+  statusFor: (index: number) => SampleStatus = (_index: number) => 'ok',
 ): MeasurementSample[] {
   return latencies.map((latency, index) => sample(index + 1, latency, { status: statusFor(index) }));
 }
@@ -107,6 +107,34 @@ describe('run storyline derivation', () => {
     expect(result.summary).toBe('Multiple paths slowed together, then stayed above the trigger.');
     expect(result.markers.filter((marker) => marker.kind === 'slowdown')).toHaveLength(2);
     expect(result.phases.some((phase) => phase.kind === 'shared-slow')).toBe(true);
+  });
+
+  it('uses high confidence only when shared patterns repeat in adjacent 15-second buckets', () => {
+    const repeatedShared = [
+      ...Array.from({ length: 14 }, () => 48),
+      170,
+      172,
+      169,
+      50,
+      49,
+      48,
+      ...Array.from({ length: 8 }, () => 47),
+      171,
+      173,
+      172,
+    ];
+    const result = buildRunStoryline({
+      endpoints: [endpoint('google', 'Google'), endpoint('cloudflare', 'Cloudflare'), endpoint('aws', 'AWS')],
+      samplesByEndpoint: {
+        google: series(repeatedShared),
+        cloudflare: series(repeatedShared.map((latency) => latency + 4)),
+        aws: series(repeatedShared.map((latency) => latency + 8)),
+      },
+      threshold: 120,
+      runStart: BASE,
+    });
+
+    expect(result.confidence).toBe('high');
   });
 
   it('treats failed samples as failure evidence, not latency spikes', () => {
@@ -206,5 +234,52 @@ describe('run storyline derivation', () => {
     expect(result.rows).toHaveLength(4);
     expect(result.overflow?.hiddenCount).toBe(2);
     expect(result.overflow?.summary).toContain('more paths');
+  });
+
+  it('summarizes hidden slow and failed endpoints by event type', () => {
+    const endpoints = [
+      endpoint('a', 'A'),
+      endpoint('b', 'B'),
+      endpoint('c', 'C'),
+      endpoint('d', 'D'),
+      endpoint('e', 'E'),
+      endpoint('f', 'F'),
+    ];
+    const slow = [
+      ...Array.from({ length: 14 }, () => 40),
+      180,
+      181,
+      182,
+      183,
+    ];
+    const samplesByEndpoint = {
+      a: series(Array.from({ length: 18 }, (_, index) => (index === 14 ? 0 : 40)), (index) => (
+        index === 14 ? 'timeout' : 'ok'
+      )),
+      b: series(Array.from({ length: 18 }, (_, index) => (index === 14 ? 0 : 40)), (index) => (
+        index === 14 ? 'error' : 'ok'
+      )),
+      c: series(Array.from({ length: 18 }, (_, index) => (index === 14 ? 0 : 40)), (index) => (
+        index === 14 ? 'timeout' : 'ok'
+      )),
+      d: series(Array.from({ length: 18 }, (_, index) => (index === 14 ? 0 : 40)), (index) => (
+        index === 14 ? 'error' : 'ok'
+      )),
+      e: series(Array.from({ length: 18 }, (_, index) => (index === 14 ? 0 : 40)), (index) => (
+        index === 14 ? 'timeout' : 'ok'
+      )),
+      f: series(slow),
+    };
+
+    const result = buildRunStoryline({
+      endpoints,
+      samplesByEndpoint,
+      threshold: 120,
+      runStart: BASE,
+      maxVisibleRows: 4,
+    });
+
+    expect(result.rows).toHaveLength(4);
+    expect(result.overflow?.summary).toBe('1 more path failed, 1 more path slowed.');
   });
 });

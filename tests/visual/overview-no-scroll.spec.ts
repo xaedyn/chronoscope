@@ -250,7 +250,7 @@ test.describe('Status — no scroll on first visit', () => {
     ).toBeLessThanOrEqual(warning.main!.bottom - 4);
   });
 
-  test('recent timeline remains reachable on short desktop viewports', async ({ page }) => {
+  test('recent timeline remains reachable on short desktop viewport (1366x768)', async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.goto('/');
     await page.waitForSelector('#chronoscope-root');
@@ -271,7 +271,15 @@ test.describe('Status — no scroll on first visit', () => {
         if (!element) return false;
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
-        return style.display !== 'none' && style.visibility !== 'hidden' && rect.width > 0 && rect.height > 0;
+        const viewportH = window.innerHeight || document.documentElement.clientHeight;
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.top >= 0 &&
+          rect.bottom <= viewportH
+        );
       };
       return {
         headingVisible: visible(timelineHeading),

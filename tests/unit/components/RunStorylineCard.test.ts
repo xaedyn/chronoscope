@@ -112,4 +112,18 @@ describe('RunStorylineCard', () => {
 
     expect(onDrill).toHaveBeenCalledWith('aws');
   });
+
+  it('drills into the clicked event marker', async () => {
+    const onDrill = vi.fn();
+    const { getByRole } = render(RunStorylineCard, {
+      props: {
+        storyline: storyline(),
+        onDrill,
+      },
+    });
+
+    await fireEvent.click(getByRole('button', { name: /AWS slow, AWS had 2 of the last 3 samples/i }));
+
+    expect(onDrill).toHaveBeenCalledWith('aws');
+  });
 });

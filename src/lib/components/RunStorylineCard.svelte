@@ -7,6 +7,7 @@
     RunStoryline,
     StoryPhase,
     TimelinePoint,
+    StoryMarker,
   } from '$lib/utils/run-storyline';
 
   interface Props {
@@ -46,6 +47,18 @@
   function failurePoints(row: EndpointTimelineRow): readonly TimelinePoint[] {
     return row.points.filter((point) => point.status === 'failed');
   }
+
+  function elevatedPoints(row: EndpointTimelineRow): readonly TimelinePoint[] {
+    return row.points.filter((point) => point.status === 'elevated');
+  }
+
+  function markerLabel(marker: StoryMarker): string {
+    return `${marker.label}, ${marker.evidence}`;
+  }
+
+  function drillMarker(marker: StoryMarker): void {
+    if (marker.endpointId) onDrill(marker.endpointId);
+  }
 </script>
 
 <section class="storyline" aria-label="Recent run timeline" data-confidence={storyline.confidence}>
@@ -57,8 +70,8 @@
     <p class="storyline-hint">Click a moment -&gt; Diagnose</p>
   </header>
 
-  <div class="story-rail" aria-hidden="true">
-    <div class="story-phases">
+  <div class="story-rail">
+    <div class="story-phases" aria-hidden="true">
       {#each storyline.phases as phase (`${phase.kind}-${phase.start}-${phase.end}`)}
         <span
           class="story-phase"
@@ -70,12 +83,24 @@
       {/each}
     </div>
     {#each storyline.markers as marker (`${marker.kind}-${marker.endpointId ?? 'all'}-${marker.t}`)}
-      <span
-        class="story-marker"
-        data-kind={marker.kind}
-        style:left="{pct(marker.t)}%"
-        title={marker.evidence}
-      ></span>
+      {#if marker.endpointId}
+        <button
+          type="button"
+          class="story-marker"
+          data-kind={marker.kind}
+          style:left="{pct(marker.t)}%"
+          title={marker.evidence}
+          aria-label={markerLabel(marker)}
+          onclick={() => drillMarker(marker)}
+        ></button>
+      {:else}
+        <span
+          class="story-marker"
+          data-kind={marker.kind}
+          style:left="{pct(marker.t)}%"
+          title={marker.evidence}
+        ></span>
+      {/if}
     {/each}
   </div>
 
@@ -99,6 +124,15 @@
           </svg>
           {#each failurePoints(row) as point (`${row.endpointId}-${point.round}-${point.t}`)}
             <span class="story-failure" style:left="{pct(point.t)}%" aria-hidden="true">!</span>
+          {/each}
+          {#each elevatedPoints(row) as point (`${row.endpointId}-elevated-${point.round}-${point.t}`)}
+            <span
+              class="story-elevated"
+              style:left="{pct(point.t)}%"
+              style:top="{22 - Math.min(20, (point.normalizedLatency ?? 0) * 20)}px"
+              title="Elevated: higher than recent median but below the slow trigger"
+              aria-hidden="true"
+            ></span>
           {/each}
         </span>
       </button>
@@ -205,14 +239,32 @@
     position: absolute;
     top: 1px;
     bottom: -3px;
-    width: 1px;
-    background: rgba(255,255,255,.55);
-    transform: translateX(-.5px);
+    width: 10px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    transform: translateX(-50%);
+    cursor: pointer;
   }
-  .story-marker[data-kind="failure"] { background: var(--accent-pink); }
-  .story-marker[data-kind="slowdown"],
-  .story-marker[data-kind="shared-change"] { background: var(--accent-amber); }
-  .story-marker[data-kind="recovery"] { background: var(--accent-green); }
+  .story-marker::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    transform: translateX(-.5px);
+    background: rgba(255,255,255,.55);
+  }
+  .story-marker:focus-visible {
+    outline: 1.5px solid var(--accent-cyan);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  .story-marker[data-kind="failure"]::before { background: var(--accent-pink); }
+  .story-marker[data-kind="slowdown"]::before,
+  .story-marker[data-kind="shared-change"]::before { background: var(--accent-amber); }
+  .story-marker[data-kind="recovery"]::before { background: var(--accent-green); }
 
   .story-rows {
     display: flex;
@@ -307,6 +359,16 @@
     font-size: 10px;
     font-weight: 700;
     line-height: 1;
+  }
+  .story-elevated {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    border: 1px solid var(--accent-amber);
+    background: rgba(251, 191, 36, .12);
+    box-shadow: 0 0 5px rgba(251, 191, 36, .28);
   }
 
   .story-footer {

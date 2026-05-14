@@ -80,6 +80,7 @@ export interface EndpointTimelineOverflow {
 
 interface FullEndpointRow extends EndpointTimelineRow {
   readonly allPoints: readonly TimelinePoint[];
+  readonly markers: readonly StoryMarker[];
   readonly eventScore: number;
   readonly lastEventAt: number;
 }
@@ -110,7 +111,7 @@ export function buildRunStoryline(input: BuildRunStorylineInput): RunStoryline {
   const sampleCount = fullRows.reduce((sum, row) => sum + row.allPoints.length, 0);
   const readyRows = fullRows.filter((row) => row.allPoints.length >= MIN_RENDER_SAMPLES);
   const readyEndpointCount = readyRows.length;
-  const allMarkers = fullRows.flatMap((row) => markersForRow(row, input.threshold));
+  const allMarkers = fullRows.flatMap((row) => row.markers);
   const markers = allMarkers.sort((a, b) => a.t - b.t);
   const confidence = confidenceFor(readyRows, markers);
   const pattern = selectPattern({ rows: fullRows, markers, confidence });
@@ -168,6 +169,7 @@ function buildEndpointRow(input: {
     summary,
     points: normalizedPoints,
     allPoints,
+    markers: rowMarkers,
     eventScore,
     lastEventAt,
   };
@@ -229,10 +231,6 @@ function isElevated(latency: number, previousOkLatencies: readonly number[]): bo
   const baseline = median(previousEight);
   if (baseline <= 0) return false;
   return latency - baseline >= ELEVATED_MIN_DELTA_MS && latency >= baseline * ELEVATED_FACTOR;
-}
-
-function markersForRow(row: FullEndpointRow, threshold: number): StoryMarker[] {
-  return markersForPoints(row.label, row.endpointId, row.allPoints, threshold);
 }
 
 function markersForPoints(label: string, endpointId: string, points: readonly TimelinePoint[], threshold: number): StoryMarker[] {
@@ -452,8 +450,16 @@ function visibleRows(input: {
 
   const hiddenEventful = hidden.filter((row) => row.eventScore >= 2).length;
   const hiddenCount = hidden.length;
-  const summary = hiddenEventful > 0
-    ? `${hiddenEventful} more ${pathWord(hiddenEventful)} also changed.`
+  const hiddenFailureCount = hidden.filter((row) => row.markers.some((marker) => marker.kind === 'failure')).length;
+  const hiddenSlowCount = hidden.filter((row) => row.markers.some((marker) => marker.kind === 'slowdown')).length;
+  const hiddenElevatedCount = hidden.filter((row) => (
+    !row.markers.some((marker) => marker.kind === 'failure' || marker.kind === 'slowdown') &&
+    row.allPoints.some((point) => point.status === 'elevated')
+  )).length;
+  const summary = hiddenFailureCount > 0 || hiddenSlowCount > 0 || hiddenElevatedCount > 0
+    ? overflowEventSummary({ failed: hiddenFailureCount, slowed: hiddenSlowCount, elevated: hiddenElevatedCount })
+    : hiddenEventful > 0
+      ? `${hiddenEventful} more ${pathWord(hiddenEventful)} also changed.`
     : `${hiddenCount} more ${pathWord(hiddenCount)} steady.`;
 
   return {
@@ -474,7 +480,6 @@ function stripInternalRow(row: FullEndpointRow): EndpointTimelineRow {
 
 function confidenceFor(rows: readonly FullEndpointRow[], markers: readonly StoryMarker[]): RunStorylineConfidence {
   if (rows.length === 0) return 'collecting';
-  if (rows.some((row) => row.allPoints.length < MIN_RENDER_SAMPLES)) return 'collecting';
   if (rows.length < 2 || rows.some((row) => row.allPoints.length < MEDIUM_CONFIDENCE_SAMPLES)) return 'low';
   if (
     rows.length >= 3 &&
@@ -544,7 +549,14 @@ function hasRepeatedSharedPattern(markers: readonly StoryMarker[]): boolean {
     set.add(marker.endpointId);
     buckets.set(bucket, set);
   }
-  return [...buckets.values()].filter((set) => set.size >= 2).length >= 2;
+  const sharedBuckets = [...buckets.entries()]
+    .filter(([, set]) => set.size >= 2)
+    .map(([bucket]) => bucket)
+    .sort((a, b) => a - b);
+  for (let i = 1; i < sharedBuckets.length; i++) {
+    if (sharedBuckets[i] === sharedBuckets[i - 1] + 1) return true;
+  }
+  return false;
 }
 
 function rowSummary(label: string, points: readonly TimelinePoint[], markers: readonly StoryMarker[]): string {
@@ -595,4 +607,12 @@ function clampTime(value: number, min: number, max: number): number {
 
 function pathWord(count: number): string {
   return count === 1 ? 'path' : 'paths';
+}
+
+function overflowEventSummary(counts: { readonly failed: number; readonly slowed: number; readonly elevated: number }): string {
+  const parts: string[] = [];
+  if (counts.failed > 0) parts.push(`${counts.failed} more ${pathWord(counts.failed)} failed`);
+  if (counts.slowed > 0) parts.push(`${counts.slowed} more ${pathWord(counts.slowed)} slowed`);
+  if (counts.elevated > 0) parts.push(`${counts.elevated} more ${pathWord(counts.elevated)} rose below trigger`);
+  return `${parts.join(', ')}.`;
 }

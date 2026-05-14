@@ -38,7 +38,9 @@ The utility must:
 - Use the latest five minutes.
 - Render at most 120 recent rounds.
 - Classify `slow` only when latency exceeds threshold.
-- Classify below-threshold `elevated` only after eight previous ok samples and both spike gates.
+- Classify below-threshold `elevated` only after eight previous ok samples and both spike gates:
+  - Absolute gate: the sample is at least 75 ms above that endpoint's median over the previous eight ok samples.
+  - Relative gate: the sample is at least 1.75x that same median.
 - Separate failures from slow samples.
 - Require two of the last three slow samples for slowdown markers.
 - Require three consecutive ok/elevated samples after a problem for recovery.
@@ -159,4 +161,3 @@ Expected: no whitespace errors; diff only touches storyline, Status integration,
 - [ ] **Step 3: Commit implementation**
 
 Commit the implementation with a clear message after verification passes.
-

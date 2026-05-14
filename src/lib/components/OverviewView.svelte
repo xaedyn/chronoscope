@@ -98,7 +98,7 @@
     return worstEp;
   });
 
-  // ── Derived data for the dial / strip / feed cards ───────────────────────
+  // ── Derived data for the dial / strip / storyline cards ──────────────────
   // Samples slice per endpoint, materialized once per render for the racing
   // strip sparkline. 40-sample tail is enough for the spec. Using toArray()
   // copies out of the ring buffer — acceptable at N<=20 endpoints.
@@ -113,11 +113,12 @@
     return out;
   });
 
+  const STORYLINE_SOURCE_SAMPLE_CAP = 5_000;
   const storylineSamplesByEndpoint = $derived.by<Record<string, readonly MeasurementSample[]>>(() => {
     const out: Record<string, readonly MeasurementSample[]> = {};
     for (const ep of monitored) {
       const m = measurements.endpoints[ep.id];
-      out[ep.id] = m ? m.samples.toArray() : [];
+      out[ep.id] = m ? m.samples.slice(-STORYLINE_SOURCE_SAMPLE_CAP) : [];
     }
     return out;
   });
