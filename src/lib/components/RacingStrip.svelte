@@ -28,6 +28,7 @@
   const axisLabels = $derived(scale.ticks);
 
   const thresholdPct = $derived(Math.min(100, (threshold / maxSeen) * 100));
+  const thresholdLabel = $derived(`${Math.round(threshold)} ms`);
 
   function rowStyle(epId: string): { p50Pct: number; p95Pct: number; livePct: number; over: boolean } {
     const s = stats[epId];
@@ -76,6 +77,7 @@
     <div>
       <h3 class="racing-title">Per-endpoint comparison</h3>
       <p class="racing-sub">Live latencies on shared axis</p>
+      <p class="racing-threshold-summary">Slow threshold: {thresholdLabel}</p>
     </div>
     <p class="racing-hint">Click → Live · ⇧-click → Investigate</p>
   </header>
@@ -85,9 +87,6 @@
       <span class="racing-axis-label">{label}</span>
     {/each}
     <span class="racing-axis-label" data-role="axis-label-max">{maxSeen}</span>
-    <span class="racing-axis-label racing-axis-threshold" style:left="{thresholdPct}%">
-      {threshold} trigger
-    </span>
   </div>
 
   <div class="racing-rows">
@@ -115,6 +114,7 @@
           <span
             class="racing-threshtick"
             style:left="{thresholdPct}%"
+            title="Slow threshold: {thresholdLabel}"
             aria-hidden="true"
           ></span>
           {#if s}
@@ -164,6 +164,14 @@
   .racing-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 8px; }
   .racing-title { margin: 0; font-size: var(--ts-lg); font-weight: 500; color: var(--t1); letter-spacing: var(--tr-tight); }
   .racing-sub { margin: 2px 0 0; font-family: var(--mono); font-size: var(--ts-xs); letter-spacing: var(--tr-kicker); color: var(--t3); text-transform: uppercase; }
+  .racing-threshold-summary {
+    margin: 3px 0 0;
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+    letter-spacing: var(--tr-label);
+    color: var(--accent-pink);
+    white-space: nowrap;
+  }
   .racing-hint { margin: 0; font-family: var(--mono); font-size: var(--ts-sm); color: var(--t2); }
 
   .racing-axis {
@@ -179,15 +187,6 @@
     margin-bottom: 8px;
     font-variant-numeric: tabular-nums;
   }
-  .racing-axis-threshold {
-    position: absolute;
-    top: 0;
-    transform: translateX(-50%);
-    color: var(--accent-pink);
-    padding: 0 4px;
-    background: var(--surface-topbar-bg);
-  }
-
   .racing-rows { display: flex; flex-direction: column; gap: 4px; }
   .racing-row {
     display: grid;
@@ -340,6 +339,7 @@
     .racing { padding: 6px 10px; }
     .racing-header { margin-bottom: 4px; }
     .racing-sub, .racing-hint { display: none; }
+    .racing-threshold-summary { margin-top: 1px; font-size: 9px; }
     .racing-axis { padding: 2px 0 4px; margin-bottom: 3px; }
     /* Padding 3px keeps row height at 24px (3 + 18 + 3) — meets WCAG 2.5.8 AA
        (24×24 minimum touch target). Racing rows are clickable (Shift-click →

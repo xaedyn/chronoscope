@@ -4,9 +4,11 @@
 // and the project tests store/component logic this way (see controls.test.ts).
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { fireEvent, render, within } from '@testing-library/svelte';
 import { measurementStore } from '../../../src/lib/stores/measurements';
 import { get } from 'svelte/store';
 import { tokens } from '../../../src/lib/tokens';
+import Topbar from '../../../src/lib/components/Topbar.svelte';
 import type { TestLifecycleState } from '../../../src/lib/types';
 import {
   isStartLifecycle,
@@ -154,5 +156,20 @@ describe('Topbar', () => {
 
   it('btnHover timing token is at least 100ms', () => {
     expect(tokens.timing.btnHover).toBeGreaterThanOrEqual(100);
+  });
+
+  it('keeps run mechanics behind a compact Run details disclosure', async () => {
+    const { getByRole, queryByText } = render(Topbar, { props: {} });
+
+    expect(queryByText(/Measuring from your browser/i)).toBeNull();
+    const detailsButton = getByRole('button', { name: /run details/i });
+    expect(detailsButton).toBeTruthy();
+
+    await fireEvent.click(detailsButton);
+
+    const dialog = getByRole('dialog', { name: /run details/i });
+    expect(within(dialog).getByText('Browser test')).toBeTruthy();
+    expect(within(dialog).getByText(/0 of \d+ samples/i)).toBeTruthy();
+    expect(within(dialog).getByText(/\d+s timeout/i)).toBeTruthy();
   });
 });

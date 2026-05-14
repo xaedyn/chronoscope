@@ -165,21 +165,23 @@
     <p class="storyline-hint">Click a marker -&gt; Diagnose</p>
   </header>
 
-  <ul class="story-legend" aria-label="Timeline status legend">
-    {#each LEGEND_ITEMS as item (item.kind)}
-      <li data-kind={item.kind}>
-        <span aria-hidden="true"></span>
-        {item.label}
-      </li>
-    {/each}
-  </ul>
-
-  <div class="story-axis" aria-hidden="true">
-    <span class="story-axis-title">time</span>
-    <div class="story-axis-track">
-      {#each axisTicks as tick (tick.pct)}
-        <span class="story-axis-tick" style:left="{tick.pct}%">{tick.label}</span>
+  <div class="story-time-header">
+    <ul class="story-legend" aria-label="Timeline status legend">
+      {#each LEGEND_ITEMS as item (item.kind)}
+        <li data-kind={item.kind}>
+          <span aria-hidden="true"></span>
+          {item.label}
+        </li>
       {/each}
+    </ul>
+
+    <div class="story-axis" aria-hidden="true">
+      <span class="story-axis-title">time</span>
+      <div class="story-axis-track">
+        {#each axisTicks as tick (tick.pct)}
+          <span class="story-axis-tick" style:left="{tick.pct}%">{tick.label}</span>
+        {/each}
+      </div>
     </div>
   </div>
 
@@ -324,6 +326,13 @@
     white-space: nowrap;
   }
 
+  .story-time-header {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    flex: 0 0 auto;
+    min-height: 37px;
+  }
   .story-legend {
     list-style: none;
     margin: 0;
@@ -332,6 +341,8 @@
     flex-wrap: wrap;
     gap: 6px 10px;
     min-width: 0;
+    min-height: 14px;
+    align-items: center;
   }
   .story-legend li {
     display: inline-flex;
@@ -364,7 +375,8 @@
     min-width: 0;
   }
   .story-axis {
-    height: 14px;
+    height: 16px;
+    flex: 0 0 16px;
   }
   .story-axis-title,
   .story-rail-label {
@@ -380,7 +392,7 @@
   }
   .story-axis-track {
     position: relative;
-    height: 14px;
+    height: 16px;
     min-width: 0;
   }
   .story-axis-track::before {
@@ -388,7 +400,7 @@
     position: absolute;
     left: 0;
     right: 0;
-    top: 6px;
+    top: 7px;
     height: 1px;
     background: rgba(255,255,255,.08);
   }
@@ -652,7 +664,8 @@
     }
     .storyline-hint { display: none; }
     .story-legend { gap: 4px 8px; }
-    .story-axis { height: 12px; }
+    .story-time-header { gap: 5px; min-height: 31px; }
+    .story-axis { height: 14px; flex-basis: 14px; }
     .story-axis-title,
     .story-rail-label { display: none; }
     .story-axis,
@@ -706,13 +719,9 @@
     }
 
     .storyline-hint,
-    .story-legend,
+    .story-time-header,
     .story-rail,
     .story-footer {
-      display: none;
-    }
-
-    .story-axis {
       display: none;
     }
 

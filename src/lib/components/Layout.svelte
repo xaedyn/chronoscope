@@ -1,5 +1,5 @@
 <!-- src/lib/components/Layout.svelte -->
-<!-- v2 shell. Topbar (top) | { Rail (264px) | { ViewSwitcher + main content } } | FooterBar (bottom). -->
+<!-- v2 shell. Topbar (top) | { Rail (264px) | { ViewSwitcher + main content } }. -->
 <!-- Routes activeView to OverviewView / LiveView / DiagnoseView. The legacy    -->
 <!-- Lanes family was retired in Phase 7 — the v6→v7 migration rewrites         -->
 <!-- 'lanes' / 'timeline' / 'heatmap' / 'split' to 'overview' so nothing        -->
@@ -18,7 +18,6 @@
   import LiveView from './LiveView.svelte';
   import DiagnoseView from './DiagnoseView.svelte';
   import ReportView from './ReportView.svelte';
-  import FooterBar from './FooterBar.svelte';
 
   let { onStart, onStop }: {
     onStart?: () => void;
@@ -96,8 +95,6 @@
       </div>
     </div>
   {/if}
-
-  <FooterBar />
 </div>
 
 <div
