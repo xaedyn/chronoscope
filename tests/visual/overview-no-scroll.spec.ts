@@ -20,6 +20,7 @@ const VIEWPORTS = [
   { name: 'desktop-2560',  width: 2560, height: 1440 },
 ] as const;
 
+const MIN_TOUCH_TARGET_PX = 24;
 const RUNNING_OR_STARTING_CONTROL = /^(?:Starting\.\.\.|Stop)$/i;
 
 interface VisibleEndpointTarget {
@@ -466,7 +467,10 @@ test.describe('Status — no scroll on first visit', () => {
     expect(activeTabVisual.perEndpointBackground, 'Per-endpoint tab should remain visually inactive').toBe('rgba(0, 0, 0, 0)');
 
     const minTimelineRowHeight = await measureMinTimelineRowHeight(page);
-    expect(minTimelineRowHeight, 'Timeline endpoint rows should preserve the 24px touch-target floor').toBeGreaterThanOrEqual(24);
+    expect(
+      minTimelineRowHeight,
+      `Timeline endpoint rows should preserve the ${MIN_TOUCH_TARGET_PX}px touch-target floor`,
+    ).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_PX);
 
     const warning = await measureStatusLayout(page);
     expect(warning.detail).not.toBeNull();
@@ -495,7 +499,10 @@ test.describe('Status — no scroll on first visit', () => {
     await expect(page.getByRole('heading', { name: 'What happened' })).toBeVisible();
 
     const minTimelineRowHeight = await measureMinTimelineRowHeight(page);
-    expect(minTimelineRowHeight, 'Timeline endpoint rows should preserve the 24px touch-target floor').toBeGreaterThanOrEqual(24);
+    expect(
+      minTimelineRowHeight,
+      `Timeline endpoint rows should preserve the ${MIN_TOUCH_TARGET_PX}px touch-target floor`,
+    ).toBeGreaterThanOrEqual(MIN_TOUCH_TARGET_PX);
 
     const warning = await measureStatusLayout(page);
     expect(warning.detail).not.toBeNull();

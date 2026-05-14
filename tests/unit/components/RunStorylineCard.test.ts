@@ -1,4 +1,4 @@
-import { fireEvent, render } from '@testing-library/svelte';
+import { fireEvent, render, within } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
 import RunStorylineCard from '../../../src/lib/components/RunStorylineCard.svelte';
 import type { RunStoryline } from '../../../src/lib/utils/run-storyline';
@@ -72,7 +72,7 @@ describe('RunStorylineCard', () => {
   });
 
   it('renders readable time labels and a status legend', () => {
-    const { getAllByText, getByText } = render(RunStorylineCard, {
+    const { getByRole, getByText } = render(RunStorylineCard, {
       props: {
         storyline: storyline(),
         onDrill: vi.fn(),
@@ -84,10 +84,45 @@ describe('RunStorylineCard', () => {
     expect(getByText('30s')).toBeTruthy();
     expect(getByText('15s')).toBeTruthy();
     expect(getByText('now')).toBeTruthy();
-    expect(getAllByText('steady').length).toBeGreaterThan(0);
-    expect(getByText('elevated')).toBeTruthy();
-    expect(getByText('slow')).toBeTruthy();
-    expect(getByText('failed')).toBeTruthy();
+    const legend = within(getByRole('list', { name: 'Timeline status legend' }));
+    expect(legend.getByText('steady')).toBeTruthy();
+    expect(legend.getByText('elevated')).toBeTruthy();
+    expect(legend.getByText('slow')).toBeTruthy();
+    expect(legend.getByText('failed')).toBeTruthy();
+  });
+
+  it('positions alert markers with proportional track coordinates', () => {
+    const { container } = render(RunStorylineCard, {
+      props: {
+        storyline: storyline({
+          rows: [
+            {
+              endpointId: 'aws',
+              label: 'AWS',
+              color: '#fbbf24',
+              summary: 'AWS changed state.',
+              points: [
+                { t: BASE, round: 1, latency: 50, normalizedLatency: 0, status: 'ok', threshold: 120, sampleCount: 1 },
+                { t: BASE + 30_000, round: 2, latency: 105, normalizedLatency: 0.5, status: 'elevated', threshold: 120, sampleCount: 2 },
+                { t: BASE + 45_000, round: 3, latency: 0, normalizedLatency: 1, status: 'failed', threshold: 120, sampleCount: 3 },
+              ],
+            },
+          ],
+          markers: [],
+        }),
+        onDrill: vi.fn(),
+      },
+    });
+
+    const elevated = container.querySelector<HTMLElement>('.story-elevated');
+    const failure = container.querySelector<HTMLElement>('.story-failure');
+    expect(elevated?.style.top).toMatch(/%$/);
+    expect(failure?.style.top).toMatch(/%$/);
+
+    const path = container.querySelector<SVGPathElement>('.story-spark path');
+    const yValues = Array.from(path?.getAttribute('d')?.matchAll(/[ML] [\d.]+ ([\d.]+)/g) ?? [])
+      .map((match) => Number(match[1]));
+    expect(yValues.every((y) => y >= 0 && y <= 40)).toBe(true);
   });
 
   it('uses fewer axis ticks for very short runs so time remains readable', () => {

@@ -59,9 +59,15 @@
     }
     return positions.map((position) => {
       const age = span * (1 - position);
-      const label = position === 1 ? 'now' : position === 0 ? `${durationLabel(age)} ago` : durationLabel(age);
+      const label = axisTickLabel(position, age);
       return { pct: position * 100, label };
     });
+  }
+
+  function axisTickLabel(position: number, age: number): string {
+    if (position === 1) return 'now';
+    if (position === 0) return `${durationLabel(age)} ago`;
+    return durationLabel(age);
   }
 
   function pct(t: number): number {
@@ -74,8 +80,12 @@
     return Math.max(4, ((phase.end - phase.start) / span) * 100);
   }
 
-  function sparkY(point: Pick<TimelinePoint, 'normalizedLatency'>): number {
+  function sparkSvgY(point: Pick<TimelinePoint, 'normalizedLatency'>): number {
     return SPARK_BASELINE_Y - Math.min(SPARK_RANGE_Y, (point.normalizedLatency ?? 0) * SPARK_RANGE_Y);
+  }
+
+  function sparkY(point: Pick<TimelinePoint, 'normalizedLatency'>): number {
+    return (sparkSvgY(point) / SPARK_VIEWBOX_HEIGHT) * 100;
   }
 
   function pathFor(row: EndpointTimelineRow): string {
@@ -88,7 +98,7 @@
         continue;
       }
       const x = pct(point.t);
-      const y = sparkY(point);
+      const y = sparkSvgY(point);
       d += `${prevWasGap ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)} `;
       prevWasGap = false;
     }
@@ -245,13 +255,13 @@
             />
           </svg>
           {#each failurePoints(row) as point (`${row.endpointId}-${point.round}-${point.t}`)}
-            <span class="story-failure" style:left="{pct(point.t)}%" style:top="{sparkY(point)}px" aria-hidden="true">!</span>
+            <span class="story-failure" style:left="{pct(point.t)}%" style:top="{sparkY(point)}%" aria-hidden="true">!</span>
           {/each}
           {#each elevatedPoints(row) as point (`${row.endpointId}-elevated-${point.round}-${point.t}`)}
             <span
               class="story-elevated"
               style:left="{pct(point.t)}%"
-              style:top="{sparkY(point)}px"
+              style:top="{sparkY(point)}%"
               title="Elevated: higher than recent median but below the slow trigger"
               aria-hidden="true"
             ></span>
