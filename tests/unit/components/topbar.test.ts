@@ -159,7 +159,7 @@ describe('Topbar', () => {
   });
 
   it('keeps run mechanics behind a compact Run details disclosure', async () => {
-    const { getByRole, getByText, queryByText } = render(Topbar, { props: {} });
+    const { getByRole, queryByText } = render(Topbar, { props: {} });
 
     expect(queryByText(/Measuring from your browser/i)).toBeNull();
     const detailsButton = getByRole('button', { name: /run details/i });
