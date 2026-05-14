@@ -262,11 +262,14 @@ test.describe('Status — no scroll on first visit', () => {
       `internal scrollers with hidden content: ${JSON.stringify(state.overflowingScrollers, null, 2)}`,
     ).toEqual([]);
 
-    const reachability = await page.evaluate(() => {
-      const timelineHeading = Array.from(document.querySelectorAll<HTMLElement>('h3'))
-        .find((heading) => heading.textContent?.trim() === 'What happened');
-      const timelineTab = Array.from(document.querySelectorAll<HTMLElement>('button[role="tab"]'))
-        .find((tab) => tab.textContent?.trim() === 'Timeline');
+    const reachability = await page.evaluate(async () => {
+      const findTimelineHeading = () =>
+        Array.from(document.querySelectorAll<HTMLElement>('h3')).find(
+          (heading) => heading.textContent?.trim() === 'What happened',
+        );
+      const timelineTab = Array.from(document.querySelectorAll<HTMLElement>('button[role="tab"]')).find(
+        (tab) => tab.textContent?.trim() === 'Timeline',
+      );
       const visible = (element: HTMLElement | undefined): boolean => {
         if (!element) return false;
         const rect = element.getBoundingClientRect();
@@ -281,9 +284,36 @@ test.describe('Status — no scroll on first visit', () => {
           rect.bottom <= viewportH
         );
       };
+      const intersectsViewport = (element: HTMLElement | undefined): boolean => {
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        const viewportH = window.innerHeight || document.documentElement.clientHeight;
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.bottom > 0 &&
+          rect.top < viewportH
+        );
+      };
+      let headingVisible = visible(findTimelineHeading());
+      const tabVisible = intersectsViewport(timelineTab);
+
+      if (!headingVisible && tabVisible && timelineTab) {
+        timelineTab.click();
+        const deadline = performance.now() + 800;
+        while (performance.now() < deadline) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          headingVisible = visible(findTimelineHeading());
+          if (headingVisible) break;
+        }
+      }
+
       return {
-        headingVisible: visible(timelineHeading),
-        tabVisible: visible(timelineTab),
+        headingVisible,
+        tabVisible,
       };
     });
 

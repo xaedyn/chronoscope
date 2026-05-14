@@ -259,7 +259,7 @@ Likely files:
 - `src/lib/utils/run-storyline.ts`
 - `src/lib/components/RunStorylineCard.svelte`
 - `src/lib/components/OverviewView.svelte`
-- `tests/unit/run-storyline.test.ts`
+- `tests/unit/utils/run-storyline.test.ts`
 - Status visual tests in `tests/visual/`
 
 The new card can initially replace `EventFeed` in `OverviewView`. Existing event derivation may be reused or folded into the new pure utility if doing so reduces duplication.

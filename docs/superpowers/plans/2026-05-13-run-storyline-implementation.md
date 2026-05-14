@@ -10,7 +10,7 @@
 
 ---
 
-### Task 1: Pure Run Storyline Derivation
+## Task 1: Pure Run Storyline Derivation
 
 **Files:**
 - Create: `src/lib/utils/run-storyline.ts`
@@ -54,7 +54,7 @@ Run: `npx vitest run tests/unit/utils/run-storyline.test.ts`
 
 Expected: PASS.
 
-### Task 2: Run Storyline Card Component
+## Task 2: Run Storyline Card Component
 
 **Files:**
 - Create: `src/lib/components/RunStorylineCard.svelte`
@@ -91,7 +91,7 @@ Run: `npx vitest run tests/unit/components/RunStorylineCard.test.ts`
 
 Expected: PASS.
 
-### Task 3: Status Integration And Layout Guardrails
+## Task 3: Status Integration And Layout Guardrails
 
 **Files:**
 - Modify: `src/lib/components/OverviewView.svelte`
@@ -131,7 +131,7 @@ npx playwright test tests/visual/overview-no-scroll.spec.ts
 
 Expected: all pass.
 
-### Task 4: Final Verification
+## Task 4: Final Verification
 
 **Files:**
 - All changed implementation and test files.
