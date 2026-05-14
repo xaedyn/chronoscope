@@ -250,6 +250,79 @@ test.describe('Status — no scroll on first visit', () => {
     ).toBeLessThanOrEqual(warning.main!.bottom - 4);
   });
 
+  test('recent timeline remains reachable on short desktop viewport (1366x768)', async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
+    await page.goto('/');
+    await page.waitForSelector('#chronoscope-root');
+    await page.waitForTimeout(400);
+
+    const state = await scrollState(page);
+    expect(
+      state.overflowingScrollers,
+      `internal scrollers with hidden content: ${JSON.stringify(state.overflowingScrollers, null, 2)}`,
+    ).toEqual([]);
+
+    const reachability = await page.evaluate(async () => {
+      const findTimelineHeading = () =>
+        Array.from(document.querySelectorAll<HTMLElement>('h3')).find(
+          (heading) => heading.textContent?.trim() === 'What happened',
+        );
+      const timelineTab = Array.from(document.querySelectorAll<HTMLElement>('button[role="tab"]')).find(
+        (tab) => tab.textContent?.trim() === 'Timeline',
+      );
+      const visible = (element: HTMLElement | undefined): boolean => {
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        const viewportH = window.innerHeight || document.documentElement.clientHeight;
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.top >= 0 &&
+          rect.bottom <= viewportH
+        );
+      };
+      const intersectsViewport = (element: HTMLElement | undefined): boolean => {
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        const style = getComputedStyle(element);
+        const viewportH = window.innerHeight || document.documentElement.clientHeight;
+        return (
+          style.display !== 'none' &&
+          style.visibility !== 'hidden' &&
+          rect.width > 0 &&
+          rect.height > 0 &&
+          rect.bottom > 0 &&
+          rect.top < viewportH
+        );
+      };
+      let headingVisible = visible(findTimelineHeading());
+      const tabVisible = intersectsViewport(timelineTab);
+
+      if (!headingVisible && tabVisible && timelineTab) {
+        timelineTab.click();
+        const deadline = performance.now() + 800;
+        while (performance.now() < deadline) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          headingVisible = visible(findTimelineHeading());
+          if (headingVisible) break;
+        }
+      }
+
+      return {
+        headingVisible,
+        tabVisible,
+      };
+    });
+
+    expect(
+      reachability.headingVisible || reachability.tabVisible,
+      `timeline should be visible or reachable via visible tab: ${JSON.stringify(reachability)}`,
+    ).toBe(true);
+  });
+
   test('lifecycle stability @ mobile-floor (no reflow after engine starts)', async ({ page }) => {
     await page.setViewportSize({ width: 360, height: 780 });
     await page.goto('/');
