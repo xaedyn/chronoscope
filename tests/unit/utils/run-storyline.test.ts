@@ -198,6 +198,24 @@ describe('run storyline derivation', () => {
     expect(result.beats.map((beat) => beat.shortLabel)).toEqual(['AWS slow', 'AWS recovered']);
   });
 
+  it('keeps beat ids unique when same-timestamp events repeat for one endpoint', () => {
+    const repeatedTimestamp = BASE + 42_000;
+    const result = buildRunStoryline({
+      endpoints: [endpoint('aws', 'AWS')],
+      samplesByEndpoint: {
+        aws: series([
+          50, 50, 180, 181, 50, 49, 48, 182, 183,
+        ]).map((entry) => ({ ...entry, timestamp: repeatedTimestamp })),
+      },
+      threshold: 120,
+      runStart: BASE,
+    });
+
+    const beatIds = result.beats.map((beat) => beat.id);
+    expect(result.beats.map((beat) => beat.kind)).toEqual(['slowdown', 'recovery', 'slowdown']);
+    expect(new Set(beatIds).size).toBe(beatIds.length);
+  });
+
   it('does not promote below-threshold elevated latency to slow wording', () => {
     const result = buildRunStoryline({
       endpoints: [endpoint('aws', 'AWS')],

@@ -577,10 +577,10 @@ function beatsFor(markers: readonly StoryMarker[], rows: readonly FullEndpointRo
     }
   }
 
-  return clusters.map((cluster) => beatForCluster(cluster, rows));
+  return clusters.map((cluster, index) => beatForCluster(cluster, rows, index));
 }
 
-function beatForCluster(cluster: readonly StoryMarker[], rows: readonly FullEndpointRow[]): StoryBeat {
+function beatForCluster(cluster: readonly StoryMarker[], rows: readonly FullEndpointRow[], sequence: number): StoryBeat {
   const endpointIds = uniqueEndpointIds(cluster);
   const endpointLabel = labelForEndpoint(endpointIds[0], rows);
   const failureMarkers = cluster.filter((marker) => marker.kind === 'failure');
@@ -594,7 +594,7 @@ function beatForCluster(cluster: readonly StoryMarker[], rows: readonly FullEndp
     const count = endpointIds.length;
     const label = count > 1 ? `${count} paths failed` : `${endpointLabel} failed`;
     return {
-      id: beatId('failure', endpointIds, t),
+      id: beatId('failure', endpointIds, t, sequence),
       t,
       kind: 'failure',
       severity: 'bad',
@@ -611,7 +611,7 @@ function beatForCluster(cluster: readonly StoryMarker[], rows: readonly FullEndp
   if (slowdownMarkers.length > 1 && endpointIds.length > 1) {
     const count = endpointIds.length;
     return {
-      id: beatId('shared-slowdown', endpointIds, t),
+      id: beatId('shared-slowdown', endpointIds, t, sequence),
       t,
       kind: 'shared-slowdown',
       severity: 'bad',
@@ -626,7 +626,7 @@ function beatForCluster(cluster: readonly StoryMarker[], rows: readonly FullEndp
   if (slowdownMarkers.length > 0) {
     const label = `${endpointLabel} slow`;
     return {
-      id: beatId('slowdown', endpointIds, t),
+      id: beatId('slowdown', endpointIds, t, sequence),
       t,
       kind: 'slowdown',
       severity: 'bad',
@@ -642,7 +642,7 @@ function beatForCluster(cluster: readonly StoryMarker[], rows: readonly FullEndp
     const count = endpointIds.length;
     const label = count > 1 ? `${count} paths recovered` : `${endpointLabel} recovered`;
     return {
-      id: beatId('recovery', endpointIds, t),
+      id: beatId('recovery', endpointIds, t, sequence),
       t,
       kind: 'recovery',
       severity: 'good',
@@ -659,7 +659,7 @@ function beatForCluster(cluster: readonly StoryMarker[], rows: readonly FullEndp
   if (elevationMarkers.length > 0) {
     const label = `${endpointLabel} rose`;
     return {
-      id: beatId('elevation', endpointIds, t),
+      id: beatId('elevation', endpointIds, t, sequence),
       t,
       kind: 'elevation',
       severity: 'watch',
@@ -673,7 +673,7 @@ function beatForCluster(cluster: readonly StoryMarker[], rows: readonly FullEndp
 
   const label = endpointIds.length > 1 ? `${endpointIds.length} paths changed` : `${endpointLabel} changed`;
   return {
-    id: beatId('shared-change', endpointIds, t),
+    id: beatId('shared-change', endpointIds, t, sequence),
     t,
     kind: sharedChangeMarkers[0]?.kind ?? 'shared-change',
     severity: 'info',
@@ -685,8 +685,8 @@ function beatForCluster(cluster: readonly StoryMarker[], rows: readonly FullEndp
   };
 }
 
-function beatId(kind: StoryBeatKind, endpointIds: readonly string[], t: number): string {
-  return `${kind}-${endpointIds.length > 0 ? endpointIds.join('-') : 'all'}-${t}`;
+function beatId(kind: StoryBeatKind, endpointIds: readonly string[], t: number, sequence: number): string {
+  return `${kind}-${endpointIds.length > 0 ? endpointIds.join('-') : 'all'}-${t}-${sequence}`;
 }
 
 function uniqueEndpointIds(markers: readonly StoryMarker[]): string[] {

@@ -54,6 +54,16 @@
     soloEndpoint ? 'solo' : liveOptions.split ? 'split' : 'unified',
   );
   const scopeHeight = $derived(mode === 'split' ? 220 : 540);
+  const modeLabel = $derived.by(() => {
+    if (mode === 'solo') return 'Focused path';
+    if (mode === 'split') return 'Split lanes';
+    return 'Unified overlay';
+  });
+  const endpointCountLabel = $derived(
+    soloEndpoint ? `1 of ${monitored.length} endpoints` : `${monitored.length} endpoint${monitored.length === 1 ? '' : 's'}`,
+  );
+  const roundLabel = $derived(`Round ${currentRound}`);
+  const windowLabel = `Last ${tokens.lane.chartWindow} rounds`;
 
   function handleDrill(epId: string): void {
     uiStore.setFocusedEndpoint(epId);
@@ -74,25 +84,45 @@
   function handleChipClick(epId: string): void {
     uiStore.setFocusedEndpoint(focusedId === epId ? null : epId);
   }
+
+  function latencyLabel(latency: number | null): string {
+    return latency === null ? 'waiting' : `${fmt(latency)} ms`;
+  }
+
+  function hasP95Value(p95: number | undefined): p95 is number {
+    return typeof p95 === 'number' && Number.isFinite(p95);
+  }
+
+  function p95Label(ready: boolean | undefined, p95: number | undefined): string {
+    return ready && hasP95Value(p95) ? `p95 ${fmt(p95)} ms` : 'p95 collecting';
+  }
+
+  function footerChipLabel(epId: string, epLabel: string, last: number | null, ready: boolean | undefined, p95: number | undefined): string {
+    const action = focusedId === epId ? 'click to clear focus' : 'click to focus this endpoint';
+    return `${epLabel}: last ${latencyLabel(last)}, ${p95Label(ready, p95)}, ${action}`;
+  }
 </script>
 
 <section class="live-wrap" aria-label="Live latency trace">
   <header class="live-header">
     <div class="live-title-block">
-      <div class="live-kicker">Live · Trace</div>
-      <h1 class="live-title">
+      <div class="live-kicker">Live</div>
+      <h1 class="live-title">Live trace</h1>
+      <div class="live-status-strip" aria-label="Live trace summary">
+        <span>{modeLabel}</span>
         {#if soloEndpoint}
           <span class="live-title-solo">
             <span class="live-title-pip" style:background={soloEndpoint.color} aria-hidden="true"></span>
-            Tracing <span class="live-title-solo-label" style:color={soloEndpoint.color}>{soloEndpoint.label}</span>
+            {soloEndpoint.label}
           </span>
-        {:else}
-          All endpoints · {liveOptions.split ? 'split' : 'unified'} view
         {/if}
-      </h1>
+        <span>{endpointCountLabel}</span>
+        <span>{roundLabel}</span>
+        <span>{windowLabel}</span>
+      </div>
     </div>
 
-    <div class="live-controls">
+    <div class="live-controls" role="group" aria-label="Live view controls">
       {#if soloEndpoint}
         <button
           type="button" class="live-chip live-chip-back"
@@ -104,7 +134,7 @@
       {/if}
 
       <div class="live-control" role="group" aria-label="Layout mode">
-        <span class="live-control-label">Mode</span>
+        <span class="live-control-label">View</span>
         <div class="live-segment">
           <!--
             Pressed state tracks `liveOptions.split` (the user's stashed
@@ -130,8 +160,8 @@
         </div>
       </div>
 
-      <div class="live-control live-control-trig" aria-label="Health threshold, {threshold} milliseconds">
-        <span class="live-control-label">Threshold</span>
+      <div class="live-control live-control-trig" role="group" aria-label="Slow trigger, {threshold} milliseconds">
+        <span class="live-control-label">Trigger</span>
         <div class="trig-display">
           {threshold}<span>ms</span>
         </div>
@@ -181,13 +211,17 @@
         class:on={focusedId === ep.id}
         aria-pressed={focusedId === ep.id}
         data-endpoint-id={ep.id}
+        aria-label={footerChipLabel(ep.id, ep.label, last, s?.ready, s?.p95)}
         onclick={() => handleChipClick(ep.id)}
       >
         <span class="live-footer-pip" style:background={color} aria-hidden="true"></span>
         <span class="live-footer-name">{ep.label}</span>
-        <span class="live-footer-val">{fmt(last)} ms</span>
-        {#if s?.ready}
-          <span class="live-footer-p95">p95 {fmt(s.p95)}</span>
+        <span class="live-footer-val">
+          <span>last</span>
+          {latencyLabel(last)}
+        </span>
+        {#if s?.ready && hasP95Value(s.p95)}
+          <span class="live-footer-p95">p95 {fmt(s.p95)} ms</span>
         {/if}
       </button>
     {/each}
@@ -227,8 +261,31 @@
     letter-spacing: var(--tr-tight);
     color: var(--t1);
   }
+  .live-status-strip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+    min-width: 0;
+  }
+  .live-status-strip > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    min-width: 0;
+    padding: 3px 7px;
+    border: 1px solid var(--border-mid);
+    border-radius: 5px;
+    background: rgba(255,255,255,.035);
+    color: var(--t2);
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+    letter-spacing: var(--tr-kicker);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
   .live-title-solo { display: inline-flex; align-items: center; gap: 10px; }
-  .live-title-solo-label { letter-spacing: inherit; }
   .live-title-pip {
     width: 10px; height: 10px; border-radius: 50%;
     box-shadow: 0 0 6px currentColor;
@@ -372,9 +429,16 @@
   }
   .live-footer-name { color: inherit; }
   .live-footer-val {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
     font-variant-numeric: tabular-nums;
     color: var(--t3);
     margin-left: 3px;
+  }
+  .live-footer-val span {
+    color: var(--t4);
+    text-transform: uppercase;
   }
   .live-footer-p95 {
     color: var(--t2);
