@@ -375,3 +375,9 @@ The assistant should then:
 - Phase 5 shipped advanced browser diagnostics: loaded-latency evidence, browser-safe outside DNS/topology context, and strict proof-boundary copy.
 - Phase 6 shipped as an explicitly opt-in foundation: consent contract, sanitized aggregate payloads, server ingest guardrails, aggregate summary API, and a compact Investigate aggregate-context panel.
 - Current next step is not another roadmap phase by default. It is a fresh live product review, then a new roadmap only for issues discovered in production use.
+
+### 2026-05-15
+
+- Evaluated the generated Figma redesign prototype at `/Users/shane/claude/chronoscope-redesign-figma/`.
+- Decided to use the Figma concept as the visual north star, but not as production code.
+- Created `docs/vision/figma-redesign-implementation-spec.md` to define the redesign contract: visual system, trust-copy rules, data mapping, screen requirements, PR sequence, accessibility requirements, and performance constraints.
