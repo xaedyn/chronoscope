@@ -122,14 +122,16 @@ test.describe('Accessibility', () => {
     await expectNoAxeViolations(page);
   });
 
-  test('no axe violations when recent threshold events are visible', async ({ page }) => {
-    test.skip((page.viewportSize()?.width ?? 0) < 700, 'Event feed contrast is covered in the desktop Status layout.');
+  test('no axe violations when recent timeline events are visible', async ({ page }) => {
+    test.skip((page.viewportSize()?.width ?? 0) < 700, 'Timeline event contrast is covered in the desktop Status layout.');
     await page.goto('/');
     await page.waitForSelector('#chronoscope-root');
     await seedThresholdCrossingSamples(page);
+    const timelineTab = page.getByRole('tab', { name: 'Timeline' });
+    if (await timelineTab.isVisible()) await timelineTab.click();
 
-    await expect(page.locator('.feed-row').first()).toBeVisible();
-    const opacities = await page.locator('.feed-row').evaluateAll((rows) => (
+    await expect(page.locator('.story-beat').first()).toBeVisible();
+    const opacities = await page.locator('.story-beat').evaluateAll((rows) => (
       rows.map((row) => Number(getComputedStyle(row).opacity))
     ));
     for (const opacity of opacities) {

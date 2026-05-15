@@ -344,7 +344,7 @@
     --status-dial-pad-y: 16px;
     --status-mobile-dial-size: 300px;
     --status-mobile-dial-row-h: calc(var(--status-mobile-dial-size) + var(--status-dial-pad-y));
-    --status-mobile-detail-row-h: 167px;
+    --status-mobile-detail-row-h: 186px;
     flex: 1;
     height: 100%;
     display: flex;
@@ -463,7 +463,7 @@
   @media (max-width: 767px) and (max-height: 860px) {
     .overview {
       --status-mobile-dial-size: 300px;
-      --status-mobile-detail-row-h: 167px;
+      --status-mobile-detail-row-h: 186px;
     }
     .overview { padding-block: 6px; }
     .status-shell,
@@ -481,14 +481,14 @@
   @media (max-width: 767px) and (max-height: 760px) {
     .overview {
       --status-dial-pad-y: 4px;
-      --status-mobile-dial-size: 270px;
-      --status-mobile-detail-row-h: 144px;
+      --status-mobile-dial-size: 262px;
+      --status-mobile-detail-row-h: 152px;
     }
   }
 
   @media (max-width: 375px) and (max-height: 760px) {
     .overview {
-      --status-mobile-dial-size: 252px;
+      --status-mobile-dial-size: 244px;
     }
   }
 </style>

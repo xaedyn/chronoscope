@@ -15,6 +15,8 @@ export type RunStorylineConfidence = 'collecting' | 'low' | 'medium' | 'high';
 export type StoryPhaseKind = 'collecting' | 'steady' | 'isolated-slow' | 'shared-slow' | 'failure' | 'recovered';
 export type TimelinePointStatus = 'ok' | 'elevated' | 'slow' | 'failed' | 'unknown';
 export type StoryMarkerKind = 'elevation' | 'slowdown' | 'failure' | 'recovery' | 'shared-change';
+export type StoryBeatKind = StoryMarkerKind | 'shared-slowdown';
+export type StoryBeatSeverity = 'info' | 'watch' | 'bad' | 'good';
 
 export interface BuildRunStorylineInput {
   readonly endpoints: readonly Endpoint[];
@@ -33,6 +35,7 @@ export interface RunStoryline {
   readonly rows: readonly EndpointTimelineRow[];
   readonly overflow: EndpointTimelineOverflow | null;
   readonly markers: readonly StoryMarker[];
+  readonly beats: readonly StoryBeat[];
   readonly summary: string;
   readonly confidence: RunStorylineConfidence;
   readonly sampleCount: number;
@@ -71,6 +74,18 @@ export interface StoryMarker {
   readonly kind: StoryMarkerKind;
   readonly label: string;
   readonly evidence: string;
+}
+
+export interface StoryBeat {
+  readonly id: string;
+  readonly t: number;
+  readonly kind: StoryBeatKind;
+  readonly severity: StoryBeatSeverity;
+  readonly label: string;
+  readonly shortLabel: string;
+  readonly endpointIds: readonly string[];
+  readonly evidence: string;
+  readonly markerCount: number;
 }
 
 export interface EndpointTimelineOverflow {
@@ -113,6 +128,7 @@ export function buildRunStoryline(input: BuildRunStorylineInput): RunStoryline {
   const readyEndpointCount = readyRows.length;
   const allMarkers = fullRows.flatMap((row) => row.markers);
   const markers = allMarkers.sort((a, b) => a.t - b.t);
+  const beats = beatsFor(markers, fullRows);
   const confidence = confidenceFor(readyRows, markers);
   const pattern = selectPattern({ rows: fullRows, markers, confidence });
   const summary = summaryFor({ pattern, rows: fullRows, markers, confidence });
@@ -136,6 +152,7 @@ export function buildRunStoryline(input: BuildRunStorylineInput): RunStoryline {
     rows,
     overflow,
     markers,
+    beats,
     summary,
     confidence,
     sampleCount,
@@ -537,6 +554,153 @@ function recoveryAfter(markers: readonly StoryMarker[], t: number, endpointId?: 
     marker.t > t &&
     (endpointId == null || marker.endpointId === endpointId)
   ))?.t;
+}
+
+function beatsFor(markers: readonly StoryMarker[], rows: readonly FullEndpointRow[]): StoryBeat[] {
+  const sorted = [...markers].sort((a, b) => a.t - b.t);
+  const clusters: StoryMarker[][] = [];
+
+  for (const marker of sorted) {
+    if (marker.kind === 'recovery') {
+      clusters.push([marker]);
+      continue;
+    }
+
+    const last = clusters[clusters.length - 1];
+    const canJoinLast = last !== undefined &&
+      last.every((candidate) => candidate.kind !== 'recovery') &&
+      marker.t - last[0].t <= CORRELATION_WINDOW_MS;
+    if (canJoinLast) {
+      last.push(marker);
+    } else {
+      clusters.push([marker]);
+    }
+  }
+
+  return clusters.map((cluster) => beatForCluster(cluster, rows));
+}
+
+function beatForCluster(cluster: readonly StoryMarker[], rows: readonly FullEndpointRow[]): StoryBeat {
+  const endpointIds = uniqueEndpointIds(cluster);
+  const endpointLabel = labelForEndpoint(endpointIds[0], rows);
+  const failureMarkers = cluster.filter((marker) => marker.kind === 'failure');
+  const slowdownMarkers = cluster.filter((marker) => marker.kind === 'slowdown');
+  const recoveryMarkers = cluster.filter((marker) => marker.kind === 'recovery');
+  const elevationMarkers = cluster.filter((marker) => marker.kind === 'elevation');
+  const sharedChangeMarkers = cluster.filter((marker) => marker.kind === 'shared-change');
+  const t = cluster[0]?.t ?? 0;
+
+  if (failureMarkers.length > 0) {
+    const count = endpointIds.length;
+    const label = count > 1 ? `${count} paths failed` : `${endpointLabel} failed`;
+    return {
+      id: beatId('failure', endpointIds, t),
+      t,
+      kind: 'failure',
+      severity: 'bad',
+      label,
+      shortLabel: label,
+      endpointIds,
+      evidence: count > 1
+        ? `${count} endpoints returned timeout or error samples within 15 seconds.`
+        : failureMarkers[0]?.evidence ?? 'A path returned a timeout or error sample.',
+      markerCount: cluster.length,
+    };
+  }
+
+  if (slowdownMarkers.length > 1 && endpointIds.length > 1) {
+    const count = endpointIds.length;
+    return {
+      id: beatId('shared-slowdown', endpointIds, t),
+      t,
+      kind: 'shared-slowdown',
+      severity: 'bad',
+      label: `${count} paths slowed together`,
+      shortLabel: `${count} paths slow`,
+      endpointIds,
+      evidence: `${count} endpoints crossed the trigger within 15 seconds.`,
+      markerCount: cluster.length,
+    };
+  }
+
+  if (slowdownMarkers.length > 0) {
+    const label = `${endpointLabel} slow`;
+    return {
+      id: beatId('slowdown', endpointIds, t),
+      t,
+      kind: 'slowdown',
+      severity: 'bad',
+      label,
+      shortLabel: label,
+      endpointIds,
+      evidence: slowdownMarkers[0]?.evidence ?? `${endpointLabel} crossed the trigger.`,
+      markerCount: cluster.length,
+    };
+  }
+
+  if (recoveryMarkers.length > 0) {
+    const count = endpointIds.length;
+    const label = count > 1 ? `${count} paths recovered` : `${endpointLabel} recovered`;
+    return {
+      id: beatId('recovery', endpointIds, t),
+      t,
+      kind: 'recovery',
+      severity: 'good',
+      label,
+      shortLabel: label,
+      endpointIds,
+      evidence: count > 1
+        ? `${count} endpoints returned to the configured threshold.`
+        : recoveryMarkers[0]?.evidence ?? `${endpointLabel} returned to the configured threshold.`,
+      markerCount: cluster.length,
+    };
+  }
+
+  if (elevationMarkers.length > 0) {
+    const label = `${endpointLabel} rose`;
+    return {
+      id: beatId('elevation', endpointIds, t),
+      t,
+      kind: 'elevation',
+      severity: 'watch',
+      label,
+      shortLabel: label,
+      endpointIds,
+      evidence: elevationMarkers[0]?.evidence ?? `${endpointLabel} rose below the trigger.`,
+      markerCount: cluster.length,
+    };
+  }
+
+  const label = endpointIds.length > 1 ? `${endpointIds.length} paths changed` : `${endpointLabel} changed`;
+  return {
+    id: beatId('shared-change', endpointIds, t),
+    t,
+    kind: sharedChangeMarkers[0]?.kind ?? 'shared-change',
+    severity: 'info',
+    label,
+    shortLabel: label,
+    endpointIds,
+    evidence: sharedChangeMarkers[0]?.evidence ?? 'A browser-visible event changed in the current window.',
+    markerCount: cluster.length,
+  };
+}
+
+function beatId(kind: StoryBeatKind, endpointIds: readonly string[], t: number): string {
+  return `${kind}-${endpointIds.length > 0 ? endpointIds.join('-') : 'all'}-${t}`;
+}
+
+function uniqueEndpointIds(markers: readonly StoryMarker[]): string[] {
+  const out: string[] = [];
+  for (const marker of markers) {
+    if (marker.endpointId == null || out.includes(marker.endpointId)) continue;
+    out.push(marker.endpointId);
+  }
+  return out;
+}
+
+function labelForEndpoint(endpointId: string | undefined, rows: readonly FullEndpointRow[]): string {
+  if (endpointId === undefined) return 'One path';
+  return rows.find((row) => row.endpointId === endpointId)?.label ?? endpointId;
 }
 
 function hasRepeatedSharedPattern(markers: readonly StoryMarker[]): boolean {
