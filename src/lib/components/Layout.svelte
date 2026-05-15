@@ -57,11 +57,21 @@
 
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
-<div class="bg" aria-hidden="true"></div>
+<div
+  class="bg"
+  aria-hidden="true"
+  style:--bg-base={tokens.color.surface.base}
+  style:--shell-bg={tokens.color.shell.base}
+  style:--shell-bg-cyan={tokens.color.shell.bgCyan}
+  style:--shell-bg-amber={tokens.color.shell.bgAmber}
+></div>
 
 <div
   class="app"
   style:--bg-base={tokens.color.surface.base}
+  style:--shell-bg={tokens.color.shell.base}
+  style:--shell-bg-cyan={tokens.color.shell.bgCyan}
+  style:--shell-bg-amber={tokens.color.shell.bgAmber}
   style:--t1={tokens.color.text.t1}
 >
   <Topbar {onStart} {onStop} />
@@ -116,14 +126,15 @@
 
   .bg {
     position: fixed; inset: 0; z-index: 0;
-    background: var(--bg-base);
+    background:
+      linear-gradient(180deg, var(--shell-bg), var(--bg-base));
   }
-  /* Subtle cyan/pink atmosphere — matches v2 prototype background pass.       */
+
   .bg::before {
     content: ''; position: absolute; inset: 0; pointer-events: none;
     background:
-      radial-gradient(ellipse 70% 50% at 15% 0%,  rgba(103,232,249,.05), transparent 60%),
-      radial-gradient(ellipse 60% 45% at 90% 100%, rgba(249,168,212,.04), transparent 65%);
+      radial-gradient(ellipse 70% 42% at 18% -10%, var(--shell-bg-cyan), transparent 62%),
+      radial-gradient(ellipse 55% 38% at 92% 105%, var(--shell-bg-amber), transparent 68%);
   }
 
   .app {

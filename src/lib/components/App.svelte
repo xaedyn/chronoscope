@@ -36,6 +36,24 @@
     // Background
     root.style.setProperty('--bg-base', tokens.color.surface.base);
 
+    // Figma redesign shell foundation
+    root.style.setProperty('--shell-bg',             tokens.color.shell.base);
+    root.style.setProperty('--shell-panel',          tokens.color.shell.panel);
+    root.style.setProperty('--shell-panel-raised',   tokens.color.shell.panelRaised);
+    root.style.setProperty('--shell-panel-hover',    tokens.color.shell.panelHover);
+    root.style.setProperty('--shell-panel-active',   tokens.color.shell.panelActive);
+    root.style.setProperty('--shell-border',         tokens.color.shell.border);
+    root.style.setProperty('--shell-border-strong',  tokens.color.shell.borderStrong);
+    root.style.setProperty('--shell-divider',        tokens.color.shell.divider);
+    root.style.setProperty('--shell-backdrop',       tokens.color.shell.backdrop);
+    root.style.setProperty('--shell-popover',        tokens.color.shell.popover);
+    root.style.setProperty('--shell-bg-cyan',        tokens.color.shell.bgCyan);
+    root.style.setProperty('--shell-bg-amber',       tokens.color.shell.bgAmber);
+    root.style.setProperty('--shell-success-bg',     tokens.color.shell.successBg);
+    root.style.setProperty('--shell-success-border', tokens.color.shell.successBorder);
+    root.style.setProperty('--shell-stop-bg',        tokens.color.shell.stopBg);
+    root.style.setProperty('--shell-stop-border',    tokens.color.shell.stopBorder);
+
     // Text opacity layers
     root.style.setProperty('--t1', tokens.color.text.t1);
     root.style.setProperty('--t2', tokens.color.text.t2);
@@ -92,6 +110,16 @@
     root.style.setProperty('--border-mid',          tokens.color.surface.border.mid);
     root.style.setProperty('--border-bright',       tokens.color.surface.border.bright);
     root.style.setProperty('--surface-topbar-bg',   tokens.color.surface.overlayDeep);
+    root.style.setProperty('--shell-topbar-height', `${tokens.shell.topbarHeight}px`);
+    root.style.setProperty('--shell-popover-width', `${tokens.shell.popoverWidth}px`);
+    root.style.setProperty('--shell-topbar-backdrop', tokens.shell.topbarBackdropFilter);
+    root.style.setProperty('--shell-popover-backdrop', tokens.shell.popoverBackdropFilter);
+    root.style.setProperty('--shell-brand-highlight-shadow', tokens.shell.brandHighlightShadow);
+    root.style.setProperty('--shell-nav-height', `${tokens.shell.navHeight}px`);
+    root.style.setProperty('--shell-control-size', `${tokens.shell.controlSize}px`);
+    root.style.setProperty('--shell-mobile-control-size', `${tokens.shell.mobileControlSize}px`);
+    root.style.setProperty('--content-max-w', `${tokens.shell.contentMaxWidth}px`);
+    root.style.setProperty('--shadow-popover', tokens.shadow.popover);
 
     // v2 tooltip variants
     root.style.setProperty('--tooltip-bg-deep',      tokens.color.tooltip.bgDeep);
