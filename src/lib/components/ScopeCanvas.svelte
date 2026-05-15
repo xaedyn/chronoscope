@@ -97,6 +97,8 @@
   const thresholdLabelY = $derived(Math.max(plotY0 + 12, thresholdY - 4));
   const normalBandY = $derived(yOf(Math.min(threshold, maxMs)));
   const normalBandHeight = $derived(plotY1 - normalBandY);
+  const scaleRangeLabel = $derived(`0-${maxMs} ms`);
+  const triggerLabel = $derived(`Trigger ${threshold} ms`);
 
   // X axis ticks — every 10 rounds within the visible window; major every 30.
   interface XTick { round: number; x: number; major: boolean; }
@@ -256,7 +258,7 @@
   });
 
   const ariaLabel = $derived(
-    `Live latency scope — ${endpoints.length} endpoint${endpoints.length === 1 ? '' : 's'}, last ${WINDOW} rounds, threshold ${threshold} ms.`
+    `Live latency scope — ${endpoints.length} endpoint${endpoints.length === 1 ? '' : 's'}, last ${WINDOW} rounds, latest on right, same scale ${scaleRangeLabel}, trigger ${threshold} ms.`
   );
 
   function handleClickTrace(epId: string): void {
@@ -283,6 +285,12 @@
 </script>
 
 <div class="scope-wrap" style:height="{height}px">
+  <div class="scope-meta" role="list" aria-label="Scope scale">
+    <span role="listitem">Latest on right</span>
+    <span role="listitem">Same scale</span>
+    <span role="listitem">{scaleRangeLabel}</span>
+  </div>
+
   <svg
     bind:this={svgEl}
     class="scope-svg"
@@ -352,7 +360,7 @@
       text-anchor="end" font-size="9" font-family={tokens.typography.mono.fontFamily}
       fill="var(--svg-threshold)" letter-spacing="0.1em"
       aria-hidden="true"
-    >TRIG {threshold}</text>
+    >{triggerLabel}</text>
 
     <!-- Traces -->
     {#each traces as trace (trace.id)}
@@ -454,6 +462,31 @@
     cursor: crosshair;
   }
 
+  .scope-meta {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    max-width: calc(100% - 24px);
+    pointer-events: none;
+  }
+  .scope-meta span {
+    min-width: 0;
+    padding: 3px 6px;
+    border: 1px solid rgba(255,255,255,.09);
+    border-radius: 5px;
+    background: rgba(3, 5, 9, .66);
+    color: var(--t3);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: var(--tr-kicker);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
   .scope-tooltip {
     position: absolute;
     background: var(--tooltip-bg-deep);
@@ -503,5 +536,17 @@
     padding: 0; margin: -1px; overflow: hidden;
     clip-path: inset(50%);
     white-space: nowrap; border: 0;
+  }
+
+  @media (max-width: 767px) {
+    .scope-meta {
+      top: 7px;
+      right: 8px;
+      gap: 4px;
+    }
+    .scope-meta span {
+      padding: 2px 5px;
+      font-size: 8px;
+    }
   }
 </style>
