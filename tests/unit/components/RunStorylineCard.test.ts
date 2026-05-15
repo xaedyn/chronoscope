@@ -52,6 +52,19 @@ function storyline(over: Partial<RunStoryline> = {}): RunStoryline {
         evidence: 'AWS had 2 of the last 3 samples above 120 ms.',
       },
     ],
+    beats: [
+      {
+        id: 'slowdown-aws-1765000030000',
+        t: BASE + 30_000,
+        kind: 'slowdown',
+        severity: 'bad',
+        label: 'AWS slow',
+        shortLabel: 'AWS slow',
+        endpointIds: ['aws'],
+        evidence: 'AWS had 2 of the last 3 samples above 120 ms.',
+        markerCount: 1,
+      },
+    ],
     overflow: null,
     ...over,
   };
@@ -72,7 +85,7 @@ describe('RunStorylineCard', () => {
   });
 
   it('renders readable time labels and a status legend', () => {
-    const { container, getByRole, getByText } = render(RunStorylineCard, {
+    const { container, getByRole, getByText, getAllByText } = render(RunStorylineCard, {
       props: {
         storyline: storyline(),
         onDrill: vi.fn(),
@@ -81,7 +94,7 @@ describe('RunStorylineCard', () => {
 
     expect(getByText('-60s')).toBeTruthy();
     expect(getByText('-45s')).toBeTruthy();
-    expect(getByText('-30s')).toBeTruthy();
+    expect(getAllByText('-30s').length).toBeGreaterThanOrEqual(1);
     expect(getByText('-15s')).toBeTruthy();
     expect(getByText('Now')).toBeTruthy();
     const legend = within(getByRole('list', { name: 'Timeline status legend' }));
@@ -90,6 +103,24 @@ describe('RunStorylineCard', () => {
     expect(legend.getByText('slow')).toBeTruthy();
     expect(legend.getByText('failed')).toBeTruthy();
     expect(container.querySelector('.story-time-header')).not.toBeNull();
+  });
+
+  it('renders large signature event marks with time, endpoint, and evidence', () => {
+    const { container } = render(RunStorylineCard, {
+      props: {
+        storyline: storyline(),
+        onDrill: vi.fn(),
+      },
+    });
+
+    const beat = container.querySelector<HTMLElement>('.story-beat');
+
+    expect(beat).not.toBeNull();
+    expect(beat?.textContent).toContain('AWS slow');
+    expect(beat?.textContent).toContain('30s ago');
+    expect(beat?.getAttribute('aria-label')).toMatch(
+      /Timeline event: AWS slow, 30s ago, AWS had 2 of the last 3 samples/i,
+    );
   });
 
   it('positions alert markers with proportional track coordinates', () => {
@@ -133,6 +164,7 @@ describe('RunStorylineCard', () => {
           windowEnd: BASE + 7_000,
           phases: [{ start: BASE, end: BASE + 7_000, label: 'collecting', kind: 'collecting' }],
           markers: [],
+          beats: [],
         }),
         onDrill: vi.fn(),
       },
@@ -153,6 +185,7 @@ describe('RunStorylineCard', () => {
           windowEnd: BASE + 800,
           phases: [{ start: BASE, end: BASE + 800, label: 'collecting', kind: 'collecting' }],
           markers: [],
+          beats: [],
         }),
         onDrill: vi.fn(),
       },
@@ -220,14 +253,19 @@ describe('RunStorylineCard', () => {
 
   it('drills into the clicked event marker', async () => {
     const onDrill = vi.fn();
-    const { getByRole } = render(RunStorylineCard, {
+    const { container } = render(RunStorylineCard, {
       props: {
         storyline: storyline(),
         onDrill,
       },
     });
 
-    await fireEvent.click(getByRole('button', { name: /AWS slow, 30s ago, AWS had 2 of the last 3 samples/i }));
+    const rail = container.querySelector<HTMLElement>('.story-rail');
+
+    expect(rail).not.toBeNull();
+    await fireEvent.click(within(rail as HTMLElement).getByRole('button', {
+      name: /Timeline event: AWS slow, 30s ago, AWS had 2 of the last 3 samples/i,
+    }));
 
     expect(onDrill).toHaveBeenCalledWith('aws');
   });
