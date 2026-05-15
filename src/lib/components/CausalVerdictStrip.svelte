@@ -131,30 +131,32 @@
   {/if}
 
   {#if showMetrics}
-    <dl class="verdict-facts verdict-metrics" aria-label="Measured facts">
+    <div class="verdict-facts verdict-metrics" role="group" aria-label="Measured facts">
       <div class="verdict-facts-heading" aria-hidden="true">Measured facts</div>
-      <div class="verdict-metric">
-        <dt class="verdict-metric-label">Median</dt>
-        <dd class="verdict-metric-value">
-          <span class="verdict-metric-num">{fmtInt(avgP50)}</span>
-          <span class="verdict-metric-unit">ms</span>
-        </dd>
-      </div>
-      <div class="verdict-metric">
-        <dt class="verdict-metric-label">Jitter</dt>
-        <dd class="verdict-metric-value">
-          <span class="verdict-metric-num">{fmt1(avgJitter)}</span>
-          <span class="verdict-metric-unit">ms</span>
-        </dd>
-      </div>
-      <div class="verdict-metric">
-        <dt class="verdict-metric-label">Loss</dt>
-        <dd class="verdict-metric-value">
-          <span class="verdict-metric-num">{fmt1(avgLoss)}</span>
-          <span class="verdict-metric-unit">%</span>
-        </dd>
-      </div>
-    </dl>
+      <dl class="verdict-metric-list">
+        <div class="verdict-metric">
+          <dt class="verdict-metric-label">Median</dt>
+          <dd class="verdict-metric-value">
+            <span class="verdict-metric-num">{fmtInt(avgP50)}</span>
+            <span class="verdict-metric-unit">ms</span>
+          </dd>
+        </div>
+        <div class="verdict-metric">
+          <dt class="verdict-metric-label">Jitter</dt>
+          <dd class="verdict-metric-value">
+            <span class="verdict-metric-num">{fmt1(avgJitter)}</span>
+            <span class="verdict-metric-unit">ms</span>
+          </dd>
+        </div>
+        <div class="verdict-metric">
+          <dt class="verdict-metric-label">Loss</dt>
+          <dd class="verdict-metric-value">
+            <span class="verdict-metric-num">{fmt1(avgLoss)}</span>
+            <span class="verdict-metric-unit">%</span>
+          </dd>
+        </div>
+      </dl>
+    </div>
   {/if}
 
   {#if drillEndpoint && verdict.tone === 'warn'}
@@ -467,6 +469,11 @@
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
     text-transform: uppercase;
+  }
+  .verdict-metric-list {
+    display: contents;
+    margin: 0;
+    padding: 0;
   }
   .verdict-metric {
     display: flex;
