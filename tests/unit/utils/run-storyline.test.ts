@@ -107,6 +107,16 @@ describe('run storyline derivation', () => {
     expect(result.summary).toBe('Multiple paths slowed together, then stayed above the trigger.');
     expect(result.markers.filter((marker) => marker.kind === 'slowdown')).toHaveLength(2);
     expect(result.phases.some((phase) => phase.kind === 'shared-slow')).toBe(true);
+    expect(result.beats).toEqual([
+      expect.objectContaining({
+        kind: 'shared-slowdown',
+        severity: 'bad',
+        label: '2 paths slowed together',
+        shortLabel: '2 paths slow',
+        endpointIds: ['google', 'cloudflare'],
+        markerCount: 2,
+      }),
+    ]);
   });
 
   it('uses high confidence only when shared patterns repeat in adjacent 15-second buckets', () => {
@@ -153,6 +163,14 @@ describe('run storyline derivation', () => {
     expect(result.summary).toBe('Fastly had a failed request; the other paths stayed reachable.');
     expect(result.markers.some((marker) => marker.kind === 'failure' && marker.endpointId === 'fastly')).toBe(true);
     expect(result.markers.some((marker) => marker.kind === 'slowdown')).toBe(false);
+    expect(result.beats[0]).toEqual(expect.objectContaining({
+      kind: 'failure',
+      severity: 'bad',
+      label: 'Fastly failed',
+      shortLabel: 'Fastly failed',
+      endpointIds: ['fastly'],
+      evidence: 'Fastly returned a timeout or error sample.',
+    }));
   });
 
   it('adds recovery after a marked problem has three normal samples', () => {
@@ -177,6 +195,7 @@ describe('run storyline derivation', () => {
     expect(result.markers.some((marker) => marker.kind === 'recovery' && marker.endpointId === 'aws')).toBe(true);
     expect(result.phases.some((phase) => phase.kind === 'recovered')).toBe(true);
     expect(result.summary).toBe('AWS slowed briefly, then recovered.');
+    expect(result.beats.map((beat) => beat.shortLabel)).toEqual(['AWS slow', 'AWS recovered']);
   });
 
   it('does not promote below-threshold elevated latency to slow wording', () => {

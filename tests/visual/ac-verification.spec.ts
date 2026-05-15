@@ -212,14 +212,14 @@ test.describe('Acceptance criteria verification', () => {
     expect(await endpointButtons.count()).toBeGreaterThan(0);
   });
 
-  test('cold Status renders dial, racing comparison, and event feed', async ({ page }) => {
+  test('cold Status renders dial, racing comparison, and timeline', async ({ page }) => {
     await page.goto('/');
     await page.waitForSelector('#chronoscope-root');
 
     await expect(page.locator('section[aria-label="Status"]')).toBeVisible();
     await expect(page.locator('svg.dial')).toBeVisible();
     await expect(page.locator('section[aria-label="Per-endpoint comparison"]')).toBeVisible();
-    await expect(page.locator('section[aria-label="Recent events"]')).toBeAttached();
+    await expect(page.locator('section[aria-label^="Recent run timeline"]')).toBeAttached();
   });
 
   test('Status first paint shows verdict before the dial on desktop', async ({ page }) => {
