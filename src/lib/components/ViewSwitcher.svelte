@@ -93,7 +93,7 @@
     left: 8px;
     right: 8px;
     height: 2px;
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
     background: transparent;
     transition: background 200ms ease, box-shadow 200ms ease;
   }
@@ -181,7 +181,11 @@
   /* Mobile: drop the keyboard-shortcut kicker (keyboard isn't reachable
      anyway) and hide the tab sub-label so tabs pack tighter. */
   @media (max-width: 767px) {
-    .view-switcher { padding: 7px 12px 0; gap: 4px; }
+    .view-switcher {
+      height: 44px;
+      padding: 6px 12px 0;
+      gap: 4px;
+    }
     .view-switcher-trailing { display: none; }
     .view-tab { padding: 6px 8px 9px 6px; }
     .view-tab-sub { display: none; }
