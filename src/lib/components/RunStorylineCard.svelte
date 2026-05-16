@@ -9,6 +9,7 @@
     TimelinePoint,
     StoryMarker,
     StoryMarkerKind,
+    StoryBeat,
   } from '$lib/utils/run-storyline';
 
   interface Props {
@@ -28,8 +29,10 @@
 
   let { storyline, onDrill }: Props = $props();
 
-  let windowLabel = $derived(`Last ${durationLabel(windowSpan())} · newest on right`);
+  let windowLabel = $derived(`Last ${durationLabel(windowSpan())} · Now on right`);
   let axisTicks = $derived(buildAxisTicks(storyline.windowStart, storyline.windowEnd));
+  let visibleBeats = $derived(storyline.beats.slice(-4));
+  let mobileBeats = $derived(storyline.beats.slice(-2));
 
   function windowSpan(): number {
     return Math.max(1, storyline.windowEnd - storyline.windowStart);
@@ -65,9 +68,8 @@
   }
 
   function axisTickLabel(position: number, age: number): string {
-    if (position === 1) return 'now';
-    if (position === 0) return `${durationLabel(age)} ago`;
-    return durationLabel(age);
+    if (position === 1) return 'Now';
+    return `-${durationLabel(age)}`;
   }
 
   function pct(t: number): number {
@@ -114,8 +116,17 @@
   }
 
   function markerTimeLabel(marker: StoryMarker): string {
-    const age = storyline.windowEnd - marker.t;
+    return timeAgoLabel(marker.t);
+  }
+
+  function timeAgoLabel(t: number): string {
+    const age = storyline.windowEnd - t;
     return age <= 999 ? 'now' : `${durationLabel(age)} ago`;
+  }
+
+  function runRelativeLabel(t: number): string {
+    const age = storyline.windowEnd - t;
+    return age <= 999 ? 'Now' : `-${durationLabel(age)}`;
   }
 
   function markerKindLabel(kind: StoryMarkerKind): string {
@@ -147,12 +158,20 @@
     return `Steady for ${durationLabel(windowSpan())}`;
   }
 
-  function markerLabel(marker: StoryMarker): string {
-    return `${marker.label}, ${markerTimeLabel(marker)}, ${marker.evidence}`;
+  function beatLabel(beat: StoryBeat): string {
+    return `Timeline event: ${beat.label}, ${timeAgoLabel(beat.t)}, ${beat.evidence}`;
   }
 
-  function drillMarker(marker: StoryMarker): void {
-    if (marker.endpointId) onDrill(marker.endpointId);
+  function beatEdge(beat: StoryBeat): 'start' | 'middle' | 'end' {
+    const position = pct(beat.t);
+    if (position <= 12) return 'start';
+    if (position >= 88) return 'end';
+    return 'middle';
+  }
+
+  function drillBeat(beat: StoryBeat): void {
+    const endpointId = beat.endpointIds[0];
+    if (endpointId) onDrill(endpointId);
   }
 </script>
 
@@ -164,6 +183,24 @@
     </div>
     <p class="storyline-hint">Click a marker -&gt; Diagnose</p>
   </header>
+
+  {#if mobileBeats.length > 0}
+    <div class="story-mobile-beats" aria-label="Recent timeline events">
+      {#each mobileBeats as beat (beat.id)}
+        <button
+          type="button"
+          class="story-mobile-beat"
+          data-kind={beat.kind}
+          data-severity={beat.severity}
+          aria-label={beatLabel(beat)}
+          onclick={() => drillBeat(beat)}
+        >
+          <span>{beat.shortLabel}</span>
+          <span>{runRelativeLabel(beat.t)}</span>
+        </button>
+      {/each}
+    </div>
+  {/if}
 
   <div class="story-time-header">
     <ul class="story-legend" aria-label="Timeline status legend">
@@ -199,24 +236,40 @@
           </span>
         {/each}
       </div>
-      {#each storyline.markers as marker (`${marker.kind}-${marker.endpointId ?? 'all'}-${marker.t}`)}
-        {#if marker.endpointId}
+      {#each visibleBeats as beat (beat.id)}
+        {#if beat.endpointIds.length > 0}
           <button
             type="button"
-            class="story-marker"
-            data-kind={marker.kind}
-            style:left="{pct(marker.t)}%"
-            title="{markerTimeLabel(marker)} - {marker.evidence}"
-            aria-label={markerLabel(marker)}
-            onclick={() => drillMarker(marker)}
-          ></button>
+            class="story-beat"
+            data-kind={beat.kind}
+            data-severity={beat.severity}
+            data-edge={beatEdge(beat)}
+            style:left="{pct(beat.t)}%"
+            title="{timeAgoLabel(beat.t)} - {beat.evidence}"
+            aria-label={beatLabel(beat)}
+            onclick={() => drillBeat(beat)}
+          >
+            <span class="story-beat-pin" aria-hidden="true"></span>
+            <span class="story-beat-copy">
+              <span class="story-beat-label">{beat.shortLabel}</span>
+              <span class="story-beat-time">{timeAgoLabel(beat.t)}</span>
+            </span>
+          </button>
         {:else}
           <span
-            class="story-marker"
-            data-kind={marker.kind}
-            style:left="{pct(marker.t)}%"
-            title="{markerTimeLabel(marker)} - {marker.evidence}"
-          ></span>
+            class="story-beat"
+            data-kind={beat.kind}
+            data-severity={beat.severity}
+            data-edge={beatEdge(beat)}
+            style:left="{pct(beat.t)}%"
+            title="{timeAgoLabel(beat.t)} - {beat.evidence}"
+          >
+            <span class="story-beat-pin" aria-hidden="true"></span>
+            <span class="story-beat-copy">
+              <span class="story-beat-label">{beat.shortLabel}</span>
+              <span class="story-beat-time">{timeAgoLabel(beat.t)}</span>
+            </span>
+          </span>
         {/if}
       {/each}
     </div>
@@ -324,6 +377,9 @@
     font-size: var(--ts-xs);
     color: var(--t2);
     white-space: nowrap;
+  }
+  .story-mobile-beats {
+    display: none;
   }
 
   .story-time-header {
@@ -460,55 +516,89 @@
     background: rgba(148, 163, 184, .1);
     color: var(--t3);
   }
-  .story-marker {
+  .story-beat {
     position: absolute;
-    top: -2px;
-    bottom: -4px;
-    width: 18px;
-    padding: 0;
-    border: none;
-    background: transparent;
+    top: 3px;
+    z-index: 2;
+    min-width: 96px;
+    max-width: 156px;
+    height: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 0 9px 0 7px;
+    border: 1px solid rgba(255,255,255,.14);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, .82);
+    color: var(--t1);
+    font: inherit;
+    font-family: var(--mono);
+    text-align: left;
+    box-shadow: 0 8px 24px rgba(0,0,0,.26);
     transform: translateX(-50%);
     cursor: pointer;
   }
-  .story-marker::before {
-    content: '';
-    position: absolute;
-    top: 1px;
-    bottom: 1px;
-    left: 50%;
-    width: 2px;
-    transform: translateX(-1px);
-    background: rgba(255,255,255,.6);
+  .story-beat[data-edge="start"] { transform: translateX(0); }
+  .story-beat[data-edge="end"] { transform: translateX(-100%); }
+  .story-beat[data-severity="bad"] {
+    border-color: rgba(251, 191, 36, .34);
+    background: rgba(49, 36, 20, .9);
   }
-  .story-marker::after {
-    content: '';
-    position: absolute;
-    top: 10px;
-    left: 50%;
+  .story-beat[data-severity="good"] {
+    border-color: rgba(134, 239, 172, .28);
+    background: rgba(20, 46, 31, .88);
+  }
+  .story-beat[data-severity="watch"] {
+    border-color: rgba(103, 232, 249, .26);
+    background: rgba(18, 42, 52, .88);
+  }
+  .story-beat:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+  }
+  .story-beat-pin {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(255,255,255,.8);
-    box-shadow: 0 0 12px rgba(255,255,255,.28);
+    flex: 0 0 auto;
+    background: var(--accent-cyan);
+    box-shadow: 0 0 10px rgba(103,232,249,.45);
   }
-  .story-marker:focus-visible {
-    outline: 1.5px solid var(--accent-cyan);
-    outline-offset: 2px;
-    border-radius: 5px;
+  .story-beat[data-severity="bad"] .story-beat-pin {
+    background: var(--accent-amber);
+    box-shadow: 0 0 10px rgba(251,191,36,.42);
   }
-  .story-marker[data-kind="failure"]::before,
-  .story-marker[data-kind="failure"]::after { background: var(--accent-pink); }
-  .story-marker[data-kind="slowdown"]::before,
-  .story-marker[data-kind="slowdown"]::after,
-  .story-marker[data-kind="shared-change"]::before,
-  .story-marker[data-kind="shared-change"]::after { background: var(--accent-amber); }
-  .story-marker[data-kind="recovery"]::before,
-  .story-marker[data-kind="recovery"]::after { background: var(--accent-green); }
-  .story-marker[data-kind="elevation"]::before,
-  .story-marker[data-kind="elevation"]::after { background: var(--accent-amber); }
-
+  .story-beat[data-severity="good"] .story-beat-pin {
+    background: var(--accent-green);
+    box-shadow: 0 0 10px rgba(134,239,172,.38);
+  }
+  .story-beat-copy {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px;
+    align-items: baseline;
+    width: 100%;
+  }
+  .story-beat-label,
+  .story-beat-time {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .story-beat-label {
+    font-size: 10px;
+    color: var(--t1);
+    letter-spacing: var(--tr-kicker);
+    text-transform: uppercase;
+  }
+  .story-beat-time {
+    font-size: 9px;
+    color: var(--t3);
+    letter-spacing: var(--tr-kicker);
+    text-transform: uppercase;
+  }
   .story-rows {
     display: flex;
     flex-direction: column;
@@ -519,7 +609,9 @@
     grid-template-columns: var(--story-label-w) minmax(0, 1fr);
     align-items: center;
     gap: 10px;
+    flex: 0 0 42px;
     height: 42px;
+    min-height: 42px;
     padding: 0;
     border: 1px solid transparent;
     border-radius: 8px;
@@ -534,7 +626,7 @@
     border-color: var(--border-mid);
   }
   .story-row:focus-visible {
-    outline: 1.5px solid var(--accent-cyan);
+    outline: 2px solid var(--accent-cyan);
     outline-offset: 2px;
   }
   .story-label {
@@ -676,6 +768,10 @@
     }
     .story-phases { height: 22px; }
     .story-row { height: 30px; }
+    .story-row {
+      flex-basis: 30px;
+      min-height: 30px;
+    }
     .story-track { height: 28px; }
     .story-footer { display: block; }
     .story-overflow { margin-top: 2px; }
@@ -725,6 +821,59 @@
       display: none;
     }
 
+    .story-mobile-beats {
+      display: flex;
+      gap: 4px;
+      flex: 0 0 22px;
+      height: 22px;
+      min-height: 22px;
+      min-width: 0;
+      overflow: hidden;
+    }
+
+    .story-mobile-beat {
+      flex: 1 1 0;
+      min-width: 0;
+      height: 22px;
+      padding: 0 7px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.045);
+      color: var(--t2);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: var(--tr-kicker);
+      text-transform: uppercase;
+    }
+
+    .story-mobile-beat[data-severity="bad"] {
+      color: var(--accent-amber);
+      border-color: rgba(251, 191, 36, .24);
+      background: rgba(251, 191, 36, .06);
+    }
+
+    .story-mobile-beat[data-severity="good"] {
+      color: var(--accent-green);
+      border-color: rgba(134, 239, 172, .22);
+      background: rgba(134, 239, 172, .055);
+    }
+
+    .story-mobile-beat span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .story-mobile-beat span:last-child {
+      flex: 0 0 auto;
+      color: var(--t3);
+    }
+
     .story-rows {
       gap: 1px;
       min-height: 0;
@@ -732,7 +881,9 @@
 
     .story-row {
       --row-h: 24px;
+      flex-basis: var(--row-h);
       height: var(--row-h);
+      min-height: var(--row-h);
       grid-template-columns: var(--story-label-w) minmax(0, 1fr);
       gap: 6px;
       border-radius: 5px;
@@ -801,6 +952,10 @@
 
     .story-rows {
       gap: 0;
+    }
+
+    .story-mobile-beats {
+      display: none;
     }
 
     .story-row {

@@ -58,11 +58,12 @@
 
   function relTime(ms: number): string {
     const s = Math.max(0, Math.round(ms / 1000));
-    if (s < 60) return `${s}s ago`;
+    if (s <= 1) return 'Now';
+    if (s < 60) return `-${s}s`;
     const m = Math.round(s / 60);
-    if (m < 60) return `${m}m ago`;
+    if (m < 60) return `-${m}m`;
     const h = Math.round(m / 60);
-    return `${h}h ago`;
+    return `-${h}h`;
   }
 
   function endpointFor(epId: string): Endpoint | undefined {
@@ -71,10 +72,10 @@
 
   function actionPhrase(ev: FeedEvent): { phrase: string; value: string } {
     switch (ev.kind) {
-      case 'cross-up':   return { phrase: 'crossed up',   value: ev.value != null ? `${fmt(ev.value)}ms` : '' };
-      case 'cross-down': return { phrase: 'recovered',    value: ev.value != null ? `${fmt(ev.value)}ms` : '' };
+      case 'cross-up':   return { phrase: 'crossed trigger', value: ev.value != null ? `${fmt(ev.value)}ms` : '' };
+      case 'cross-down': return { phrase: 'recovered below trigger', value: ev.value != null ? `${fmt(ev.value)}ms` : '' };
       case 'shift':      return {
-        phrase: 'p95 shift',
+        phrase: 'p95 shifted',
         value: ev.from != null && ev.to != null ? `${fmt(ev.from)}→${fmt(ev.to)}ms` : '',
       };
     }
@@ -84,11 +85,11 @@
 <section class="feed" aria-label="Recent events">
   <header class="feed-header">
     <h3 class="feed-title">Recent events</h3>
-    <p class="feed-sub">Threshold activity</p>
+    <p class="feed-sub">Run-relative activity</p>
   </header>
 
   {#if rows.length === 0}
-    <p class="feed-empty">No crossings in window. Network steady.</p>
+    <p class="feed-empty">No threshold events in this window.</p>
   {:else}
     <ol class="feed-rows" aria-live="polite">
       {#each rows as ev, rank (`${ev.t}-${ev.epId}-${ev.kind}`)}
@@ -168,7 +169,7 @@
     /* Inherit the row's mono + ts-sm so all columns share one baseline. */
     font: inherit;
   }
-  .feed-btn:focus-visible { outline: 1.5px solid var(--accent-cyan); outline-offset: 2px; border-radius: 6px; }
+  .feed-btn:focus-visible { outline: 2px solid var(--accent-cyan); outline-offset: 2px; border-radius: 6px; }
 
   .feed-time {
     color: var(--t2);
