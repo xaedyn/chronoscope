@@ -1,11 +1,6 @@
 <!-- src/lib/components/Topbar.svelte -->
-<!-- v2 chrome — pixel-aligned to v2/Chronoscope v2.html. Brand on the left,    -->
-<!-- combined `run-status` (lifecycle dot + label + tick) inline next to it,    -->
-<!-- and the action cluster (endpoints / settings / share / start-stop) on     -->
-<!-- the right. The network-quality severity pill the older brief asked for    -->
-<!-- was removed at the v2-parity refactor: the chronograph dial in Overview   -->
-<!-- already carries the at-a-glance health verdict, so the pill duplicated    -->
-<!-- that signal in a less expressive form.                                    -->
+<!-- Figma-aligned top app bar. Brand left, primary run action right, compact  -->
+<!-- utility controls nearby. Detailed run state lives in the Overview card.   -->
 <script lang="ts">
   import { measurementStore } from '$lib/stores/measurements';
   import { endpointStore } from '$lib/stores/endpoints';
@@ -59,6 +54,11 @@
 
   const startStopLabel = $derived(startStopButtonLabel(lifecycle));
   const isStartButton = $derived(isStartLifecycle(lifecycle));
+  const startStopText = $derived.by(() => {
+    if (lifecycle === 'starting') return 'Starting...';
+    if (lifecycle === 'stopping') return 'Stopping...';
+    return isStartButton ? 'Start Test' : 'Stop Test';
+  });
 
   $effect(() => {
     if (lifecycle !== 'running') return;
@@ -216,7 +216,7 @@
         onclick={handleStartStop}
       >
         <span class="run-btn-icon" aria-hidden="true">{isRunning ? '■' : '▶'}</span>
-        <span>{startStopLabel}</span>
+        <span>{startStopText}</span>
       </button>
     {/if}
   </nav>
@@ -226,61 +226,60 @@
   .topbar {
     position: relative;
     z-index: 50;
-    height: var(--topbar-height);
+    height: var(--shell-topbar-height, var(--topbar-height));
     padding: 0 18px;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     flex-shrink: 0;
-    background: var(--surface-topbar-bg);
-    backdrop-filter: blur(16px) saturate(1.3);
-    -webkit-backdrop-filter: blur(16px) saturate(1.3);
-    border-bottom: 1px solid var(--border-bright);
+    background: rgba(7, 11, 18, 0.78);
+    backdrop-filter: var(--shell-topbar-backdrop);
+    -webkit-backdrop-filter: var(--shell-topbar-backdrop);
+    border-bottom: 1px solid var(--shell-border);
     color: var(--t1);
   }
 
-  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
   .brand-mark {
     width: 32px; height: 32px;
     border-radius: 8px;
-    background: linear-gradient(135deg, rgba(103,232,249,.15), rgba(249,168,212,.10));
-    border: 1px solid var(--border-bright);
+    background: linear-gradient(135deg, var(--accent-cyan), #0891b2);
+    border: 0;
     display: grid; place-items: center;
-    color: var(--accent-cyan);
+    color: var(--shell-bg);
     flex-shrink: 0;
+    box-shadow: 0 0 24px rgba(103, 232, 249, 0.22);
   }
-  .brand-meta { display: flex; flex-direction: column; gap: 1px; }
+  .brand-mark svg circle { display: none; }
+  .brand-meta { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
   .brand-name {
     font-family: var(--sans);
-    font-weight: 600;
-    font-size: var(--ts-lg);
-    letter-spacing: var(--tr-tight);
+    font-weight: 900;
+    font-size: 18px;
+    letter-spacing: var(--tr-label);
+    text-transform: uppercase;
     color: var(--t1);
   }
   .brand-sub {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    color: var(--t3);
-    letter-spacing: var(--tr-kicker);
-    text-transform: uppercase;
+    display: none;
   }
 
   .topbar-divider {
-    width: 1px; height: 28px;
-    background: var(--border-mid);
-    flex-shrink: 0;
+    display: none;
   }
 
   .run-status {
-    display: inline-flex;
+    display: none;
     align-items: center;
     gap: 10px;
+    min-width: 0;
   }
   .run-dot {
     width: 7px; height: 7px;
     border-radius: 50%;
     background: var(--t4);
     transition: background 200ms ease, box-shadow 200ms ease;
+    flex-shrink: 0;
   }
   .run-dot.on {
     background: var(--accent-green);
@@ -306,33 +305,28 @@
     margin-left: 2px;
   }
   .run-summary {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    color: var(--t3);
-    letter-spacing: var(--tr-label);
-    white-space: nowrap;
+    display: none;
   }
 
   .spacer { flex: 1; }
 
-  .actions { display: flex; align-items: center; gap: 8px; }
+  .actions { display: flex; align-items: center; gap: 10px; }
   .run-details {
-    position: relative;
-    display: flex;
+    display: none;
   }
   .run-details-popover {
     position: absolute;
     right: 0;
     top: calc(100% + 8px);
     z-index: 80;
-    width: 260px;
+    width: var(--shell-popover-width);
     padding: 12px;
-    border-radius: 10px;
-    border: 1px solid var(--border-bright);
-    background: #0a0913;
-    box-shadow: 0 18px 60px rgba(0,0,0,.42);
-    backdrop-filter: blur(18px) saturate(1.2);
-    -webkit-backdrop-filter: blur(18px) saturate(1.2);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--shell-border-strong);
+    background: var(--shell-popover);
+    box-shadow: var(--shadow-popover);
+    backdrop-filter: var(--shell-popover-backdrop);
+    -webkit-backdrop-filter: var(--shell-popover-backdrop);
   }
   .run-details-title {
     margin: 0 0 9px;
@@ -366,11 +360,13 @@
   }
 
   .icon-btn {
-    width: 44px; height: 44px;
-    min-width: 44px; min-height: 44px;
-    border-radius: 8px;
-    background: transparent;
-    border: 1px solid var(--border-mid);
+    width: var(--shell-control-size);
+    height: var(--shell-control-size);
+    min-width: var(--shell-control-size);
+    min-height: var(--shell-control-size);
+    border-radius: var(--radius-sm);
+    background: var(--shell-panel);
+    border: 1px solid var(--shell-border);
     color: var(--t2);
     display: grid; place-items: center;
     cursor: pointer;
@@ -378,39 +374,40 @@
   }
   .icon-btn:hover {
     color: var(--t1);
-    border-color: var(--border-bright);
-    background: rgba(255,255,255,.03);
+    border-color: var(--shell-border-strong);
+    background: var(--shell-panel-hover);
   }
   .icon-btn:focus-visible {
-    outline: 1.5px solid var(--accent-cyan);
+    outline: 2px solid var(--accent-cyan);
     outline-offset: 2px;
   }
 
   .run-btn {
     font-family: var(--sans);
-    font-size: var(--ts-md);
-    font-weight: 500;
-    letter-spacing: 0.02em;
+    font-size: 15px;
+    font-weight: 900;
+    letter-spacing: var(--tr-label);
+    text-transform: uppercase;
     min-height: 44px;
-    padding: 0 16px;
+    padding: 0 28px;
     border-radius: 8px;
-    background: rgba(134,239,172,.12);
-    border: 1px solid rgba(134,239,172,.30);
-    color: var(--accent-green);
+    background: var(--accent-cyan);
+    border: 1px solid var(--accent-cyan);
+    color: var(--shell-bg);
     display: inline-flex; align-items: center; gap: 6px;
     cursor: pointer;
     white-space: nowrap;
     transition: background 160ms ease, border-color 160ms ease, color 160ms ease, filter 160ms ease;
   }
   .run-btn.stop {
-    background: rgba(249,168,212,.10);
-    border-color: rgba(249,168,212,.30);
+    background: var(--shell-stop-bg);
+    border-color: var(--shell-stop-border);
     color: var(--accent-pink);
   }
   .run-btn:hover:not(:disabled) { filter: brightness(1.15); }
   .run-btn:disabled { opacity: 0.55; cursor: not-allowed; }
   .run-btn:focus-visible {
-    outline: 1.5px solid var(--accent-cyan);
+    outline: 2px solid var(--accent-cyan);
     outline-offset: 2px;
   }
   .run-btn-icon { font-size: var(--ts-xs); }
@@ -420,31 +417,34 @@
   }
 
   @media (max-width: 767px) {
-    .brand-sub, .run-tick, .run-summary, .run-details { display: none; }
-    .brand-name { font-size: var(--ts-sm); }
-    .run-label { font-size: var(--ts-xs); }
+    .brand-name { font-size: 14px; }
     .topbar { gap: 8px; padding: 0 12px; }
     .actions { gap: 6px; }
-    .icon-btn { min-width: 40px; padding: 0 10px; }
+    .icon-btn {
+      width: var(--shell-mobile-control-size);
+      height: var(--shell-mobile-control-size);
+      min-width: var(--shell-mobile-control-size);
+      min-height: var(--shell-mobile-control-size);
+      padding: 0;
+    }
     .actions .run-btn:not(.run-own) {
       justify-content: center;
-      min-width: 40px;
-      width: 40px;
+      min-width: 44px;
+      width: 44px;
+      min-height: var(--shell-mobile-control-size);
       padding: 0;
     }
     .actions .run-btn:not(.run-own) span:not(.run-btn-icon) { display: none; }
   }
 
   @media (max-width: 420px) {
-    .run-label { display: none; }
-    .topbar-divider { display: none; }
     .brand { gap: 6px; }
-    .brand-mark { width: 22px; height: 22px; }
+    .brand-mark { width: 28px; height: 28px; }
     .run-btn { padding: 0 10px; }
   }
 
   @media (max-width: 374px) {
-    .brand-meta, .run-label { display: none; }
+    .brand-meta { display: none; }
     .brand { gap: 0; }
   }
 </style>

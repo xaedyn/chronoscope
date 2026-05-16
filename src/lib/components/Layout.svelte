@@ -1,6 +1,6 @@
 <!-- src/lib/components/Layout.svelte -->
-<!-- v2 shell. Topbar (top) | { Rail (264px) | { ViewSwitcher + main content } }. -->
-<!-- Routes activeView to OverviewView / LiveView / DiagnoseView. The legacy    -->
+<!-- Figma-aligned shell. Topbar + top-level nav + active content.             -->
+<!-- Routes activeView to Overview / Live / Investigate / Report. The legacy   -->
 <!-- Lanes family was retired in Phase 7 — the v6→v7 migration rewrites         -->
 <!-- 'lanes' / 'timeline' / 'heatmap' / 'split' to 'overview' so nothing        -->
 <!-- reaches here.                                                              -->
@@ -12,9 +12,8 @@
   import { uiStore } from '$lib/stores/ui';
   import { tokens } from '$lib/tokens';
   import Topbar from './Topbar.svelte';
-  import EndpointRail from './EndpointRail.svelte';
   import ViewSwitcher from './ViewSwitcher.svelte';
-  import OverviewView from './OverviewView.svelte';
+  import FigmaOverviewView from './FigmaOverviewView.svelte';
   import LiveView from './LiveView.svelte';
   import DiagnoseView from './DiagnoseView.svelte';
   import ReportView from './ReportView.svelte';
@@ -57,11 +56,21 @@
 
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
-<div class="bg" aria-hidden="true"></div>
+<div
+  class="bg"
+  aria-hidden="true"
+  style:--bg-base={tokens.color.surface.base}
+  style:--shell-bg={tokens.color.shell.base}
+  style:--shell-bg-cyan={tokens.color.shell.bgCyan}
+  style:--shell-bg-amber={tokens.color.shell.bgAmber}
+></div>
 
 <div
   class="app"
   style:--bg-base={tokens.color.surface.base}
+  style:--shell-bg={tokens.color.shell.base}
+  style:--shell-bg-cyan={tokens.color.shell.bgCyan}
+  style:--shell-bg-amber={tokens.color.shell.bgAmber}
   style:--t1={tokens.color.text.t1}
 >
   <Topbar {onStart} {onStop} />
@@ -72,8 +81,6 @@
     </main>
   {:else}
     <div class="shell-body">
-      <EndpointRail />
-
       <div class="shell-main-wrap">
         <ViewSwitcher />
 
@@ -82,14 +89,16 @@
             <LiveView />
           {:else if activeView === 'diagnose'}
             <DiagnoseView />
+          {:else if activeView === 'report'}
+            <ReportView />
           {:else}
             <!--
               Fallback: overview renders here as the default. Legacy route IDs
               may still exist in ActiveView or persisted payloads for backwards
-              compatibility, but the primary ViewSwitcher exposes only Status,
-              Live, and Investigate.
+              compatibility, but the primary ViewSwitcher exposes Overview,
+              Live, Investigate, and Report.
             -->
-            <OverviewView {onStart} />
+            <FigmaOverviewView />
           {/if}
         </main>
       </div>
@@ -116,14 +125,15 @@
 
   .bg {
     position: fixed; inset: 0; z-index: 0;
-    background: var(--bg-base);
+    background:
+      linear-gradient(180deg, var(--shell-bg), var(--bg-base));
   }
-  /* Subtle cyan/pink atmosphere — matches v2 prototype background pass.       */
+
   .bg::before {
     content: ''; position: absolute; inset: 0; pointer-events: none;
     background:
-      radial-gradient(ellipse 70% 50% at 15% 0%,  rgba(103,232,249,.05), transparent 60%),
-      radial-gradient(ellipse 60% 45% at 90% 100%, rgba(249,168,212,.04), transparent 65%);
+      radial-gradient(ellipse 70% 42% at 18% -10%, var(--shell-bg-cyan), transparent 62%),
+      radial-gradient(ellipse 55% 38% at 92% 105%, var(--shell-bg-amber), transparent 68%);
   }
 
   .app {
@@ -143,6 +153,7 @@
     flex: 1;
     display: flex;
     min-height: 0;
+    min-width: 0;
   }
 
   .shell-main-wrap {
