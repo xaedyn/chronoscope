@@ -6,6 +6,8 @@ const VIEWPORTS = [
   { name: 'mobile', width: 390, height: 844 },
 ] as const;
 
+const MIN_ENDPOINT_HISTORY_HEIGHT = 44;
+
 type OverviewFixture = 'collecting' | 'healthy' | 'isolated-slow' | 'request-failures';
 
 async function seedOverviewFixture(page: Page, fixture: OverviewFixture): Promise<void> {
@@ -134,5 +136,48 @@ test.describe('Figma alignment shell', () => {
     await expect(page.locator('.verdict-card h1')).toContainText('Some requests are failing');
     await expect(page.locator('.endpoint-row[data-tone="bad"]')).toContainText('Request failed in browser check');
     await expect(page.locator('.verdict-card')).not.toContainText(/cause|prove|your local Wi-Fi .* fine/i);
+  });
+
+  test('Overview lower evidence area is time-aware and drills into Investigate', async ({ page }) => {
+    await seedOverviewFixture(page, 'isolated-slow');
+
+    await expect(page.locator('.overview-time-window').first()).toContainText(/Last \d+(s|m)/);
+    await expect(page.locator('.overview-time-axis').first()).toContainText('Now');
+
+    const history = page.locator('.endpoint-row[data-tone="warn"] .endpoint-history').first();
+    await expect(history).toBeVisible();
+    const box = await history.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(MIN_ENDPOINT_HISTORY_HEIGHT);
+
+    const markers = page.locator('.endpoint-row[data-tone="warn"] .endpoint-history-marker');
+    expect(await markers.count()).toBeGreaterThan(0);
+
+    const event = page.locator('.event-entry[data-tone="bad"]').first();
+    await expect(event).toContainText(/T\+\d{2}:\d{2}/);
+    await expect(event).toContainText(/ago/);
+    await event.click();
+    await expect(page.locator('section[aria-label="Investigate"]')).toBeVisible();
+  });
+
+  test('Overview failure history exposes visible failure markers', async ({ page }) => {
+    await seedOverviewFixture(page, 'request-failures');
+
+    await expect(page.locator('.overview-time-axis').first()).toContainText('Now');
+    const failures = page.locator('.endpoint-row[data-tone="bad"] .endpoint-history-marker[data-status="failed"]');
+    expect(await failures.count()).toBeGreaterThan(0);
+    await expect(page.locator('.event-timeline .overview-time-window')).toContainText(/Last \d+(s|m)/);
+  });
+
+  test('Overview lower evidence stays readable on mobile', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await seedOverviewFixture(page, 'isolated-slow');
+
+    const history = page.locator('.endpoint-row[data-tone="warn"] .endpoint-history').first();
+    const box = await history.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(MIN_ENDPOINT_HISTORY_HEIGHT);
+    await expect(page.locator('.event-timeline')).toBeVisible();
+
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(overflow).toBe(false);
   });
 });
