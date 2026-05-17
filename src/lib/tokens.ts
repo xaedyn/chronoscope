@@ -12,21 +12,28 @@
 // ── Primitive tokens ───────────────────────────────────────────────────────
 const primitive = {
   // Background
-  bgBase: '#0c0a14',
-  bgMid:  '#100e1e',
-  bgDeep: '#0e0c18',
+  // v2 aesthetic arc PR 3: page bg is pure black, panels are warm-grey
+  // (#1C1C1E) one notch above. Pure solid is the only atmospheric option
+  // that doesn't band on dark — see [[feedback_dark_backgrounds]]. The
+  // prior cyan/amber radial-gradient orbs in Layout.svelte are dropped
+  // alongside this token shift.
+  bgBase: '#000000',
+  bgMid:  '#0A0A0A',
+  bgDeep: '#000000',
 
-  // Figma redesign shell foundation (PR 1)
-  shellBase: '#070b12',
-  shellPanel: '#0b111b',
-  shellPanelRaised: '#101722',
+  // v2 panel scale: black page → #1C1C1E panel → #2C2C2E raised. Hover
+  // and active stay as alpha-on-white so they read the same across light
+  // and dark panel families.
+  shellBase: '#000000',
+  shellPanel: '#1C1C1E',
+  shellPanelRaised: '#2C2C2E',
   shellPanelHover: 'rgba(255,255,255,.055)',
   shellPanelActive: 'rgba(103,232,249,.095)',
-  shellBorder: 'rgba(255,255,255,.085)',
-  shellBorderStrong: 'rgba(255,255,255,.145)',
+  shellBorder: 'rgba(255,255,255,.08)',
+  shellBorderStrong: 'rgba(255,255,255,.14)',
   shellDivider: 'rgba(255,255,255,.06)',
-  shellBackdrop: 'rgba(7,11,18,.78)',
-  shellPopover: 'rgba(8,12,19,.96)',
+  shellBackdrop: 'rgba(28,28,30,.8)',
+  shellPopover: 'rgba(28,28,30,.96)',
   shellBgCyan: 'rgba(103,232,249,.045)',
   shellBgAmber: 'rgba(251,191,36,.028)',
   shellSuccessBg: 'rgba(134,239,172,.115)',
