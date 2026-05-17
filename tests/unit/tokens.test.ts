@@ -3,9 +3,11 @@ import { tokens } from '../../src/lib/tokens';
 
 describe('tokens', () => {
   it('exposes all required surface tokens', () => {
-    expect(tokens.color.surface.base).toBe('#0c0a14');
-    expect(tokens.color.surface.mid).toBe('#100e1e');
-    expect(tokens.color.surface.deep).toBe('#0e0c18');
+    // v2 aesthetic arc PR 3: page bg is pure black + warm-grey panels
+    // (#1C1C1E / #2C2C2E) to match the v2 reference.
+    expect(tokens.color.surface.base).toBe('#000000');
+    expect(tokens.color.surface.mid).toBe('#0A0A0A');
+    expect(tokens.color.surface.deep).toBe('#000000');
   });
 
   it('exposes all spacing tokens as numbers (px)', () => {
@@ -58,7 +60,8 @@ describe('Glass token additions', () => {
   });
 
   it('exports glass background base color', () => {
-    expect(tokens.color.surface.base).toBe('#0c0a14');
+    // v2 aesthetic arc PR 3: surface base is now pure black.
+    expect(tokens.color.surface.base).toBe('#000000');
   });
 
   it('exports glass accent colors', () => {
@@ -274,19 +277,22 @@ describe('v2 foundation tokens (Phase 0)', () => {
 
 describe('figma redesign shell tokens (PR 1)', () => {
   it('exports graphite shell surfaces with a near-black base', () => {
-    expect(tokens.color.shell.base).toBe('#070b12');
-    expect(tokens.color.shell.panel).toBe('#0b111b');
-    expect(tokens.color.shell.panelRaised).toBe('#101722');
-    expect(tokens.color.shell.popover).toBe('rgba(8,12,19,.96)');
+    // v2 aesthetic arc PR 3: shell surface scale is now pure black page bg
+    // (#000) + warm-grey panel (#1C1C1E) + raised (#2C2C2E). Replaces the
+    // prior #070b12 / #0b111b / #101722 blue-tinted near-black scale.
+    expect(tokens.color.shell.base).toBe('#000000');
+    expect(tokens.color.shell.panel).toBe('#1C1C1E');
+    expect(tokens.color.shell.panelRaised).toBe('#2C2C2E');
+    expect(tokens.color.shell.popover).toBe('rgba(28,28,30,.96)');
   });
 
   it('exports shell interaction and atmosphere tokens', () => {
     expect(tokens.color.shell.panelHover).toBe('rgba(255,255,255,.055)');
     expect(tokens.color.shell.panelActive).toBe('rgba(103,232,249,.095)');
-    expect(tokens.color.shell.border).toBe('rgba(255,255,255,.085)');
-    expect(tokens.color.shell.borderStrong).toBe('rgba(255,255,255,.145)');
+    expect(tokens.color.shell.border).toBe('rgba(255,255,255,.08)');
+    expect(tokens.color.shell.borderStrong).toBe('rgba(255,255,255,.14)');
     expect(tokens.color.shell.divider).toBe('rgba(255,255,255,.06)');
-    expect(tokens.color.shell.backdrop).toBe('rgba(7,11,18,.78)');
+    expect(tokens.color.shell.backdrop).toBe('rgba(28,28,30,.8)');
     expect(tokens.color.shell.bgCyan).toBe('rgba(103,232,249,.045)');
     expect(tokens.color.shell.bgAmber).toBe('rgba(251,191,36,.028)');
   });

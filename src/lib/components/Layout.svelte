@@ -120,17 +120,14 @@
   }
   .skip-link:focus { top: 0; }
 
+  /* v2 aesthetic arc PR 3: page bg is solid black. The prior linear
+     gradient and corner radial-gradient orbs both banded on dark per
+     [[feedback_dark_backgrounds]]; v2 simply uses a flat bg-black body.
+     Solid colour is the only banding-safe option without a pre-dithered
+     raster, which is overkill for this surface. */
   .bg {
     position: fixed; inset: 0; z-index: 0;
-    background:
-      linear-gradient(180deg, var(--shell-bg), var(--bg-base));
-  }
-
-  .bg::before {
-    content: ''; position: absolute; inset: 0; pointer-events: none;
-    background:
-      radial-gradient(ellipse 70% 42% at 18% -10%, var(--shell-bg-cyan), transparent 62%),
-      radial-gradient(ellipse 55% 38% at 92% 105%, var(--shell-bg-amber), transparent 68%);
+    background: var(--shell-bg);
   }
 
   .app {
