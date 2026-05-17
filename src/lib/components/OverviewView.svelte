@@ -882,40 +882,59 @@
   .overview-time-axis span:first-child { transform: translateX(0); }
   .overview-time-axis span:last-child { transform: translateX(-100%); color: var(--accent-cyan); }
 
+  /* v2 endpoint stack — each row is its own rounded card inside the
+     panel. No outer border or background; the panel container above
+     already carries the surface treatment. Rows sit in a vertical stack
+     with gaps between them. */
   .endpoint-list,
   .event-list {
-    margin-top: 10px;
-    border: 1px solid var(--shell-border);
-    border-radius: 18px;
-    background: color-mix(in srgb, var(--shell-panel) 74%, transparent);
-    overflow: hidden;
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border: 0;
+    background: transparent;
+    overflow: visible;
   }
 
   .endpoint-row {
     width: 100%;
     display: grid;
-    grid-template-columns: 20px minmax(190px, 0.9fr) minmax(220px, 1.15fr) minmax(76px, auto);
-    gap: 16px;
+    grid-template-columns: 36px minmax(180px, 0.9fr) minmax(200px, 1.1fr) minmax(76px, auto);
+    gap: 14px;
     align-items: center;
-    min-height: 102px;
-    padding: 18px 20px;
-    border: 0;
-    border-bottom: 1px solid var(--shell-border);
-    background: transparent;
+    min-height: 76px;
+    padding: 12px 16px;
+    border: 1px solid color-mix(in srgb, var(--t1) 4%, transparent);
+    border-radius: 16px;
+    background: color-mix(in srgb, black 40%, transparent);
     color: var(--t1);
     text-align: left;
     cursor: pointer;
+    transition: background 160ms ease, border-color 160ms ease;
+  }
+  .endpoint-row:hover {
+    background: color-mix(in srgb, var(--t1) 4%, transparent);
   }
 
-  .endpoint-row:last-child { border-bottom: 0; }
-  .endpoint-row:hover { background: var(--shell-panel-hover); }
-
+  /* v2 status indicator — small tinted square (rounded full) with a
+     tone-coloured border + bg. Replaces the prior bare 16 px ring. */
   .endpoint-state {
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    border: 2px solid currentColor;
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    background: color-mix(in srgb, currentColor 12%, transparent);
     color: var(--t4);
+    display: grid;
+    place-items: center;
+  }
+  .endpoint-state::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
   }
 
   .endpoint-row[data-tone='good'] .endpoint-state { color: var(--accent-green); }
@@ -923,20 +942,24 @@
   .endpoint-row[data-tone='bad'] .endpoint-state { color: var(--accent-pink); }
   .endpoint-row[data-tone='collecting'] .endpoint-state { color: var(--accent-cyan); }
 
+  /* v2 endpoint metadata stack — mono name, smaller status descriptor,
+     no underline under the name. The recent-samples summary collapses
+     onto the same line as the status so the row stays compact. */
   .endpoint-main {
     min-width: 0;
-    display: grid;
-    gap: 5px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .endpoint-main strong {
-    width: fit-content;
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
-    border-bottom: 1px solid var(--shell-border-strong);
+    white-space: nowrap;
     font-family: var(--mono);
-    font-size: clamp(15px, 1.6vw, 18px);
+    font-size: 13px;
+    font-weight: 500;
     color: var(--t1);
   }
 
@@ -945,54 +968,53 @@
   .endpoint-metric em,
   .event-list small {
     font-style: normal;
-    color: var(--t3);
+    color: var(--t4);
   }
 
+  .endpoint-main small {
+    font-family: var(--sans);
+    font-size: 12px;
+    font-weight: 500;
+  }
   .endpoint-main em {
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--ts-xs);
+    font-family: var(--sans);
+    font-size: 11px;
     color: var(--t4);
   }
 
+  /* v2-quieted sparkline — half the height, no inset baseline line, no
+     drop-shadow glow. The sparkline is supporting evidence, not the
+     row's primary signal. */
   .endpoint-history {
     position: relative;
     width: 100%;
     min-width: 0;
-    height: 54px;
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--shell-base) 54%, transparent);
+    height: 36px;
+    border-radius: 8px;
+    background: color-mix(in srgb, black 30%, transparent);
     overflow: hidden;
-  }
-
-  .endpoint-history::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 10px;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
   }
 
   .endpoint-trace {
     position: absolute;
-    inset: 7px 8px;
-    width: calc(100% - 16px);
-    height: calc(100% - 14px);
+    inset: 4px 6px;
+    width: calc(100% - 12px);
+    height: calc(100% - 8px);
     overflow: visible;
   }
 
   .endpoint-trace path {
     fill: none;
     stroke: currentColor;
-    stroke-width: 4;
+    stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
     color: var(--accent-green);
-    filter: drop-shadow(0 0 8px rgba(44, 245, 169, 0.18));
+    opacity: 0.75;
   }
 
   .endpoint-row[data-tone='warn'] .endpoint-trace path { color: var(--accent-amber); }
@@ -1001,43 +1023,51 @@
 
   .endpoint-history-marker {
     position: absolute;
-    width: 12px;
-    height: 12px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     transform: translate(-50%, -50%);
     background: var(--accent-amber);
-    border: 2px solid rgba(8, 14, 24, 0.92);
-    box-shadow: 0 0 14px rgba(250, 204, 21, 0.35);
+    border: 1px solid color-mix(in srgb, black 60%, transparent);
   }
-
   .endpoint-history-marker[data-status='slow'] {
     background: var(--accent-pink);
-    box-shadow: 0 0 16px rgba(251, 113, 133, 0.36);
   }
-
   .endpoint-history-marker[data-status='failed'] {
-    width: 14px;
-    height: 14px;
-    border-radius: 4px;
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
     background: var(--accent-pink);
-    box-shadow: 0 0 16px rgba(251, 113, 133, 0.42);
   }
 
+  /* v2 endpoint metric — right-aligned latency value with units in a
+     muted suffix, jitter below in zinc-500. Less heavy than the prior
+     clamp(18-24) mono treatment. */
   .endpoint-metric {
-    display: grid;
-    justify-items: end;
-    gap: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 2px;
     font-family: var(--mono);
   }
 
   .endpoint-metric strong {
-    font-size: clamp(18px, 1.8vw, 24px);
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+    font-size: 17px;
+    font-weight: 500;
     color: var(--t1);
   }
-
-  .endpoint-metric small {
-    font-size: var(--ts-xs);
-    color: var(--t2);
+  .endpoint-metric strong small {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--t4);
+  }
+  .endpoint-metric em {
+    font-style: normal;
+    font-size: 11px;
+    color: var(--t4);
   }
 
   .event-timeline {
@@ -1107,11 +1137,15 @@
     box-shadow: 0 0 18px rgba(251, 113, 133, 0.38);
   }
 
+  /* v2 event list — same card pattern as endpoint rows: each entry is
+     its own rounded-card with quiet typography. Compact heights, sans-
+     serif body, mono timestamps. */
   .event-list {
     list-style: none;
-    padding: 18px;
-    display: grid;
-    gap: 10px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
   }
 
   .event-list li {
@@ -1121,40 +1155,49 @@
   .event-entry {
     width: 100%;
     display: grid;
-    grid-template-columns: 72px minmax(0, 1fr) 58px;
+    grid-template-columns: 60px minmax(0, 1fr) 50px;
     gap: 12px;
-    align-items: start;
-    min-height: 54px;
-    padding: 0;
-    border: 0;
-    background: transparent;
+    align-items: center;
+    min-height: 48px;
+    padding: 10px 14px;
+    border: 1px solid color-mix(in srgb, var(--t1) 4%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, black 30%, transparent);
     color: inherit;
     text-align: left;
-    font-family: var(--mono);
     cursor: pointer;
+    transition: background 160ms ease;
+  }
+  .event-entry:hover {
+    background: color-mix(in srgb, var(--t1) 4%, transparent);
   }
 
   .event-list time {
     color: var(--t4);
-    font-size: var(--ts-sm);
+    font-family: var(--mono);
+    font-size: 11px;
   }
 
   .event-entry span {
-    display: grid;
-    gap: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
     min-width: 0;
   }
 
   .event-list strong {
     color: var(--t1);
-    font-size: var(--ts-md);
-    line-height: 1.45;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.35;
   }
 
   .event-entry em {
     justify-self: end;
     font-style: normal;
-    font-size: var(--ts-xs);
+    font-family: var(--mono);
+    font-size: 11px;
     color: var(--t4);
     white-space: nowrap;
   }
