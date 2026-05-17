@@ -3,6 +3,7 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { endpointStore } from '$lib/stores/endpoints';
+  import { navigateTo } from '$lib/router';
   import { historyStore } from '$lib/stores/history';
   import { measurementStore } from '$lib/stores/measurements';
   import { settingsStore } from '$lib/stores/settings';
@@ -158,12 +159,14 @@
   }
 
   function openInteractive(targetEndpointId = report.diagnosis.verdict.worstEpId): void {
+    // PR 9 of synthesis arc: route through the router so deep links update.
+    // If an endpoint is named (worst-offender or click target), land on
+    // /endpoint/:id; otherwise land on /.
     uiStore.setSharedReportMode(false);
     if (targetEndpointId) {
-      uiStore.setFocusedEndpoint(targetEndpointId);
-      uiStore.setActiveView('diagnose');
+      navigateTo({ name: 'endpoint', endpointId: targetEndpointId });
     } else {
-      uiStore.setActiveView('overview');
+      navigateTo({ name: 'overview', endpointId: null });
     }
   }
 
