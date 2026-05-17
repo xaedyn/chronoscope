@@ -4,6 +4,11 @@
 <!-- on the left, one endpoint node per monitored endpoint on the right,        -->
 <!-- connecting path lines, animated pulse packets driven by REAL measurement   -->
 <!-- round events (not setInterval(Math.random) like the v2 prototype).         -->
+<!--                                                                            -->
+<!-- Glyphs are rounded squares (not circles) per the Arc C cohesiveness pass.  -->
+<!-- Labels switch to a right-side anchor when ≥5 endpoints share the column    -->
+<!-- so they can't collide with adjacent nodes. >8 endpoints collapse the last  -->
+<!-- slot to a "+N more" chip so the visual cap stays at 8 glyphs.              -->
 <script lang="ts">
   import { measurementStore } from '$lib/stores/measurements';
   import { monitoredEndpointsStore } from '$lib/stores/derived';
@@ -12,14 +17,20 @@
   import { uiStore } from '$lib/stores/ui';
   import { navigateTo } from '$lib/router';
   import { deriveEndpointTone, type EndpointTone } from '$lib/utils/endpoint-tone';
+  import {
+    layoutTopologyNodes,
+    TOPOLOGY_VISIBLE_LIMIT,
+  } from '$lib/utils/network-topology-layout';
 
   // Layout grid (SVG viewBox is unitless — these are abstract design units).
   const VIEWBOX_WIDTH = 320;
   const VIEWBOX_HEIGHT = 260;
   const ORIGIN_X = 50;
   const ORIGIN_Y = VIEWBOX_HEIGHT / 2;
-  const ENDPOINT_X = 250;
-  const NODE_RADIUS = 14;
+  const ENDPOINT_X = 240;
+  const NODE_HALF = 14;
+  const NODE_SIZE = NODE_HALF * 2;
+  const NODE_RADIUS = NODE_HALF; // legacy alias retained for the origin glyph
 
   const monitored = $derived($monitoredEndpointsStore);
   const stats = $derived($statisticsStore);
@@ -48,44 +59,68 @@
     }
   });
 
-  interface Node {
+  interface EndpointNode {
     readonly endpoint: { id: string; label: string };
     readonly tone: EndpointTone;
     readonly x: number;
     readonly y: number;
   }
 
-  // Endpoint layout — simple vertical column at ENDPOINT_X, evenly spaced.
-  // Works without label collision for 1-8 endpoints (the common case). For
-  // >8 endpoints, a compact-grid + "+N more" treatment is deferred to a
-  // follow-up; current behavior caps at 8 visible nodes.
-  const MAX_VISIBLE_NODES = 8;
-  const nodes: readonly Node[] = $derived.by(() => {
-    const visible = monitored.slice(0, MAX_VISIBLE_NODES);
-    const n = visible.length;
-    if (n === 0) return [];
-    const usableHeight = VIEWBOX_HEIGHT - 60;
-    const step = n === 1 ? 0 : usableHeight / (n - 1);
-    const topY = n === 1 ? VIEWBOX_HEIGHT / 2 : 30;
-    return visible.map((ep, i) => ({
-      endpoint: { id: ep.id, label: ep.label },
-      tone: deriveEndpointTone({
-        stats: stats[ep.id] ?? null,
-        lastStatus: measurements.endpoints[ep.id]?.lastStatus ?? null,
-        healthThreshold: threshold,
-      }),
-      x: ENDPOINT_X,
-      y: topY + step * i,
-    }));
+  const layout = $derived(layoutTopologyNodes({
+    endpointCount: monitored.length,
+    viewboxHeight: VIEWBOX_HEIGHT,
+    endpointX: ENDPOINT_X,
+  }));
+
+  // Visible endpoint slice: when overflow kicks in we keep the first 7
+  // endpoints and use the last slot for the "+N more" chip.
+  const visibleEndpoints = $derived.by(() => {
+    const cap = layout.hasOverflowSlot
+      ? TOPOLOGY_VISIBLE_LIMIT - 1
+      : monitored.length;
+    return monitored.slice(0, cap);
   });
 
-  const overflowCount = $derived(Math.max(0, monitored.length - MAX_VISIBLE_NODES));
+  const endpointNodes: readonly EndpointNode[] = $derived.by(() => (
+    visibleEndpoints.map((ep, i) => {
+      const slot = layout.slots[i];
+      return {
+        endpoint: { id: ep.id, label: ep.label },
+        tone: deriveEndpointTone({
+          stats: stats[ep.id] ?? null,
+          lastStatus: measurements.endpoints[ep.id]?.lastStatus ?? null,
+          healthThreshold: threshold,
+        }),
+        x: slot.x,
+        y: slot.y,
+      };
+    })
+  ));
+
+  const overflowSlot = $derived(
+    layout.hasOverflowSlot ? layout.slots[layout.slots.length - 1] : null,
+  );
+
+  const labelAnchorMode = $derived(layout.labelAnchor);
+
+  // Label-position helper. "below": centered under the node. "right":
+  // anchored to the right of the node (start-anchored, vertically centered).
+  function labelPosition(node: { x: number; y: number }): { x: number; y: number; anchor: 'middle' | 'start' } {
+    if (labelAnchorMode === 'below') {
+      return { x: node.x, y: node.y + NODE_HALF + 16, anchor: 'middle' };
+    }
+    return { x: node.x + NODE_HALF + 6, y: node.y + 4, anchor: 'start' };
+  }
 
   function handleEndpointClick(endpointId: string): void {
     navigateTo({ name: 'endpoint', endpointId });
   }
 
   function handleAddEndpoint(): void {
+    uiStore.toggleEndpoints();
+  }
+
+  function handleOverflowClick(): void {
     uiStore.toggleEndpoints();
   }
 </script>
@@ -106,8 +141,8 @@
       role="img"
       aria-hidden="true"
     >
-      <!-- Connecting path lines (origin → each endpoint) -->
-      {#each nodes as node (node.endpoint.id)}
+      <!-- Connecting path lines (origin → each endpoint, plus overflow slot) -->
+      {#each endpointNodes as node (node.endpoint.id)}
         <line
           class="topology-path"
           x1={ORIGIN_X}
@@ -117,6 +152,16 @@
           stroke-width="1"
         />
       {/each}
+      {#if overflowSlot !== null}
+        <line
+          class="topology-path topology-path-overflow"
+          x1={ORIGIN_X}
+          y1={ORIGIN_Y}
+          x2={overflowSlot.x}
+          y2={overflowSlot.y}
+          stroke-width="1"
+        />
+      {/if}
 
       <!-- Pulse packets — re-rendered when pulseKeys[ep.id] increments.
            cx/cy are set to the ORIGIN position; the animation translates the
@@ -124,7 +169,7 @@
            unlike CSS animation of SVG `cx`/`cy` attributes which silently
            strands the element). The translate distance is the delta from
            origin to endpoint, passed via --pulse-dx/--pulse-dy. -->
-      {#each nodes as node (node.endpoint.id)}
+      {#each endpointNodes as node (node.endpoint.id)}
         {#if pulseKeys[node.endpoint.id]}
           {#key pulseKeys[node.endpoint.id]}
             <circle
@@ -140,16 +185,22 @@
         {/if}
       {/each}
 
-      <!-- Origin (browser) node -->
+      <!-- Origin (browser) node — kept circular to read as "you" / device. -->
       <g class="topology-node-group" data-role="origin">
-        <circle class="topology-node" cx={ORIGIN_X} cy={ORIGIN_Y} r={NODE_RADIUS} />
-        <text class="topology-label" x={ORIGIN_X} y={ORIGIN_Y + NODE_RADIUS + 16} text-anchor="middle">
+        <circle class="topology-node-circle" cx={ORIGIN_X} cy={ORIGIN_Y} r={NODE_RADIUS} />
+        <text
+          class="topology-label"
+          x={ORIGIN_X}
+          y={ORIGIN_Y + NODE_HALF + 16}
+          text-anchor="middle"
+        >
           BROWSER
         </text>
       </g>
 
-      <!-- Endpoint nodes -->
-      {#each nodes as node (node.endpoint.id)}
+      <!-- Endpoint nodes — rounded squares per Arc C cohesiveness pass. -->
+      {#each endpointNodes as node (node.endpoint.id)}
+        {@const lp = labelPosition(node)}
         <g
           class="topology-node-group topology-node-clickable"
           data-tone={node.tone}
@@ -165,29 +216,71 @@
             }
           }}
         >
-          <circle
-            class="topology-node"
-            cx={node.x}
-            cy={node.y}
-            r={NODE_RADIUS}
+          <rect
+            class="topology-node-rect"
+            x={node.x - NODE_HALF}
+            y={node.y - NODE_HALF}
+            width={NODE_SIZE}
+            height={NODE_SIZE}
+            rx="6"
+            ry="6"
           />
           <text
             class="topology-label"
-            x={node.x}
-            y={node.y + NODE_RADIUS + 16}
-            text-anchor="middle"
+            x={lp.x}
+            y={lp.y}
+            text-anchor={lp.anchor}
           >
             {node.endpoint.label.slice(0, 16)}
           </text>
         </g>
       {/each}
-    </svg>
 
-    {#if overflowCount > 0}
-      <p class="topology-overflow" role="note">
-        +{overflowCount} more endpoint{overflowCount === 1 ? '' : 's'} not shown
-      </p>
-    {/if}
+      <!-- Overflow chip (+N more) — claims the last slot when the monitored
+           list exceeds the 8-glyph visual cap. Opens the endpoints overlay
+           on click so all endpoints stay reachable. -->
+      {#if overflowSlot !== null}
+        {@const overflowLabel = labelPosition(overflowSlot)}
+        <g
+          class="topology-node-group topology-overflow-chip"
+          data-role="overflow"
+          role="button"
+          tabindex="0"
+          aria-label="Show all {monitored.length} endpoints"
+          onclick={handleOverflowClick}
+          onkeydown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault();
+              handleOverflowClick();
+            }
+          }}
+        >
+          <rect
+            class="topology-node-rect topology-overflow-rect"
+            x={overflowSlot.x - NODE_HALF}
+            y={overflowSlot.y - NODE_HALF}
+            width={NODE_SIZE}
+            height={NODE_SIZE}
+            rx="6"
+            ry="6"
+          />
+          <text
+            class="topology-overflow-count"
+            x={overflowSlot.x}
+            y={overflowSlot.y + 4}
+            text-anchor="middle"
+          >+{layout.overflowCount}</text>
+          <text
+            class="topology-label"
+            x={overflowLabel.x}
+            y={overflowLabel.y}
+            text-anchor={overflowLabel.anchor}
+          >
+            MORE
+          </text>
+        </g>
+      {/if}
+    </svg>
   </div>
 {/if}
 
@@ -220,48 +313,69 @@
     fill: none;
     stroke-width: 1.2;
   }
+  .topology-path-overflow {
+    stroke-dasharray: 3 4;
+    opacity: 0.7;
+  }
 
-  /* Nodes — filled (slightly darker than the panel background so the
-     coloured stroke pops), thicker stroke, and a tone-coloured drop
-     shadow / glow halo so each endpoint has presence rather than reading
-     as a wireframe placeholder. */
-  .topology-node {
+  /* Endpoint glyphs — rounded squares per Arc C synthesis. Coloured stroke
+     pops against the slightly darker fill; tone-coloured drop-shadow / glow
+     gives each endpoint presence rather than reading as a wireframe. */
+  .topology-node-rect,
+  .topology-node-circle {
     fill: var(--shell-base);
     stroke-width: 2.5;
     transition: stroke 200ms ease, fill 200ms ease;
   }
-  [data-role='origin'] .topology-node {
+  [data-role='origin'] .topology-node-circle {
     stroke: var(--t2);
   }
-  [data-tone='good'] .topology-node {
+  [data-tone='good'] .topology-node-rect {
     stroke: var(--accent-green);
     filter: drop-shadow(0 0 6px var(--accent-green));
   }
-  [data-tone='watch'] .topology-node {
+  [data-tone='watch'] .topology-node-rect {
     stroke: var(--accent-amber);
     filter: drop-shadow(0 0 6px var(--accent-amber));
   }
-  [data-tone='bad'] .topology-node {
+  [data-tone='bad'] .topology-node-rect {
     stroke: var(--accent-pink);
     filter: drop-shadow(0 0 8px var(--accent-pink));
   }
-  [data-tone='collecting'] .topology-node {
+  [data-tone='collecting'] .topology-node-rect {
     stroke: var(--accent-cyan);
     filter: drop-shadow(0 0 6px var(--accent-cyan));
   }
 
-  .topology-node-clickable {
+  .topology-node-clickable,
+  .topology-overflow-chip {
     cursor: pointer;
   }
-  .topology-node-clickable:hover .topology-node,
-  .topology-node-clickable:focus-visible .topology-node {
+  .topology-node-clickable:hover .topology-node-rect,
+  .topology-node-clickable:focus-visible .topology-node-rect,
+  .topology-overflow-chip:hover .topology-node-rect,
+  .topology-overflow-chip:focus-visible .topology-node-rect {
     fill: var(--shell-panel-hover);
   }
-  .topology-node-clickable:focus-visible {
+  .topology-node-clickable:focus-visible,
+  .topology-overflow-chip:focus-visible {
     outline: none;
   }
-  .topology-node-clickable:focus-visible .topology-node {
+  .topology-node-clickable:focus-visible .topology-node-rect,
+  .topology-overflow-chip:focus-visible .topology-node-rect {
     stroke-width: 3.5;
+  }
+
+  .topology-overflow-rect {
+    stroke: var(--shell-border-strong);
+    fill: var(--shell-panel-hover);
+  }
+  .topology-overflow-count {
+    fill: var(--t1);
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 800;
+    pointer-events: none;
   }
 
   /* Labels — bumped contrast (was --t3 = .5 alpha, barely readable;
@@ -340,18 +454,9 @@
   }
   .empty-cta:hover { background: var(--shell-panel-hover); }
 
-  .topology-overflow {
-    margin: 8px 0 0;
-    color: var(--t4);
-    font-family: var(--mono);
-    font-size: 10px;
-    text-align: center;
-    letter-spacing: var(--tr-label);
-    text-transform: uppercase;
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .topology-pulse { animation: none; opacity: 0; }
-    .topology-node { transition: none; }
+    .topology-node-rect,
+    .topology-node-circle { transition: none; }
   }
 </style>
