@@ -4,7 +4,7 @@
 // lifecycle label expectations compact and explicit.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { fireEvent, render, within } from '@testing-library/svelte';
+import { render } from '@testing-library/svelte';
 import { measurementStore } from '../../../src/lib/stores/measurements';
 import { endpointStore } from '../../../src/lib/stores/endpoints';
 import { settingsStore } from '../../../src/lib/stores/settings';
@@ -150,13 +150,17 @@ describe('Topbar', () => {
   });
 
   it('renders the shared chrome controls with accessible names', () => {
-    const { getByRole } = render(Topbar, { props: {} });
+    // Synthesis design contract Section 1 collapsed the prior trio of icon
+    // ovals (endpoints / share / run-details) into the SettingsDrawer's
+    // Quick actions section. Only the settings cog + Start/Stop button
+    // remain on the pill in the non-shared view.
+    const { getByRole, queryByRole } = render(Topbar, { props: {} });
 
-    expect(getByRole('button', { name: /run details/i })).toBeTruthy();
-    expect(getByRole('button', { name: /add or remove endpoints/i })).toBeTruthy();
     expect(getByRole('button', { name: /open settings/i })).toBeTruthy();
-    expect(getByRole('button', { name: /share results/i })).toBeTruthy();
     expect(getByRole('button', { name: /^start$/i })).toBeTruthy();
+    expect(queryByRole('button', { name: /run details/i })).toBeNull();
+    expect(queryByRole('button', { name: /add or remove endpoints/i })).toBeNull();
+    expect(queryByRole('button', { name: /share results/i })).toBeNull();
   });
 
   // statTransition / dotEntrance / dotExit removed in Phase 7 — the surviving
@@ -166,18 +170,13 @@ describe('Topbar', () => {
     expect(tokens.timing.btnHover).toBeGreaterThanOrEqual(100);
   });
 
-  it('keeps run mechanics behind a compact Run details disclosure', async () => {
-    const { getByRole, queryByText } = render(Topbar, { props: {} });
+  it('hides the measuring affordance when no run is active', () => {
+    // The Measuring pulse + T+MM:SS counter only renders during a run.
+    // While stopped/completed/idle the pill stays quiet — verifying this
+    // prevents the affordance from leaking into the brand-row layout.
+    const { queryByText, queryByLabelText } = render(Topbar, { props: {} });
 
-    expect(queryByText(/Measuring from your browser/i)).toBeNull();
-    const detailsButton = getByRole('button', { name: /run details/i });
-    expect(detailsButton).toBeTruthy();
-
-    await fireEvent.click(detailsButton);
-
-    const dialog = getByRole('dialog', { name: /run details/i });
-    expect(within(dialog).getByText('Browser test')).toBeTruthy();
-    expect(within(dialog).getByText(/0 of \d+ samples/i)).toBeTruthy();
-    expect(within(dialog).getByText(/\d+s timeout/i)).toBeTruthy();
+    expect(queryByLabelText(/^measuring$/i)).toBeNull();
+    expect(queryByText(/^T\+\d{2}:\d{2}$/)).toBeNull();
   });
 });

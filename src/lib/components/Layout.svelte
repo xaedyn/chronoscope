@@ -12,7 +12,6 @@
   import { uiStore } from '$lib/stores/ui';
   import { tokens } from '$lib/tokens';
   import Topbar from './Topbar.svelte';
-  import ViewSwitcher from './ViewSwitcher.svelte';
   import OverviewView from './OverviewView.svelte';
   import LiveView from './LiveView.svelte';
   import DiagnoseView from './DiagnoseView.svelte';
@@ -82,8 +81,6 @@
   {:else}
     <div class="shell-body">
       <div class="shell-main-wrap">
-        <ViewSwitcher />
-
         <main id="main-content" class="shell-main" tabindex="-1">
           {#if activeView === 'live'}
             <LiveView />
