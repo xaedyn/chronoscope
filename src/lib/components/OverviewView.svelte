@@ -6,12 +6,11 @@
   import { statisticsStore } from '$lib/stores/statistics';
   import { settingsStore } from '$lib/stores/settings';
   import { uiStore } from '$lib/stores/ui';
-  import { networkQualityStore, monitoredEndpointsStore } from '$lib/stores/derived';
+  import { monitoredEndpointsStore } from '$lib/stores/derived';
   import {
     buildDiagnosticNarrative,
     type DiagnosticNarrative,
   } from '$lib/utils/diagnostic-narrative';
-  import { diagnosticAlignedScore } from '$lib/utils/classify';
   import {
     buildRunStoryline,
     type EndpointTimelineRow,
@@ -58,7 +57,6 @@
   const settings = $derived($settingsStore);
   const measurements = $derived($measurementStore);
   const threshold = $derived(settings.healthThreshold);
-  const rawScore = $derived($networkQualityStore);
 
   const samplesByEndpoint = $derived.by<Record<string, readonly MeasurementSample[]>>(() => {
     const out: Record<string, readonly MeasurementSample[]> = {};
@@ -109,9 +107,6 @@
   const timelineWindowLabel = $derived(`Last ${durationLabel(timelineWindowSpan())} · Now on right`);
   const timelineTicks = $derived(buildTimelineTicks(runStoryline.windowStart, runStoryline.windowEnd));
 
-  const score = $derived(diagnosticAlignedScore(rawScore, diagnosticNarrative.severity));
-  const scoreDisplay = $derived(score === null ? '—' : (score / 10).toFixed(1));
-  const scorePercent = $derived(score === null ? 0 : Math.max(0, Math.min(100, score)));
   const severityLabel = $derived.by(() => {
     if (diagnosticNarrative.kind === 'collecting') return 'Collecting';
     if (diagnosticNarrative.severity === 'healthy') return 'Good';
@@ -387,33 +382,33 @@
   <div class="overview-inner">
     <div class="hero-row">
     <section class="verdict-card" aria-label="Connection verdict">
-      <div class="score-ring" style:--score-percent={`${scorePercent}%`} aria-label={`Score ${scoreDisplay} out of 10`}>
-        <div class="score-ring-inner">
-          <strong>{scoreDisplay}</strong>
-          <span>Score</span>
-        </div>
-        <small>Based on aggregate latency</small>
-      </div>
-
       <div class="verdict-copy">
         <div class="verdict-kickers">
           <span class="severity-pill" data-tone={severityTone}>{severityLabel}</span>
           {#if measurements.lifecycle === 'running' || measurements.lifecycle === 'starting'}
-            <span class="measuring-pill"><span aria-hidden="true"></span>Measuring</span>
+            <span class="measuring-pill" aria-label="Measuring">
+              <span class="measuring-dot" aria-hidden="true">
+                <span class="measuring-dot-ping"></span>
+                <span class="measuring-dot-core"></span>
+              </span>
+              Live
+            </span>
           {/if}
         </div>
         <h1>
           {#if headlineSegments !== null}
             {headlineSegments.before}<span
-              class="headline-endpoint-chip"
+              class="headline-endpoint-name"
               data-tone={highlightedTone ?? 'collecting'}
             >{headlineSegments.chip}</span>{headlineSegments.after}
           {:else}
             {headline}
           {/if}
         </h1>
-        <p><strong>Measured Fact:</strong> {measuredFact}</p>
-        <p class="interpretation"><strong>Interpretation:</strong> {interpretation}</p>
+        <div class="verdict-body">
+          <p>{measuredFact}</p>
+          <p class="interpretation">{interpretation}</p>
+        </div>
         <div class="verdict-actions">
           <button
             type="button"
@@ -423,7 +418,6 @@
             aria-disabled={primaryActionDisabled}
             onclick={handlePrimaryAction}
           >
-            <span aria-hidden="true">◇</span>
             {primaryActionText}
           </button>
           <button type="button" class="secondary-action" onclick={handleEvidenceAction}>
@@ -588,193 +582,154 @@
     flex: 1;
   }
 
+  /* Verdict card — v2 alignment. Single-column composition (no score
+     ring), flat panel surface (no radial-gradient), larger radius (24px
+     ≈ v2's rounded-3xl), and a soft drop shadow. The cyan/amber radial
+     "atmosphere" that the prior card carried as a background gradient is
+     dropped here; the page-wide atmospheric pass lands in v2 PR 3 with
+     a pre-dithered raster that won't band on dark. */
   .verdict-card {
     min-height: 360px;
     max-height: 460px;
-    display: grid;
-    grid-template-columns: 180px minmax(0, 1fr);
-    gap: clamp(20px, 3vw, 40px);
-    align-items: center;
-    padding: clamp(24px, 3vw, 40px);
-    border: 1px solid var(--shell-border-strong);
-    border-radius: 18px;
-    background:
-      radial-gradient(circle at 18% 45%, var(--shell-bg-cyan), transparent 34%),
-      linear-gradient(135deg, var(--shell-panel-raised), color-mix(in srgb, var(--shell-panel-raised) 72%, transparent));
-    box-shadow: 0 28px 90px color-mix(in srgb, black 18%, transparent);
-  }
-
-  .score-ring {
-    --score-percent: 0%;
-    width: 172px;
-    justify-self: center;
-    display: grid;
-    justify-items: center;
-    gap: 12px;
-    text-align: center;
-    color: var(--accent-cyan);
-  }
-
-  .score-ring::before {
-    content: '';
-    width: 154px;
-    height: 154px;
-    grid-area: 1 / 1;
-    border-radius: 50%;
-    background: conic-gradient(var(--accent-cyan) var(--score-percent), rgba(103, 232, 249, 0.12) 0);
-    box-shadow: 0 0 32px rgba(103, 232, 249, 0.18);
-  }
-
-  .score-ring-inner {
-    width: 126px;
-    height: 126px;
-    margin-top: 14px;
-    grid-area: 1 / 1;
-    border-radius: 50%;
-    display: grid;
-    place-content: center;
-    gap: 4px;
+    padding: clamp(28px, 3.4vw, 44px);
+    border: 1px solid var(--shell-border);
+    border-radius: 24px;
     background: var(--shell-panel);
-    color: var(--t1);
+    box-shadow: 0 25px 50px -12px color-mix(in srgb, black 35%, transparent);
+    overflow: hidden;
+    position: relative;
   }
-
-  .score-ring strong {
-    font-size: clamp(36px, 4vw, 48px);
-    line-height: 1;
-    letter-spacing: var(--tr-body);
-  }
-
-  .score-ring span,
-  .score-ring small {
-    font-family: var(--mono);
-    text-transform: uppercase;
-    letter-spacing: var(--tr-label);
-    color: var(--accent-cyan);
-  }
-
-  .score-ring span { font-size: var(--ts-xs); font-weight: 700; }
-  .score-ring small { max-width: 150px; font-size: 10px; color: var(--t4); }
 
   .verdict-copy {
     min-width: 0;
-    display: grid;
-    gap: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
   }
 
   .verdict-kickers {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: 12px;
   }
 
+  /* Severity + Live pills — v2 sizing: smaller font, lighter weight,
+     subtler tone tints. The Chronoscope tone vocabulary survives;
+     only the visual weight changes. */
   .severity-pill,
   .measuring-pill {
     display: inline-flex;
     align-items: center;
     gap: 8px;
     width: fit-content;
-    min-height: 28px;
-    padding: 0 14px;
+    padding: 4px 12px;
     border-radius: 999px;
     font-family: var(--mono);
-    font-size: var(--ts-sm);
-    font-weight: 800;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.4;
     text-transform: uppercase;
     letter-spacing: var(--tr-label);
   }
 
   .severity-pill[data-tone='good'] {
     color: var(--accent-green);
-    border: 1px solid var(--shell-success-border);
-    background: var(--shell-success-bg);
+    border: 1px solid color-mix(in srgb, var(--accent-green) 20%, transparent);
+    background: color-mix(in srgb, var(--accent-green) 10%, transparent);
   }
-
   .severity-pill[data-tone='warn'],
   .severity-pill[data-tone='watch'] {
     color: var(--accent-amber);
-    border: 1px solid var(--shell-stop-border);
-    background: var(--shell-bg-amber);
+    border: 1px solid color-mix(in srgb, var(--accent-amber) 20%, transparent);
+    background: color-mix(in srgb, var(--accent-amber) 10%, transparent);
+  }
+  .severity-pill[data-tone='collecting'] {
+    color: var(--accent-cyan);
+    border: 1px solid color-mix(in srgb, var(--accent-cyan) 20%, transparent);
+    background: color-mix(in srgb, var(--accent-cyan) 10%, transparent);
   }
 
-  .severity-pill[data-tone='collecting'],
+  /* Live affordance — v2's pinging-dot pattern. Less chrome than the
+     prior Measuring pill; the dot itself carries the live-state signal. */
   .measuring-pill {
     color: var(--accent-cyan);
-    border: 1px solid var(--shell-border-strong);
-    background: var(--shell-bg-cyan);
+    border: 0;
+    background: transparent;
+    padding-left: 0;
   }
-
-  .measuring-pill span {
+  .measuring-dot {
+    position: relative;
+    display: inline-flex;
+    width: 8px;
+    height: 8px;
+    flex-shrink: 0;
+  }
+  .measuring-dot-ping {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+    opacity: 0.55;
+    animation: measuring-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+  }
+  .measuring-dot-core {
+    position: relative;
     width: 8px;
     height: 8px;
     border-radius: 50%;
     background: var(--accent-cyan);
-    box-shadow: 0 0 12px var(--glow-cyan);
+  }
+  @keyframes measuring-ping {
+    0% { transform: scale(1); opacity: 0.6; }
+    75%, 100% { transform: scale(2.2); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .measuring-dot-ping { animation: none; opacity: 0.45; }
   }
 
   h1 {
     margin: 0;
-    max-width: 900px;
-    font-size: clamp(30px, 4.2vw, 52px);
-    line-height: 1.08;
+    max-width: 820px;
+    font-family: var(--sans);
+    font-size: clamp(28px, 3.6vw, 44px);
+    font-weight: 600;
+    line-height: 1.1;
     letter-spacing: var(--tr-tight);
     color: var(--t1);
   }
 
-  /* Inline endpoint chip embedded in the verdict headline (Arc C C4 /
-     synthesis design contract Section 2). Tone mirrors the endpoint-row tone
-     vocabulary (good / warn / bad / collecting) so the chip reads the same
-     across surfaces. Sized down relative to the h1 so it doesn't overpower
-     the surrounding sentence — still tabular-numeric-aligned to the headline
-     baseline. */
-  .headline-endpoint-chip {
-    display: inline-block;
-    padding: 0 0.4em;
-    margin: 0 0.05em;
-    border-radius: 0.32em;
-    font-weight: 800;
-    line-height: 1.15;
-    vertical-align: baseline;
+  /* Inline endpoint name highlight — v2 pattern: same typographic size as
+     the surrounding sentence, just a tone-coloured weight bump (no
+     background, no border, no chip box). Reads as a name, not a button. */
+  .headline-endpoint-name {
     color: var(--t1);
-    background: color-mix(in srgb, var(--accent-cyan) 14%, transparent);
-    border: 1px solid color-mix(in srgb, var(--accent-cyan) 28%, transparent);
+    font-weight: 600;
   }
-  .headline-endpoint-chip[data-tone='good'] {
-    color: var(--accent-green);
-    background: color-mix(in srgb, var(--accent-green) 12%, transparent);
-    border-color: color-mix(in srgb, var(--accent-green) 28%, transparent);
-  }
-  .headline-endpoint-chip[data-tone='warn'],
-  .headline-endpoint-chip[data-tone='watch'] {
-    color: var(--accent-amber);
-    background: color-mix(in srgb, var(--accent-amber) 14%, transparent);
-    border-color: color-mix(in srgb, var(--accent-amber) 32%, transparent);
-  }
-  .headline-endpoint-chip[data-tone='bad'] {
-    color: var(--accent-pink);
-    background: color-mix(in srgb, var(--accent-pink) 14%, transparent);
-    border-color: color-mix(in srgb, var(--accent-pink) 32%, transparent);
-  }
-  .headline-endpoint-chip[data-tone='collecting'] {
-    color: var(--accent-cyan);
-    background: color-mix(in srgb, var(--accent-cyan) 12%, transparent);
-    border-color: color-mix(in srgb, var(--accent-cyan) 28%, transparent);
-  }
+  .headline-endpoint-name[data-tone='good']      { color: var(--accent-green); }
+  .headline-endpoint-name[data-tone='warn'],
+  .headline-endpoint-name[data-tone='watch']     { color: var(--accent-amber); }
+  .headline-endpoint-name[data-tone='bad']       { color: var(--accent-pink); }
+  .headline-endpoint-name[data-tone='collecting']{ color: var(--accent-cyan); }
 
-  p {
+  /* Body paragraphs — v2 drops the "Measured Fact:" / "Interpretation:"
+     labels. Sentence separation survives through typography (slightly
+     dimmer second paragraph) and the gap between paragraphs. */
+  .verdict-body {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-width: 760px;
+  }
+  .verdict-body p {
     margin: 0;
-    max-width: 820px;
     color: var(--t2);
-    font-size: clamp(15px, 1.6vw, 19px);
-    line-height: 1.65;
+    font-family: var(--sans);
+    font-size: clamp(14px, 1.4vw, 17px);
+    font-weight: 500;
+    line-height: 1.6;
   }
-
-  p strong {
-    color: var(--t1);
-    font-weight: 800;
-  }
-
-  .interpretation {
+  .verdict-body .interpretation {
     color: var(--t3);
   }
 
@@ -782,52 +737,72 @@
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 18px;
-    padding-top: 10px;
+    gap: 12px;
+    padding-top: 8px;
   }
 
-  .primary-action,
-  .secondary-action,
-  .panel-header button,
-  .event-more {
-    min-height: 44px;
-    border-radius: 8px;
-    font-family: var(--sans);
-    font-weight: 800;
-    cursor: pointer;
-  }
-
+  /* v2 primary action — white-on-black pill with a soft white halo.
+     Replaces the prior cyan-gradient button so the primary CTA reads as
+     "the thing you do next" rather than an extension of the verdict's
+     tone colour. */
   .primary-action {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    padding: 0 28px;
-    border: 1px solid transparent;
-    background: linear-gradient(135deg, var(--accent-cyan), color-mix(in srgb, var(--accent-cyan), black 70%));
+    gap: 8px;
+    min-height: 44px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--t1);
     color: var(--shell-bg);
-    box-shadow: 0 0 28px rgba(103, 232, 249, 0.26);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: transform 160ms ease, background 160ms ease;
+    box-shadow: 0 0 20px color-mix(in srgb, var(--t1) 15%, transparent);
   }
-
+  .primary-action:hover {
+    background: color-mix(in srgb, var(--t1) 88%, transparent);
+    transform: translateY(-1px);
+  }
   .primary-action:disabled {
     cursor: default;
-    opacity: 0.72;
+    opacity: 0.6;
     box-shadow: none;
+    transform: none;
   }
 
+  /* v2 secondary action — quiet text link. No border, no background;
+     hover lifts to t1 + faint surface tint. */
   .secondary-action {
     display: inline-flex;
     align-items: center;
-    gap: 10px;
-    padding: 0 18px;
-    border: 1px solid transparent;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 12px;
     background: transparent;
-    color: var(--t2);
+    color: var(--t3);
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 160ms ease, background 160ms ease;
   }
-
-  .secondary-action:hover,
+  .secondary-action:hover {
+    color: var(--t1);
+    background: color-mix(in srgb, var(--t1) 5%, transparent);
+  }
   .panel-header button:hover,
   .event-more:hover {
     color: var(--accent-cyan);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .primary-action,
+    .secondary-action { transition: none; }
+    .primary-action:hover { transform: none; }
   }
 
   .lower-grid {
@@ -1235,30 +1210,12 @@
       gap: 24px;
     }
     .verdict-card {
-      grid-template-columns: 1fr;
-      justify-items: start;
-      padding: 20px 24px 22px;
+      padding: 24px;
       min-height: 0;
-      gap: 16px;
     }
-    .score-ring {
-      justify-self: center;
-      width: 132px;
-      order: -1;
-    }
-    .score-ring::before {
-      width: 118px;
-      height: 118px;
-    }
-    .score-ring-inner {
-      width: 94px;
-      height: 94px;
-      margin-top: 12px;
-    }
-    .score-ring small { display: none; }
-    .score-ring strong { font-size: 34px; }
-    h1 { font-size: 31px; line-height: 1.08; }
-    p { font-size: 15px; line-height: 1.55; }
+    .verdict-copy { gap: 20px; }
+    h1 { font-size: 28px; line-height: 1.1; }
+    .verdict-body p { font-size: 15px; line-height: 1.55; }
     .endpoint-row {
       grid-template-columns: 18px minmax(0, 1fr) minmax(86px, 120px);
       gap: 12px;
