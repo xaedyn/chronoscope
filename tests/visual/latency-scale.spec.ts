@@ -151,13 +151,11 @@ test.describe('AC8: axis-label-max parity', () => {
     await injectHighBaselineStats(page);
   });
 
-  test('AC8 Status: Dial and RacingStrip show same maxMs', async ({ page }) => {
-    const texts = await page.locator('[data-role="axis-label-max"]').allTextContents();
-    expect(texts.length).toBeGreaterThanOrEqual(2);
-    const unique = new Set(texts);
-    expect(unique.size).toBe(1);
-    expect(Number([...unique][0])).toBeGreaterThanOrEqual(960);
-  });
+  // AC8 Status (Dial + RacingStrip) was removed in PR 5 of the synthesis
+  // arc — both ChronographDial and RacingStrip were deleted along with
+  // their dial-era Overview parent. The same axis-label invariant for the
+  // current Overview surface will be re-established in PR 6 when
+  // NetworkTopology lands and the Overview hero takes its synthesis form.
 
   test('AC8 LiveView unified mode: ScopeCanvas shows maxMs >= 960', async ({ page }) => {
     await gotoView(page, 'live');

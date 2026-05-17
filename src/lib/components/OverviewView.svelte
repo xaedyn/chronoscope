@@ -1,194 +1,90 @@
-<!-- src/lib/components/OverviewView.svelte -->
-<!-- Overview — verdict-first Status layout. Composes the CausalVerdictStrip, -->
-<!-- chronograph dial, RacingStrip, and RunStorylineCard. Score-history /      -->
-<!-- baseline / storyline are derived locally here; the underlying stats + samples -->
-<!-- flow through the monitoredEndpointsStore invariant.                        -->
-<!-- The classic Overview mode was retired in v8; pre-v10 payloads that         -->
-<!-- carried overviewMode are reset to defaults on load via persistence.ts.     -->
+<!-- src/lib/components/FigmaOverviewView.svelte -->
+<!-- Figma-aligned Overview surface. Visual hierarchy follows the locked       -->
+<!-- reference screenshots while all facts still come from Chronoscope stores. -->
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte';
   import { measurementStore } from '$lib/stores/measurements';
-  import { historyStore } from '$lib/stores/history';
   import { statisticsStore } from '$lib/stores/statistics';
   import { settingsStore } from '$lib/stores/settings';
   import { uiStore } from '$lib/stores/ui';
   import { networkQualityStore, monitoredEndpointsStore } from '$lib/stores/derived';
-  import { buildDiagnosticNarrative, type DiagnosticNarrative } from '$lib/utils/diagnostic-narrative';
+  import {
+    buildDiagnosticNarrative,
+    type DiagnosticNarrative,
+  } from '$lib/utils/diagnostic-narrative';
   import { diagnosticAlignedScore } from '$lib/utils/classify';
-  import { buildScoreExplanation } from '$lib/utils/score-explanation';
-  import { buildHistoryBaselineInsight, type HistoryBaselineInsight } from '$lib/utils/history-baseline';
-  import { buildRunStoryline, type RunStoryline } from '$lib/utils/run-storyline';
+  import {
+    buildRunStoryline,
+    type EndpointTimelineRow,
+    type RunStoryline,
+    type StoryBeat,
+    type StoryBeatSeverity,
+    type TimelinePoint,
+  } from '$lib/utils/run-storyline';
+  import type { Endpoint, EndpointStatistics, MeasurementSample } from '$lib/types';
   import type { VerdictRow } from '$lib/utils/verdict';
-  import { tokens } from '$lib/tokens';
-  import ChronographDial from './ChronographDial.svelte';
-  import CausalVerdictStrip from './CausalVerdictStrip.svelte';
-  import RacingStrip from './RacingStrip.svelte';
-  import RunStorylineCard from './RunStorylineCard.svelte';
-  import OverviewSubtabStrip from './OverviewSubtabStrip.svelte';
-  import type { Endpoint, MeasurementSample } from '$lib/types';
 
-  let { onStart }: { onStart?: () => void } = $props();
+  const HISTORY_VIEWBOX_WIDTH = 180;
+  const HISTORY_VIEWBOX_HEIGHT = 48;
+  const HISTORY_BASELINE_Y = 40;
+  const HISTORY_RANGE_Y = 32;
 
-  // ── Shared spine ──────────────────────────────────────────────────────────
-  // Cross-phase invariant — user-facing aggregates derive from
-  // monitoredEndpointsStore so dial orbit / verdict / racing strip can't
-  // disagree about who's being measured. See PATTERNS.md §3.
+  interface EndpointSummary {
+    readonly endpoint: Endpoint;
+    readonly stats: EndpointStatistics | null;
+    readonly samples: readonly MeasurementSample[];
+    readonly timeline: EndpointTimelineRow | null;
+    readonly latency: number | null;
+    readonly delta: number | null;
+    readonly status: string;
+    readonly recent: string;
+    readonly tone: 'good' | 'warn' | 'bad' | 'collecting';
+  }
+
+  interface EventLogItem {
+    readonly id: string;
+    readonly t: number | null;
+    readonly time: string;
+    readonly age: string;
+    readonly label: string;
+    readonly evidence: string;
+    readonly tone: 'info' | 'good' | 'watch' | 'bad';
+    readonly endpointIds: readonly string[];
+  }
+
   const monitored = $derived($monitoredEndpointsStore);
   const stats = $derived($statisticsStore);
   const settings = $derived($settingsStore);
-
-  // Cross-endpoint p99 — drives unified y-axis ceiling for Dial and RacingStrip.
-  // Computed across ALL monitored endpoints (not just visible or focused).
-  // Math.max(0, ...empty) === 0, which is the correct sentinel for "no data yet".
-  const p99Across = $derived(Math.max(0, ...monitored.map((ep) => stats[ep.id]?.p99 ?? 0)));
   const measurements = $derived($measurementStore);
-  const history = $derived($historyStore);
   const threshold = $derived(settings.healthThreshold);
   const rawScore = $derived($networkQualityStore);
-  const paused = $derived(
-    measurements.lifecycle === 'stopped' || measurements.lifecycle === 'completed',
-  );
-  const runContextLine = $derived.by(() => {
-    const count = monitored.length;
-    const plural = count === 1 ? 'endpoint' : 'endpoints';
-    if (count === 0) return 'No endpoints are enabled.';
-    if (measurements.lifecycle === 'running' || measurements.lifecycle === 'starting') {
-      return `Measuring ${count} enabled ${plural} from this browser.`;
-    }
-    if (measurements.lifecycle === 'completed' || measurements.lifecycle === 'stopped') {
-      return `Last run measured ${count} enabled ${plural} from this browser.`;
-    }
-    return `Ready to measure ${count} enabled ${plural} from this browser.`;
-  });
 
-  const lastLatencies = $derived.by(() => {
-    const out: Record<string, number | null> = {};
-    for (const ep of monitored) {
-      out[ep.id] = measurements.endpoints[ep.id]?.lastLatency ?? null;
-    }
-    return out;
-  });
-
-  const liveMedian = $derived.by(() => {
-    const vals: number[] = [];
-    for (const ep of monitored) {
-      const lat = measurements.endpoints[ep.id]?.lastLatency;
-      if (lat != null && Number.isFinite(lat)) vals.push(lat);
-    }
-    if (vals.length === 0) return null;
-    const sorted = [...vals].sort((a, b) => a - b);
-    const mid = sorted.length >> 1;
-    return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-  });
-
-  const worst = $derived.by(() => {
-    let worstEp: { id: string; label: string; color: string; p95: number } | null = null;
-    for (const ep of monitored) {
-      const s = stats[ep.id];
-      if (!s || !s.ready) continue;
-      if (!worstEp || s.p95 > worstEp.p95) {
-        worstEp = {
-          id: ep.id,
-          label: ep.label,
-          color: ep.color || tokens.color.endpoint[0],
-          p95: s.p95,
-        };
-      }
-    }
-    return worstEp;
-  });
-
-  // ── Derived data for the dial / strip / storyline cards ──────────────────
-  // Samples slice per endpoint, materialized once per render for the racing
-  // strip sparkline. 40-sample tail is enough for the spec. Using toArray()
-  // copies out of the ring buffer — acceptable at N<=20 endpoints.
   const samplesByEndpoint = $derived.by<Record<string, readonly MeasurementSample[]>>(() => {
     const out: Record<string, readonly MeasurementSample[]> = {};
     for (const ep of monitored) {
-      const m = measurements.endpoints[ep.id];
-      if (!m) { out[ep.id] = []; continue; }
-      const all = m.samples.toArray();
-      out[ep.id] = all.slice(-40);
+      const state = measurements.endpoints[ep.id];
+      out[ep.id] = state ? state.samples.toArray().slice(-48) : [];
     }
     return out;
   });
 
-  const STORYLINE_SOURCE_SAMPLE_CAP = 5_000;
   const storylineSamplesByEndpoint = $derived.by<Record<string, readonly MeasurementSample[]>>(() => {
     const out: Record<string, readonly MeasurementSample[]> = {};
     for (const ep of monitored) {
-      const m = measurements.endpoints[ep.id];
-      out[ep.id] = m ? m.samples.slice(-STORYLINE_SOURCE_SAMPLE_CAP) : [];
+      const state = measurements.endpoints[ep.id];
+      out[ep.id] = state ? state.samples.slice(-5_000) : [];
     }
     return out;
   });
 
-  const HISTORY_MAX = 60;
-  let scoreHistory = $state<number[]>([]);
-  let lastSeenRound = -1;
-
-  const runStoryline: RunStoryline = $derived(buildRunStoryline({
-    endpoints: monitored,
-    samplesByEndpoint: storylineSamplesByEndpoint,
-    threshold,
-    runStart: measurements.startedAt,
-    focusedEndpointId: $uiStore.focusedEndpointId,
-  }));
-
-  // Baseline — p25/median/p75 over last 120s of samples × monitored endpoints.
-  // Recomputes every 5s on a setInterval, not every tick — stable band avoids
-  // jitter on the dial.
-  interface Baseline { p25: number; median: number; p75: number; }
-  const BASELINE_WINDOW_MS = 120_000;
-  const BASELINE_MIN_SAMPLES = 30;
-  const BASELINE_REFRESH_MS = 5_000;
-  let baseline = $state<Baseline | null>(null);
-  function recomputeBaseline(): void {
-    const cutoff = Date.now() - BASELINE_WINDOW_MS;
-    const pool: number[] = [];
-    for (const ep of monitored) {
-      const m = measurements.endpoints[ep.id];
-      if (!m) continue;
-      for (const s of m.samples) {
-        if (s.status !== 'ok' || !Number.isFinite(s.latency)) continue;
-        if (s.timestamp < cutoff) continue;
-        pool.push(s.latency);
-      }
-    }
-    if (pool.length < BASELINE_MIN_SAMPLES) {
-      baseline = null;
-      return;
-    }
-    pool.sort((a, b) => a - b);
-    const at = (p: number): number => pool[Math.max(0, Math.min(pool.length - 1, Math.floor(p * pool.length)))];
-    baseline = { p25: at(0.25), median: at(0.5), p75: at(0.75) };
-  }
-  let baselineTimer: ReturnType<typeof setInterval> | null = null;
-  $effect(() => {
-    // Kick immediately so the first render has something to work with, then
-    // recompute every 5s. Both calls run inside `untrack` because
-    // recomputeBaseline reads `monitored` and `measurements` — without it,
-    // the effect re-runs on every measurement update, clearing and recreating
-    // the interval before its 5s fire window, defeating the cadence entirely.
-    untrack(() => recomputeBaseline());
-    if (baselineTimer !== null) clearInterval(baselineTimer);
-    baselineTimer = setInterval(() => untrack(() => recomputeBaseline()), BASELINE_REFRESH_MS);
-  });
-  onDestroy(() => {
-    if (baselineTimer !== null) clearInterval(baselineTimer);
-  });
-
-  // Causal verdict. Only rows with `ready` stats feed the tree — unready
-  // endpoints haven't contributed enough samples for phase dominance to be
-  // meaningful.
   const verdictRows: readonly VerdictRow[] = $derived.by(() => {
     const rows: VerdictRow[] = [];
     for (const ep of monitored) {
-      const s = stats[ep.id];
-      if (s && s.ready) rows.push({ ep, stats: s });
+      const rowStats = stats[ep.id];
+      if (rowStats?.ready) rows.push({ ep, stats: rowStats });
     }
     return rows;
   });
+
   const diagnosticNarrative: DiagnosticNarrative = $derived(buildDiagnosticNarrative({
     rows: verdictRows,
     threshold,
@@ -196,299 +92,1079 @@
     samplesByEndpoint,
     monitoredEndpointCount: monitored.length,
   }));
-  const score = $derived(diagnosticAlignedScore(rawScore, diagnosticNarrative.severity));
-  const scoreExplanation = $derived(buildScoreExplanation({
-    rows: verdictRows,
-    threshold,
-    score,
-    rawScore,
-    capReason: diagnosticNarrative.primaryAnswer.text,
-  }));
-  // Score history ring buffer — one entry per round, max 60 entries. Driven by
-  // roundCounter changes and aligned to the diagnostic narrative so the trace
-  // never trends "healthy" while the answer says the run needs attention.
-  $effect(() => {
-    const round = measurements.roundCounter;
-    if (round === lastSeenRound) return;
-    lastSeenRound = round;
-    // Only append when we have a valid score for this round.
-    if (score === null) return;
-    scoreHistory.push(score);
-    while (scoreHistory.length > HISTORY_MAX) scoreHistory.shift();
-  });
-  const historyBaselineInsight: HistoryBaselineInsight = $derived(buildHistoryBaselineInsight({
+
+  const runStoryline: RunStoryline = $derived(buildRunStoryline({
     endpoints: monitored,
-    stats,
-    history: history.sessions,
-    currentStartedAt: measurements.startedAt,
+    samplesByEndpoint: storylineSamplesByEndpoint,
+    threshold,
+    runStart: measurements.startedAt,
+    focusedEndpointId: $uiStore.focusedEndpointId,
+    maxVisibleRows: Math.max(monitored.length, 4),
   }));
+  const timelineRowsByEndpoint = $derived.by<Record<string, EndpointTimelineRow>>(() => (
+    Object.fromEntries(runStoryline.rows.map((row) => [row.endpointId, row]))
+  ));
+  const timelineWindowLabel = $derived(`Last ${durationLabel(timelineWindowSpan())} · Now on right`);
+  const timelineTicks = $derived(buildTimelineTicks(runStoryline.windowStart, runStoryline.windowEnd));
 
-  // Average metrics for the verdict strip triptych (backing evidence).
-  const avgP50 = $derived.by(() => {
-    if (verdictRows.length === 0) return null;
-    let sum = 0;
-    for (const r of verdictRows) sum += r.stats.p50;
-    return sum / verdictRows.length;
+  const score = $derived(diagnosticAlignedScore(rawScore, diagnosticNarrative.severity));
+  const scoreDisplay = $derived(score === null ? '—' : (score / 10).toFixed(1));
+  const scorePercent = $derived(score === null ? 0 : Math.max(0, Math.min(100, score)));
+  const severityLabel = $derived.by(() => {
+    if (diagnosticNarrative.kind === 'collecting') return 'Collecting';
+    if (diagnosticNarrative.severity === 'healthy') return 'Good';
+    if (diagnosticNarrative.severity === 'degraded') return 'Degraded';
+    return 'Watch';
   });
-  const avgJitter = $derived.by(() => {
-    if (verdictRows.length === 0) return null;
-    let sum = 0;
-    for (const r of verdictRows) sum += r.stats.stddev;
-    return sum / verdictRows.length;
+  const severityTone = $derived.by(() => {
+    if (diagnosticNarrative.kind === 'collecting') return 'collecting';
+    if (diagnosticNarrative.severity === 'healthy') return 'good';
+    if (diagnosticNarrative.severity === 'degraded') return 'warn';
+    return 'watch';
   });
-  const avgLoss = $derived.by(() => {
-    if (verdictRows.length === 0) return null;
-    let sum = 0;
-    for (const r of verdictRows) sum += r.stats.lossPercent;
-    return sum / verdictRows.length;
+  const headline = $derived(diagnosticNarrative.primaryAnswer.text);
+  const measuredFact = $derived(diagnosticNarrative.supportingSummary);
+  const interpretation = $derived.by(() => {
+    if (diagnosticNarrative.kind === 'collecting') {
+      return 'Chronoscope needs a few successful checks before it can compare endpoints responsibly.';
+    }
+    return diagnosticNarrative.safeSummary.replace(/^This browser test:\s*/i, '');
+  });
+  const primaryActionText = $derived(diagnosticNarrative.primaryValidation.label);
+  const primaryActionReason = $derived(diagnosticNarrative.primaryValidation.reason);
+  const primaryActionDisabled = $derived(
+    diagnosticNarrative.primaryValidation.id === 'collect-more-samples'
+      && (measurements.lifecycle === 'running' || measurements.lifecycle === 'starting' || measurements.lifecycle === 'stopping'),
+  );
+
+  const endpointRows: readonly EndpointSummary[] = $derived.by(() => (
+    monitored.map((endpoint) => {
+      const rowStats = stats[endpoint.id] ?? null;
+      const endpointState = measurements.endpoints[endpoint.id];
+      const latency = endpointState?.lastLatency ?? rowStats?.p50 ?? null;
+      const samples = samplesByEndpoint[endpoint.id] ?? [];
+      const timeline = timelineRowsByEndpoint[endpoint.id] ?? null;
+      const lastStatus = endpointState?.lastStatus ?? null;
+      const delta = rowStats?.stddev ?? null;
+      let tone: EndpointSummary['tone'] = 'collecting';
+      let status = 'Collecting samples';
+
+      if (lastStatus === 'timeout' || lastStatus === 'error') {
+        tone = 'bad';
+        status = 'Request failed in browser check';
+      } else if (rowStats?.ready) {
+        if (rowStats.lossPercent >= 1) {
+          tone = 'bad';
+          status = 'Failed requests detected';
+        } else if (rowStats.p95 > threshold) {
+          tone = 'warn';
+          status = 'Latency spikes detected';
+        } else if (rowStats.stddev >= 25) {
+          tone = 'warn';
+          status = 'Latency variation detected';
+        } else {
+          tone = 'good';
+          status = 'Stable performance';
+        }
+      }
+
+      return {
+        endpoint,
+        stats: rowStats,
+        samples,
+        timeline,
+        latency,
+        delta,
+        status,
+        recent: timeline?.summary ?? `${samples.length} recent browser samples`,
+        tone,
+      };
+    })
+  ));
+
+  const eventRows: readonly EventLogItem[] = $derived.by(() => {
+    const beats = runStoryline.beats.slice(-5);
+    if (beats.length === 0) {
+      return [{
+        id: 'run-state',
+        t: measurements.roundCounter > 0 ? runStoryline.windowEnd : null,
+        time: measurements.roundCounter > 0 ? eventRunTime(runStoryline.windowEnd) : 'Ready',
+        age: measurements.roundCounter > 0 ? 'now' : 'no run yet',
+        label: measurements.roundCounter > 0 ? runStoryline.summary : 'Start a browser test to build an event trail',
+        evidence: measurements.roundCounter > 0 ? `${runStoryline.sampleCount} samples in the current window` : 'No measurements captured yet',
+        tone: 'info',
+        endpointIds: [],
+      }];
+    }
+    return beats.map((beat: StoryBeat) => ({
+      id: beat.id,
+      t: beat.t,
+      time: eventRunTime(beat.t),
+      age: timeAgoLabel(beat.t),
+      label: beat.label,
+      evidence: beat.evidence,
+      tone: toneForBeat(beat.severity),
+      endpointIds: beat.endpointIds,
+    }));
   });
 
-  // Drill target for the verdict strip — worstEpId wins; fall back to the
-  // overall worst-p95 endpoint. null when all-healthy (no drill shown).
-  const drillEndpoint: Endpoint | null = $derived.by(() => {
-    if (diagnosticNarrative.verdict.tone !== 'warn') return null;
-    const targetId = diagnosticNarrative.verdict.worstEpId ?? worst?.id ?? null;
-    if (targetId === null) return null;
-    return monitored.find((ep) => ep.id === targetId) ?? null;
-  });
+  function toneForBeat(severity: StoryBeatSeverity): EventLogItem['tone'] {
+    if (severity === 'good') return 'good';
+    if (severity === 'bad') return 'bad';
+    if (severity === 'watch') return 'watch';
+    return 'info';
+  }
 
-  function handleEnrichedDrill(epId: string): void {
-    uiStore.setFocusedEndpoint(epId);
+  function timelineWindowSpan(): number {
+    return Math.max(1, runStoryline.windowEnd - runStoryline.windowStart);
+  }
+
+  function durationLabel(ms: number): string {
+    const seconds = Math.max(0, Math.round(ms / 1000));
+    if (seconds < 90) return `${seconds}s`;
+    const minutes = Math.round(seconds / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.round(minutes / 60);
+    return `${hours}h`;
+  }
+
+  function buildTimelineTicks(start: number, end: number): readonly { readonly pct: number; readonly label: string }[] {
+    const span = Math.max(1, end - start);
+    const seconds = span / 1000;
+    const positions = seconds < 20 ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1];
+    return positions.map((position) => ({
+      pct: position * 100,
+      label: position === 1 ? 'Now' : `-${durationLabel(span * (1 - position))}`,
+    }));
+  }
+
+  function timelinePct(timestamp: number): number {
+    const span = timelineWindowSpan();
+    return Math.max(0, Math.min(100, ((timestamp - runStoryline.windowStart) / span) * 100));
+  }
+
+  function historyPointY(point: Pick<TimelinePoint, 'normalizedLatency' | 'status'>): number {
+    if (point.status === 'failed' || point.normalizedLatency == null) return 48;
+    const y = HISTORY_BASELINE_Y - Math.min(HISTORY_RANGE_Y, Math.max(0, point.normalizedLatency) * HISTORY_RANGE_Y);
+    return (y / HISTORY_VIEWBOX_HEIGHT) * 100;
+  }
+
+  function historyPath(row: EndpointTimelineRow): string {
+    let d = '';
+    let prevWasGap = true;
+    for (const point of row.points) {
+      if (point.status === 'failed' || point.normalizedLatency == null) {
+        prevWasGap = true;
+        continue;
+      }
+      const x = (timelinePct(point.t) / 100) * HISTORY_VIEWBOX_WIDTH;
+      const y = HISTORY_BASELINE_Y - Math.min(HISTORY_RANGE_Y, Math.max(0, point.normalizedLatency) * HISTORY_RANGE_Y);
+      d += `${prevWasGap ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)} `;
+      prevWasGap = false;
+    }
+    return d.trim();
+  }
+
+  function historyMarkers(row: EndpointTimelineRow): readonly TimelinePoint[] {
+    return row.points.filter((point) => (
+      point.status === 'failed' || point.status === 'slow' || point.status === 'elevated'
+    ));
+  }
+
+  function timeAgoLabel(timestamp: number): string {
+    const age = Math.max(0, runStoryline.windowEnd - timestamp);
+    return age <= 999 ? 'now' : `${durationLabel(age)} ago`;
+  }
+
+  function eventRunTime(timestamp: number): string {
+    if (!Number.isFinite(timestamp)) return 'Now';
+    if (measurements.startedAt !== null) {
+      const elapsed = Math.max(0, Math.round((timestamp - measurements.startedAt) / 1000));
+      const mins = Math.floor(elapsed / 60);
+      const secs = elapsed % 60;
+      return `T+${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    const date = new Date(timestamp);
+    return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  }
+
+  function formatLatency(value: number | null): string {
+    return value === null || !Number.isFinite(value) ? '—' : String(Math.round(value));
+  }
+
+  function formatDelta(value: number | null): string {
+    return value === null || !Number.isFinite(value) ? '±—' : `±${Math.round(value)}`;
+  }
+
+  function handlePrimaryAction(): void {
+    const action = diagnosticNarrative.primaryValidation;
+    const target = action.endpointId;
+    if (target) uiStore.setFocusedEndpoint(target);
+
+    switch (action.id) {
+      case 'collect-more-samples':
+        if (
+          measurements.lifecycle === 'idle'
+          || measurements.lifecycle === 'stopped'
+          || measurements.lifecycle === 'completed'
+        ) {
+          measurementStore.setLifecycle('starting');
+        }
+        return;
+      case 'share-snapshot':
+      case 'share-support-report':
+        uiStore.toggleShare();
+        return;
+      case 'explain-browser-visibility':
+      case 'open-investigate':
+      case 'run-remote-check':
+      case 'compare-network':
+        uiStore.setActiveView('diagnose');
+        return;
+    }
+  }
+
+  function handleEvidenceAction(): void {
     uiStore.setActiveView('diagnose');
   }
 
-  function handleStorylineDrill(epId: string): void {
-    uiStore.setFocusedEndpoint(epId);
+  function handleEndpointDrill(endpointId: string, destination: 'live' | 'diagnose'): void {
+    uiStore.setFocusedEndpoint(endpointId);
+    uiStore.setActiveView(destination);
+  }
+
+  function handleEventDrill(item: EventLogItem): void {
+    const endpointId = item.endpointIds[0] ?? null;
+    if (endpointId) uiStore.setFocusedEndpoint(endpointId);
     uiStore.setActiveView('diagnose');
   }
 </script>
 
-<section class="overview status-view" aria-label="Status">
-  <div class="status-shell">
-    <CausalVerdictStrip
-      diagnosis={diagnosticNarrative}
-      {avgP50}
-      {avgJitter}
-      {avgLoss}
-      {drillEndpoint}
-      baselineInsight={historyBaselineInsight}
-      {scoreExplanation}
-      autoStartSuppressionReason={$uiStore.autoStartSuppressionReason}
-      contextLine={runContextLine}
-      onDrill={handleEnrichedDrill}
-      onStart={onStart}
-      variant="hero"
-    />
+<section class="figma-overview" aria-label="Overview">
+  <div class="overview-inner">
+    <section class="verdict-card" aria-label="Connection verdict">
+      <div class="score-ring" style:--score-percent={`${scorePercent}%`} aria-label={`Score ${scoreDisplay} out of 10`}>
+        <div class="score-ring-inner">
+          <strong>{scoreDisplay}</strong>
+          <span>Score</span>
+        </div>
+        <small>Based on aggregate latency</small>
+      </div>
 
-    <div class="overview-grid">
-      <div class="overview-left">
-        <ChronographDial
-          {score}
-          {liveMedian}
-          {threshold}
-          endpoints={monitored}
-          {lastLatencies}
-          {paused}
-          {scoreHistory}
-          {baseline}
-          {p99Across}
-        />
-      </div>
-      <div
-        class="overview-right"
-        data-has-events={runStoryline.markers.length > 0 ? 'true' : 'false'}
-        data-subtab={$uiStore.overviewSubtab}
-      >
-        <div class="overview-subtab-strip">
-          <OverviewSubtabStrip
-            selected={$uiStore.overviewSubtab}
-            onSelect={(t) => uiStore.setOverviewSubtab(t)}
-          />
+      <div class="verdict-copy">
+        <div class="verdict-kickers">
+          <span class="severity-pill" data-tone={severityTone}>{severityLabel}</span>
+          {#if measurements.lifecycle === 'running' || measurements.lifecycle === 'starting'}
+            <span class="measuring-pill"><span aria-hidden="true"></span>Measuring</span>
+          {/if}
         </div>
-        <div
-          class="card-slot card-slot--racing"
-          id="overview-panel-racing"
-          role="tabpanel"
-          aria-labelledby="overview-subtab-racing"
-        >
-          <RacingStrip
-            endpoints={monitored}
-            {stats}
-            {lastLatencies}
-            {samplesByEndpoint}
-            {threshold}
-            focusedEndpointId={$uiStore.focusedEndpointId}
-            {p99Across}
-          />
-        </div>
-        <div
-          class="card-slot card-slot--events"
-          id="overview-panel-events"
-          role="tabpanel"
-          aria-labelledby="overview-subtab-events"
-        >
-          <RunStorylineCard
-            storyline={runStoryline}
-            onDrill={handleStorylineDrill}
-          />
+        <h1>{headline}</h1>
+        <p><strong>Measured Fact:</strong> {measuredFact}</p>
+        <p class="interpretation"><strong>Interpretation:</strong> {interpretation}</p>
+        <div class="verdict-actions">
+          <button
+            type="button"
+            class="primary-action"
+            title={primaryActionReason}
+            disabled={primaryActionDisabled}
+            aria-disabled={primaryActionDisabled}
+            onclick={handlePrimaryAction}
+          >
+            <span aria-hidden="true">◇</span>
+            {primaryActionText}
+          </button>
+          <button type="button" class="secondary-action" onclick={handleEvidenceAction}>
+            View full evidence <span aria-hidden="true">→</span>
+          </button>
         </div>
       </div>
+    </section>
+
+    <div class="lower-grid">
+      <section class="measured-panel" aria-label="Measured endpoints">
+        <header class="panel-header">
+          <div>
+            <h2>Measured Endpoints</h2>
+            <p class="overview-time-window">{timelineWindowLabel}</p>
+          </div>
+          <button type="button" onclick={() => uiStore.setActiveView('live')}>Live chart <span aria-hidden="true">›</span></button>
+        </header>
+        <div class="overview-time-axis" aria-hidden="true">
+          {#each timelineTicks as tick (tick.pct)}
+            <span style:left="{tick.pct}%">{tick.label}</span>
+          {/each}
+        </div>
+        <div class="endpoint-list">
+          {#each endpointRows as row (row.endpoint.id)}
+            <button
+              type="button"
+              class="endpoint-row"
+              data-endpoint-id={row.endpoint.id}
+              data-tone={row.tone}
+              aria-label="{row.endpoint.label}. {row.status}. {row.recent}. Latest {formatLatency(row.latency)} milliseconds."
+              onclick={() => handleEndpointDrill(row.endpoint.id, 'live')}
+              onkeydown={(event) => {
+                if (event.shiftKey && (event.key === 'Enter' || event.key === ' ')) {
+                  event.preventDefault();
+                  handleEndpointDrill(row.endpoint.id, 'diagnose');
+                }
+              }}
+            >
+              <span class="endpoint-state" aria-hidden="true"></span>
+              <span class="endpoint-main">
+                <strong>{row.endpoint.label}</strong>
+                <small>{row.status}</small>
+                <em>{row.recent}</em>
+              </span>
+              <span class="endpoint-history" aria-hidden="true">
+                {#if row.timeline}
+                  <svg
+                    class="endpoint-trace"
+                    viewBox="0 0 {HISTORY_VIEWBOX_WIDTH} {HISTORY_VIEWBOX_HEIGHT}"
+                    preserveAspectRatio="none"
+                  >
+                    <path d={historyPath(row.timeline)} />
+                  </svg>
+                  {#each historyMarkers(row.timeline) as point, markerIndex (`${row.endpoint.id}-${point.round}-${point.t}-${point.status}-${markerIndex}`)}
+                    <span
+                      class="endpoint-history-marker"
+                      data-status={point.status}
+                      style:left="{timelinePct(point.t)}%"
+                      style:top="{historyPointY(point)}%"
+                    ></span>
+                  {/each}
+                {:else}
+                  <span class="endpoint-history-empty"></span>
+                {/if}
+              </span>
+              <span class="endpoint-metric">
+                <strong>{formatLatency(row.latency)} <small>ms</small></strong>
+                <em>{formatDelta(row.delta)} ms</em>
+              </span>
+            </button>
+          {/each}
+        </div>
+      </section>
+
+      <section class="event-panel" aria-label="Event log">
+        <header class="panel-header">
+          <div>
+            <h2>Event Log</h2>
+          </div>
+        </header>
+        <div class="event-timeline" aria-label="Event timeline">
+          <p class="overview-time-window event-timeline-window">{timelineWindowLabel}</p>
+          <div class="overview-time-axis" aria-hidden="true">
+            {#each timelineTicks as tick (tick.pct)}
+              <span style:left="{tick.pct}%">{tick.label}</span>
+            {/each}
+          </div>
+          <div class="event-track" aria-hidden="true">
+            {#each eventRows as item (item.id)}
+              {#if item.t !== null}
+                <span
+                  class="event-pin"
+                  data-tone={item.tone}
+                  style:left="{timelinePct(item.t)}%"
+                ></span>
+              {/if}
+            {/each}
+          </div>
+        </div>
+        <ol class="event-list">
+          {#each eventRows as item (item.id)}
+            <li data-tone={item.tone}>
+              <button
+                type="button"
+                class="event-entry"
+                data-tone={item.tone}
+                onclick={() => handleEventDrill(item)}
+              >
+                <time>{item.time}</time>
+                <span>
+                  <strong>{item.label}</strong>
+                  <small>{item.evidence}</small>
+                </span>
+                <em>{item.age}</em>
+              </button>
+            </li>
+          {/each}
+        </ol>
+        <button type="button" class="event-more" onclick={handleEvidenceAction}>View evidence trail</button>
+      </section>
     </div>
   </div>
 </section>
 
 <style>
-  .overview {
-    --status-shell-gap: 14px;
-    --status-verdict-h: 138px;
-    --status-dial-pad-y: 16px;
-    --status-mobile-dial-size: 300px;
-    --status-mobile-dial-row-h: calc(var(--status-mobile-dial-size) + var(--status-dial-pad-y));
-    --status-mobile-detail-row-h: 186px;
+  .figma-overview {
     flex: 1;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    padding: 12px 24px 16px;
-    min-height: 0;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: clamp(32px, 5vw, 72px) clamp(16px, 4vw, 48px) 48px;
   }
 
-  .status-shell {
-    width: 100%;
-    max-width: min(92vw, var(--content-max-w));
+  .overview-inner {
+    width: min(100%, 1320px);
     margin: 0 auto;
     display: grid;
-    grid-template-rows: var(--status-verdict-h) minmax(0, 1fr);
-    gap: var(--status-shell-gap);
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-  }
-  .status-shell :global(.verdict.hero) {
-    height: var(--status-verdict-h);
-    min-height: 0;
-    overflow: hidden;
+    gap: 32px;
   }
 
-  /* Verdict-first Status: answer on top, live dial as the left instrument,
-     endpoint comparison and event feed on the right. Collapses to one column
-     below 1024 px. Fluid above 1440 up to the --content-max-w ceiling so
-     ultrawide monitors use their real estate instead of floating the grid in a
-     centered 1440 box. */
-  .overview-grid {
-    width: 100%;
-    flex: 1 1 auto;
+  .verdict-card {
+    min-height: 330px;
     display: grid;
-    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-    gap: 20px;
-    align-items: stretch;
-    min-height: 0;
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: clamp(28px, 4vw, 56px);
+    align-items: center;
+    padding: clamp(28px, 4vw, 56px);
+    border: 1px solid var(--shell-border-strong);
+    border-radius: 18px;
+    background:
+      radial-gradient(circle at 18% 45%, var(--shell-bg-cyan), transparent 34%),
+      linear-gradient(135deg, var(--shell-panel-raised), rgba(16, 23, 34, 0.72));
+    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.18);
+  }
+
+  .score-ring {
+    --score-percent: 0%;
+    width: 172px;
+    justify-self: center;
+    display: grid;
+    justify-items: center;
+    gap: 12px;
+    text-align: center;
+    color: var(--accent-cyan);
+  }
+
+  .score-ring::before {
+    content: '';
+    width: 154px;
+    height: 154px;
+    grid-area: 1 / 1;
+    border-radius: 50%;
+    background: conic-gradient(var(--accent-cyan) var(--score-percent), rgba(103, 232, 249, 0.12) 0);
+    box-shadow: 0 0 32px rgba(103, 232, 249, 0.18);
+  }
+
+  .score-ring-inner {
+    width: 126px;
+    height: 126px;
+    margin-top: 14px;
+    grid-area: 1 / 1;
+    border-radius: 50%;
+    display: grid;
+    place-content: center;
+    gap: 4px;
+    background: var(--shell-panel);
+    color: var(--t1);
+  }
+
+  .score-ring strong {
+    font-size: clamp(36px, 4vw, 48px);
+    line-height: 1;
+    letter-spacing: var(--tr-body);
+  }
+
+  .score-ring span,
+  .score-ring small {
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: var(--tr-label);
+    color: var(--accent-cyan);
+  }
+
+  .score-ring span { font-size: var(--ts-xs); font-weight: 700; }
+  .score-ring small { max-width: 150px; font-size: 10px; color: var(--t4); }
+
+  .verdict-copy {
+    min-width: 0;
+    display: grid;
+    gap: 16px;
+  }
+
+  .verdict-kickers {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .severity-pill,
+  .measuring-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    min-height: 28px;
+    padding: 0 14px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: var(--ts-sm);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: var(--tr-label);
+  }
+
+  .severity-pill[data-tone='good'] {
+    color: var(--accent-green);
+    border: 1px solid var(--shell-success-border);
+    background: var(--shell-success-bg);
+  }
+
+  .severity-pill[data-tone='warn'],
+  .severity-pill[data-tone='watch'] {
+    color: var(--accent-amber);
+    border: 1px solid var(--shell-stop-border);
+    background: var(--shell-bg-amber);
+  }
+
+  .severity-pill[data-tone='collecting'],
+  .measuring-pill {
+    color: var(--accent-cyan);
+    border: 1px solid var(--shell-border-strong);
+    background: var(--shell-bg-cyan);
+  }
+
+  .measuring-pill span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-cyan);
+    box-shadow: 0 0 12px var(--glow-cyan);
+  }
+
+  h1 {
+    margin: 0;
+    max-width: 900px;
+    font-size: clamp(30px, 4.2vw, 52px);
+    line-height: 1.08;
+    letter-spacing: var(--tr-tight);
+    color: var(--t1);
+  }
+
+  p {
+    margin: 0;
+    max-width: 820px;
+    color: var(--t2);
+    font-size: clamp(15px, 1.6vw, 19px);
+    line-height: 1.65;
+  }
+
+  p strong {
+    color: var(--t1);
+    font-weight: 800;
+  }
+
+  .interpretation {
+    color: var(--t3);
+  }
+
+  .verdict-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 18px;
+    padding-top: 10px;
+  }
+
+  .primary-action,
+  .secondary-action,
+  .panel-header button,
+  .event-more {
+    min-height: 44px;
+    border-radius: 8px;
+    font-family: var(--sans);
+    font-weight: 800;
+    cursor: pointer;
+  }
+
+  .primary-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 28px;
+    border: 1px solid transparent;
+    background: linear-gradient(135deg, var(--accent-cyan), #2f80ff);
+    color: var(--shell-bg);
+    box-shadow: 0 0 28px rgba(103, 232, 249, 0.26);
+  }
+
+  .primary-action:disabled {
+    cursor: default;
+    opacity: 0.72;
+    box-shadow: none;
+  }
+
+  .secondary-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 18px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--t2);
+  }
+
+  .secondary-action:hover,
+  .panel-header button:hover,
+  .event-more:hover {
+    color: var(--accent-cyan);
+  }
+
+  .lower-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.8fr);
+    gap: 32px;
+    align-items: start;
+  }
+
+  .measured-panel,
+  .event-panel {
+    min-width: 0;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 54px;
+    border-bottom: 1px solid var(--shell-border);
+  }
+
+  .panel-header h2 {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: clamp(16px, 1.7vw, 22px);
+    text-transform: uppercase;
+    letter-spacing: var(--tr-kicker);
+    color: var(--t2);
+  }
+
+  .panel-header p {
+    margin: 5px 0 0;
+    font-family: var(--mono);
+    font-size: 10px;
+    line-height: 1.2;
+    letter-spacing: var(--tr-label);
+    text-transform: uppercase;
+    color: var(--t4);
+  }
+
+  .panel-header button {
+    border: 0;
+    background: transparent;
+    color: var(--accent-cyan);
+  }
+
+  .overview-time-axis {
+    position: relative;
+    height: 24px;
+    margin-top: 12px;
+    color: var(--t4);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: var(--tr-label);
+    text-transform: uppercase;
+  }
+
+  .overview-time-axis::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 11px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--shell-border-strong), transparent);
+  }
+
+  .overview-time-axis span {
+    position: absolute;
+    top: 0;
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+
+  .overview-time-axis span:first-child { transform: translateX(0); }
+  .overview-time-axis span:last-child { transform: translateX(-100%); color: var(--accent-cyan); }
+
+  .endpoint-list,
+  .event-list {
+    margin-top: 10px;
+    border: 1px solid var(--shell-border);
+    border-radius: 18px;
+    background: rgba(11, 17, 27, 0.74);
     overflow: hidden;
   }
-  /* container-type lets the dial size against this column's actual width via
-     `cqi`, so it grows with the column on wide viewports without having to
-     know about the rail, gutters, or viewport directly. */
-  .overview-left {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-width: 0;
-    min-height: 0;
-    height: 100%;
-    container-type: size;
-  }
-  .overview-right {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    min-width: 0;
-    min-height: 0;
-  }
-  .card-slot {
-    min-width: 0;
-    min-height: 0;
-  }
-  /* Desktop: both racing and events live side-by-side in the right column
-     (the 2-col grid above stacks them vertically). The subtab strip is
-     hidden — it only exists as a mobile affordance. */
-  .overview-subtab-strip { display: none; }
 
-  @media (max-width: 1023px) {
-    .overview-grid {
+  .endpoint-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 20px minmax(190px, 0.9fr) minmax(220px, 1.15fr) minmax(76px, auto);
+    gap: 16px;
+    align-items: center;
+    min-height: 102px;
+    padding: 18px 20px;
+    border: 0;
+    border-bottom: 1px solid var(--shell-border);
+    background: transparent;
+    color: var(--t1);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .endpoint-row:last-child { border-bottom: 0; }
+  .endpoint-row:hover { background: var(--shell-panel-hover); }
+
+  .endpoint-state {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+    color: var(--t4);
+  }
+
+  .endpoint-row[data-tone='good'] .endpoint-state { color: var(--accent-green); }
+  .endpoint-row[data-tone='warn'] .endpoint-state { color: var(--accent-amber); }
+  .endpoint-row[data-tone='bad'] .endpoint-state { color: var(--accent-pink); }
+  .endpoint-row[data-tone='collecting'] .endpoint-state { color: var(--accent-cyan); }
+
+  .endpoint-main {
+    min-width: 0;
+    display: grid;
+    gap: 5px;
+  }
+
+  .endpoint-main strong {
+    width: fit-content;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-bottom: 1px solid var(--shell-border-strong);
+    font-family: var(--mono);
+    font-size: clamp(15px, 1.6vw, 18px);
+    color: var(--t1);
+  }
+
+  .endpoint-main small,
+  .endpoint-main em,
+  .endpoint-metric em,
+  .event-list small {
+    font-style: normal;
+    color: var(--t3);
+  }
+
+  .endpoint-main em {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--ts-xs);
+    color: var(--t4);
+  }
+
+  .endpoint-history {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+    height: 54px;
+    border-radius: 10px;
+    background: rgba(8, 14, 24, 0.54);
+    overflow: hidden;
+  }
+
+  .endpoint-history::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 10px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  }
+
+  .endpoint-trace {
+    position: absolute;
+    inset: 7px 8px;
+    width: calc(100% - 16px);
+    height: calc(100% - 14px);
+    overflow: visible;
+  }
+
+  .endpoint-trace path {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    color: var(--accent-green);
+    filter: drop-shadow(0 0 8px rgba(44, 245, 169, 0.18));
+  }
+
+  .endpoint-row[data-tone='warn'] .endpoint-trace path { color: var(--accent-amber); }
+  .endpoint-row[data-tone='bad'] .endpoint-trace path { color: var(--accent-pink); }
+  .endpoint-row[data-tone='collecting'] .endpoint-trace path { color: var(--accent-cyan); }
+
+  .endpoint-history-marker {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--accent-amber);
+    border: 2px solid rgba(8, 14, 24, 0.92);
+    box-shadow: 0 0 14px rgba(250, 204, 21, 0.35);
+  }
+
+  .endpoint-history-marker[data-status='slow'] {
+    background: var(--accent-pink);
+    box-shadow: 0 0 16px rgba(251, 113, 133, 0.36);
+  }
+
+  .endpoint-history-marker[data-status='failed'] {
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    background: var(--accent-pink);
+    box-shadow: 0 0 16px rgba(251, 113, 133, 0.42);
+  }
+
+  .endpoint-metric {
+    display: grid;
+    justify-items: end;
+    gap: 4px;
+    font-family: var(--mono);
+  }
+
+  .endpoint-metric strong {
+    font-size: clamp(18px, 1.8vw, 24px);
+    color: var(--t1);
+  }
+
+  .endpoint-metric small {
+    font-size: var(--ts-xs);
+    color: var(--t2);
+  }
+
+  .event-timeline {
+    margin-top: 12px;
+    padding: 12px 14px 14px;
+    border: 1px solid var(--shell-border);
+    border-radius: 14px;
+    background: rgba(8, 14, 24, 0.62);
+  }
+
+  .event-timeline-window {
+    margin: 0 0 8px;
+    max-width: none;
+    font-family: var(--mono);
+    font-size: 10px;
+    line-height: 1.2;
+    letter-spacing: var(--tr-label);
+    text-transform: uppercase;
+    color: var(--t4);
+  }
+
+  .event-timeline .overview-time-axis {
+    margin-top: 0;
+  }
+
+  .event-track {
+    position: relative;
+    height: 36px;
+    margin-top: 4px;
+  }
+
+  .event-track::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 17px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(103, 232, 249, 0.12), rgba(103, 232, 249, 0.38), rgba(103, 232, 249, 0.12));
+  }
+
+  .event-pin {
+    position: absolute;
+    top: 17px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--accent-cyan);
+    border: 2px solid rgba(8, 14, 24, 0.95);
+    box-shadow: 0 0 18px rgba(103, 232, 249, 0.4);
+  }
+
+  .event-pin[data-tone='good'] {
+    background: var(--accent-green);
+    box-shadow: 0 0 18px rgba(44, 245, 169, 0.34);
+  }
+
+  .event-pin[data-tone='watch'] {
+    background: var(--accent-amber);
+    box-shadow: 0 0 18px rgba(250, 204, 21, 0.34);
+  }
+
+  .event-pin[data-tone='bad'] {
+    background: var(--accent-pink);
+    box-shadow: 0 0 18px rgba(251, 113, 133, 0.38);
+  }
+
+  .event-list {
+    list-style: none;
+    padding: 18px;
+    display: grid;
+    gap: 10px;
+  }
+
+  .event-list li {
+    min-width: 0;
+  }
+
+  .event-entry {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) 58px;
+    gap: 12px;
+    align-items: start;
+    min-height: 54px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    font-family: var(--mono);
+    cursor: pointer;
+  }
+
+  .event-list time {
+    color: var(--t4);
+    font-size: var(--ts-sm);
+  }
+
+  .event-entry span {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .event-list strong {
+    color: var(--t1);
+    font-size: var(--ts-md);
+    line-height: 1.45;
+  }
+
+  .event-entry em {
+    justify-self: end;
+    font-style: normal;
+    font-size: var(--ts-xs);
+    color: var(--t4);
+    white-space: nowrap;
+  }
+
+  .event-entry:hover strong,
+  .event-entry:focus-visible strong {
+    color: var(--accent-cyan);
+  }
+
+  .event-list li[data-tone='good'] strong { color: var(--accent-green); }
+  .event-list li[data-tone='watch'] strong { color: var(--accent-amber); }
+  .event-list li[data-tone='bad'] strong { color: var(--accent-pink); }
+
+  .event-more {
+    width: 100%;
+    margin-top: 14px;
+    border: 1px solid var(--shell-border);
+    background: transparent;
+    color: var(--t2);
+    text-transform: uppercase;
+    letter-spacing: var(--tr-label);
+    font-family: var(--mono);
+    font-size: var(--ts-xs);
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 3px;
+  }
+
+  @media (max-width: 1100px) {
+    .verdict-card {
+      grid-template-columns: 170px minmax(0, 1fr);
+      gap: 28px;
+    }
+    .lower-grid {
       grid-template-columns: 1fr;
-      grid-template-rows: var(--status-mobile-dial-row-h) var(--status-mobile-detail-row-h);
-      gap: 10px;
-      align-content: start;
-    }
-    .overview-left {
-      height: var(--status-mobile-dial-row-h);
-    }
-    .overview-right {
-      height: var(--status-mobile-detail-row-h);
-      overflow: hidden;
-    }
-    .card-slot {
-      flex: 1 1 0;
-      overflow: hidden;
-    }
-    /* Narrow viewports: expose the subtab strip and render only the active
-       card. The inactive card stays mounted in the DOM via CSS hide so its
-       store subscriptions persist (no resubscribe jitter when toggling). */
-    .overview-subtab-strip { display: block; }
-    .overview-right[data-subtab="racing"] .card-slot--events { display: none; }
-    .overview-right[data-subtab="events"] .card-slot--racing { display: none; }
-  }
-  @media (max-width: 767px) {
-    .overview { --status-dial-pad-y: 8px; }
-    .overview {
-      padding: 8px 12px;
-      overflow-x: hidden;
-      overflow-y: hidden;
-    }
-    .status-shell { gap: 6px; }
-    .overview-grid { grid-template-columns: 1fr; gap: 6px; align-content: start; }
-    .overview-left, .overview-right { gap: 8px; }
-  }
-
-  @media (max-height: 900px) and (min-width: 768px) {
-    .overview { --status-shell-gap: 10px; }
-    .overview { padding-block: 10px; }
-    .overview-grid { gap: 16px; }
-    .overview-subtab-strip { display: block; }
-    .overview-right[data-subtab="racing"] .card-slot--events { display: none; }
-    .overview-right[data-subtab="events"] .card-slot--racing { display: none; }
-  }
-
-  @media (max-width: 767px) and (max-height: 860px) {
-    .overview {
-      --status-mobile-dial-size: 300px;
-      --status-mobile-detail-row-h: 186px;
-    }
-    .overview { padding-block: 6px; }
-    .status-shell,
-    .overview-grid,
-    .overview-left,
-    .overview-right { gap: 6px; }
-  }
-
-  @media (max-width: 375px) {
-    .overview {
-      --status-mobile-dial-size: 280px;
     }
   }
 
-  @media (max-width: 767px) and (max-height: 760px) {
-    .overview {
-      --status-dial-pad-y: 4px;
-      --status-mobile-dial-size: 262px;
-      --status-mobile-detail-row-h: 152px;
+  @media (max-width: 700px) {
+    .figma-overview {
+      padding: 16px 16px 32px;
     }
-  }
-
-  @media (max-width: 375px) and (max-height: 760px) {
-    .overview {
-      --status-mobile-dial-size: 244px;
+    .overview-inner {
+      gap: 24px;
+    }
+    .verdict-card {
+      grid-template-columns: 1fr;
+      justify-items: start;
+      padding: 20px 24px 22px;
+      min-height: 0;
+      gap: 16px;
+    }
+    .score-ring {
+      justify-self: center;
+      width: 132px;
+      order: -1;
+    }
+    .score-ring::before {
+      width: 118px;
+      height: 118px;
+    }
+    .score-ring-inner {
+      width: 94px;
+      height: 94px;
+      margin-top: 12px;
+    }
+    .score-ring small { display: none; }
+    .score-ring strong { font-size: 34px; }
+    h1 { font-size: 31px; line-height: 1.08; }
+    p { font-size: 15px; line-height: 1.55; }
+    .endpoint-row {
+      grid-template-columns: 18px minmax(0, 1fr) minmax(86px, 120px);
+      gap: 12px;
+      min-height: 128px;
+      padding: 14px;
+    }
+    .endpoint-main em {
+      white-space: normal;
+    }
+    .endpoint-history {
+      grid-column: 2 / -1;
+      grid-row: 2;
+      height: 52px;
+    }
+    .endpoint-metric {
+      align-self: start;
+    }
+    .event-entry {
+      grid-template-columns: 68px minmax(0, 1fr);
+    }
+    .event-entry em {
+      grid-column: 2;
+      justify-self: start;
+    }
+    .verdict-actions {
+      width: 100%;
+    }
+    .primary-action,
+    .secondary-action {
+      width: 100%;
+      justify-content: center;
     }
   }
 </style>
