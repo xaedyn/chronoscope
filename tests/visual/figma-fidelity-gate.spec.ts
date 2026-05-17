@@ -195,7 +195,8 @@ async function expectRouteAnchors(page: Page, route: ReferenceRoute['route']): P
 
   if (route === 'overview') {
     await expect(page.locator('.verdict-card')).toBeVisible();
-    await expect(page.locator('.score-ring')).toBeVisible();
+    // .score-ring removed in v2 PR 1 — verdict card no longer carries a
+    // numeric score (matches v2's editorial posture).
     await expect(page.locator('.endpoint-row')).toHaveCount(4);
     await expect(page.locator('.event-timeline')).toBeVisible();
     return;
