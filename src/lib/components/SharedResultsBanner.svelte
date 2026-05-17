@@ -58,7 +58,7 @@
     justify-content: space-between;
     gap: var(--spacing-sm);
     padding: var(--spacing-xs) var(--spacing-md);
-    background: rgba(12,10,20,.65);
+    background: color-mix(in srgb, var(--shell-panel) 65%, transparent);
     backdrop-filter: blur(24px) saturate(1.3);
     -webkit-backdrop-filter: blur(24px) saturate(1.3);
     border-bottom: 1px solid var(--glass-border);

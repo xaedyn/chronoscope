@@ -135,7 +135,7 @@
   }
 
   .dialog {
-    background: rgba(12,10,20,.75);
+    background: color-mix(in srgb, var(--shell-panel) 75%, transparent);
     backdrop-filter: blur(40px) saturate(1.4);
     -webkit-backdrop-filter: blur(40px) saturate(1.4);
     border: 1px solid var(--glass-border);
@@ -144,7 +144,7 @@
     min-width: 360px;
     max-width: 480px;
     width: 100%;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 8px 32px color-mix(in srgb, black 60%, transparent);
     outline: none;
     position: relative;
     overflow: hidden;
@@ -224,7 +224,7 @@
   }
 
   .shortcut-table tr:not(:last-child) td {
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid color-mix(in srgb, var(--t1) 4%, transparent);
   }
 
   kbd {
