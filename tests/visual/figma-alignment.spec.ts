@@ -112,7 +112,10 @@ test.describe('Figma alignment shell', () => {
     await expect(page.locator('.verdict-card h1')).toContainText('Collecting enough data');
     await expect(page.locator('.verdict-actions .primary-action')).toHaveText(/Collect more samples/i);
     await expect(page.locator('.verdict-actions .primary-action')).toBeDisabled();
-    await expect(page.locator('.score-ring strong')).toHaveText('—');
+    // Score ring removed in v2 PR 1 — the numeric score that previously
+    // lived in the verdict card was dropped to match v2's editorial
+    // posture. No replacement assertion required; the severity pill +
+    // headline carry the at-a-glance state signal.
   });
 
   test('Overview healthy state promotes a snapshot instead of an outside-network chase', async ({ page }) => {
