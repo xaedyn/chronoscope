@@ -90,6 +90,19 @@
     }, 150);
   }
 
+  // Quick-action openers — close this drawer first so only one overlay
+  // is open at a time. The animated close runs in parallel with the new
+  // overlay opening; that's intentional and matches existing popover
+  // open/close timing.
+  function openEndpoints(): void {
+    close();
+    if (!$uiStore.showEndpoints) uiStore.toggleEndpoints();
+  }
+  function openShare(): void {
+    close();
+    if (!$uiStore.showShare) uiStore.toggleShare();
+  }
+
   let drawerContentEl: HTMLDivElement;
 
   function handleBackdropClick(event: MouseEvent): void {
@@ -278,6 +291,40 @@
           Stop test to edit locked settings.
         </p>
       {/if}
+
+      <!-- Quick actions: replaces the prior trio of icon ovals
+           (endpoints/share/run-details) that the synthesis design contract
+           collapsed off the shell pill. Buttons open the corresponding
+           overlay and close this drawer so only one sheet is open at a
+           time. -->
+      <div class="quick-actions" role="group" aria-label="Quick actions">
+        <button
+          type="button"
+          class="quick-action-btn"
+          aria-label="Open endpoint management"
+          onclick={openEndpoints}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <rect x="2" y="3" width="12" height="3" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
+            <rect x="2" y="10" width="12" height="3" rx="0.5" stroke="currentColor" stroke-width="1.2"/>
+            <circle cx="4" cy="4.5" r="0.6" fill="currentColor"/>
+            <circle cx="4" cy="11.5" r="0.6" fill="currentColor"/>
+          </svg>
+          <span>Endpoints</span>
+        </button>
+        <button
+          type="button"
+          class="quick-action-btn"
+          aria-label="Open share results"
+          onclick={openShare}
+        >
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M4 10V12.5C4 13.052 4.448 13.5 5 13.5H11C11.552 13.5 12 13.052 12 12.5V10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M8 2.5V10M8 2.5L5.5 5M8 2.5L10.5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          <span>Share</span>
+        </button>
+      </div>
 
       <!-- Timing fields -->
       <div class="field">
@@ -632,6 +679,42 @@
     font-family: var(--sans);
     font-size: 12px;
     line-height: 1.4;
+  }
+
+  /* ── Quick actions ──────────────────────────────────────────────────────── */
+  .quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-xs);
+  }
+  .quick-action-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: var(--btn-radius);
+    border: 1px solid var(--shell-border);
+    background: var(--glass-bg);
+    color: var(--t2);
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+  }
+  .quick-action-btn:hover {
+    background: var(--shell-panel-hover);
+    color: var(--t1);
+    border-color: var(--shell-border-strong);
+  }
+  .quick-action-btn:focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .quick-action-btn { transition: none; }
   }
 
   /* ── Fields ──────────────────────────────────────────────────────────────── */
