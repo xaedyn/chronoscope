@@ -8,13 +8,14 @@ import { test, expect, type Page } from '@playwright/test';
 // elements that intentionally display URLs (`.rail-row-url`, `.diagnose-title-url`)
 // are excluded.
 //
-// Class mapping (verified against component source 2026-04-25):
-//   EndpointRail   →  .rail-row-label       (primary)  /  .rail-row-url      (subtitle — excluded)
+// Class mapping (verified against component source — updated in PR 5 of the
+// synthesis arc after EndpointRail and EventFeed were deleted):
 //   Investigate    →  .diagnose-title-name  (primary)  /  .diagnose-title-url (subtitle — excluded)
-//   EventFeed      →  .feed-name            (primary)  — no URL subtitle element
 //
-// The sentinel test injects a synthetic .rail-row-label with a raw URL into
-// the live DOM and asserts the sweep catches it, proving fail-closed behaviour.
+// The sentinel test injects a synthetic .diagnose-title-name with a raw URL
+// into the live DOM and asserts the sweep catches it, proving fail-closed
+// behaviour. New primary-identifier surfaces added by future PRs (e.g.
+// EndpointDetail in PR 7) must register their selector here.
 //
 // Coverage gap: ConfigStagingBanner is reachable only via a staged share URL and is excluded from this Playwright sweep — its `.endpoint-url` subtitle is the only URL surface it renders, and that's a permitted exception per AC5.
 
@@ -26,9 +27,7 @@ const VIEWPORTS = [
 // Selectors for primary identifier elements.  Subtitle / secondary elements
 // that intentionally carry URLs are NOT listed here.
 const PRIMARY_SELECTORS = [
-  '.rail-row-label',
   '.diagnose-title-name',
-  '.feed-name',
 ] as const;
 
 // Patterns that unambiguously identify a raw URL string.
@@ -93,52 +92,25 @@ const findRawUrlLeaks = async (page: Page): Promise<readonly RawUrlLeak[]> => {
 test.describe('AC5 — no raw URL in primary identifiers', () => {
   for (const vp of VIEWPORTS) {
     test.describe(`@ ${vp.name} (${vp.width}×${vp.height})`, () => {
-      test('Status view', async ({ page }) => {
-        await page.setViewportSize({ width: vp.width, height: vp.height });
-        await page.goto('/');
-        await page.waitForSelector('#chronoscope-root');
-        // Deterministic wait: sweep runs only after primary-identifier content mounts.
-        await page.waitForSelector('.rail-row-label, .feed-name', { state: 'attached' });
-
-        const leaks = await findRawUrlLeaks(page);
-        expect(
-          leaks,
-          `Raw URL(s) found in primary identifier elements on Status: ${JSON.stringify(leaks)}`,
-        ).toEqual([]);
-      });
-
-      test('Live view', async ({ page }) => {
-        await page.setViewportSize({ width: vp.width, height: vp.height });
-        await page.goto('/');
-        await page.waitForSelector('#chronoscope-root');
-        // Deterministic wait: sweep runs only after primary-identifier content mounts.
-        await page.waitForSelector('.rail-row-label, .feed-name', { state: 'attached' });
-
-        // Navigate to the Live view via its ViewSwitcher tab.
-        await page.getByRole('button', { name: /^Live/ }).click();
-        // Assert the Live view section is mounted before sweeping.
-        await page.waitForSelector('section[aria-label="Live latency trace"]');
-
-        const leaks = await findRawUrlLeaks(page);
-        expect(
-          leaks,
-          `Raw URL(s) found in primary identifier elements on Live: ${JSON.stringify(leaks)}`,
-        ).toEqual([]);
-      });
+      // Note: Status and Live views were protected by the now-deleted
+      // EndpointRail / EventFeed selectors. After PR 5 of the synthesis
+      // arc, those surfaces' primary-identifier sweeps will need new
+      // selectors registered in PRIMARY_SELECTORS (likely .endpoint-row
+      // strong for Overview and .live-footer-chip for Live, once those
+      // are confirmed safe-by-design in PR 6/7). For now this spec
+      // covers the Investigate view only, which retains
+      // .diagnose-title-name as its primary-identifier selector.
 
       test('Investigate view', async ({ page }) => {
         await page.setViewportSize({ width: vp.width, height: vp.height });
         await page.goto('/');
         await page.waitForSelector('#chronoscope-root');
-        // Deterministic wait: sweep runs only after primary-identifier content mounts.
-        await page.waitForSelector('.rail-row-label, .feed-name', { state: 'attached' });
-
         // Navigate to the Investigate view via the ViewSwitcher button.
-        // Anchored regex avoids matching aria-labels like "Investigate endpoint X…"
-        // on CausalVerdictStrip drill buttons.
         await page.getByRole('button', { name: /^Investigate/ }).click();
         // Assert the Investigate view section is mounted before sweeping.
         await page.waitForSelector('section[aria-label="Investigate"]');
+        // Deterministic wait: sweep runs only after primary-identifier content mounts.
+        await page.waitForSelector('.diagnose-title-name', { state: 'attached' });
 
         const leaks = await findRawUrlLeaks(page);
         expect(
@@ -152,12 +124,13 @@ test.describe('AC5 — no raw URL in primary identifiers', () => {
 
 // ── Sentinel test — fail-closed verification ──────────────────────────────────
 //
-// Injects a synthetic .rail-row-label element containing a raw URL into the
-// live DOM, then asserts the sweep detects it.  If the sweep returns empty here,
-// the detection logic is broken and would silently miss real regressions.
+// Injects a synthetic .diagnose-title-name element containing a raw URL
+// into the live DOM, then asserts the sweep detects it. If the sweep
+// returns empty here, the detection logic is broken and would silently
+// miss real regressions.
 
 test.describe('AC5 sentinel — sweep is fail-closed', () => {
-  test('detects injected raw URL in .rail-row-label', async ({ page }) => {
+  test('detects injected raw URL in .diagnose-title-name', async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
     await page.goto('/');
     await page.waitForSelector('#chronoscope-root');
@@ -166,7 +139,7 @@ test.describe('AC5 sentinel — sweep is fail-closed', () => {
     // Inject a visible span with the primary-identifier class and a raw URL.
     await page.evaluate(() => {
       const sentinel = document.createElement('span');
-      sentinel.className = 'rail-row-label';
+      sentinel.className = 'diagnose-title-name';
       sentinel.textContent = 'https://sentinel.example.com/test';
       sentinel.style.cssText = 'display:inline-block;width:200px;height:20px;position:fixed;top:10px;left:10px;z-index:9999;visibility:visible';
       document.body.appendChild(sentinel);

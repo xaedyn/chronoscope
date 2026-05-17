@@ -41,7 +41,12 @@ describe('Figma redesign guardrails', () => {
   it('uses the aligned Overview shell instead of the old permanent endpoint rail', () => {
     const layoutSource = readRepoFile('src/lib/components/Layout.svelte');
 
-    expect(layoutSource).toContain('FigmaOverviewView');
+    // PR 5 of synthesis arc: FigmaOverviewView was renamed to OverviewView
+    // (the original dial-era OverviewView was deleted alongside the other
+    // orphans). The assertion still locks in the contract that Layout mounts
+    // the canonical Overview surface and does not regress to the retired
+    // EndpointRail.
+    expect(layoutSource).toContain('OverviewView');
     expect(layoutSource).not.toContain('EndpointRail');
   });
 

@@ -13,7 +13,7 @@
   import { tokens } from '$lib/tokens';
   import Topbar from './Topbar.svelte';
   import ViewSwitcher from './ViewSwitcher.svelte';
-  import FigmaOverviewView from './FigmaOverviewView.svelte';
+  import OverviewView from './OverviewView.svelte';
   import LiveView from './LiveView.svelte';
   import DiagnoseView from './DiagnoseView.svelte';
   import ReportView from './ReportView.svelte';
@@ -98,7 +98,7 @@
               compatibility, but the primary ViewSwitcher exposes Overview,
               Live, Investigate, and Report.
             -->
-            <FigmaOverviewView />
+            <OverviewView />
           {/if}
         </main>
       </div>

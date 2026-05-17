@@ -6,7 +6,9 @@
 // not relearn it per page.
 //
 // Rules run top-to-bottom; first match wins. Precedence preserves the
-// behaviour of the legacy informal derivation in FigmaOverviewView.svelte:
+// behaviour of the legacy informal derivation in OverviewView.svelte (the
+// pre-rename FigmaOverviewView; ChronographDial-era OverviewView was deleted
+// in PR 5 and the synthesis OverviewView assumed its name):
 // a recent timeout or error always trumps "not enough samples", so a
 // freshly-added endpoint that immediately times out shows `bad`, not
 // `collecting`.
