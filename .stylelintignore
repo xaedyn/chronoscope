@@ -20,19 +20,25 @@ tests/**/*
 #
 # OWNERSHIP MAP (remove file from ignore in the listed PR):
 
-# PR 5 (dead-code purge) — these files are DELETED. Removed from ignore by virtue of deletion.
-src/lib/components/ChronographDial.svelte
-src/lib/components/CausalVerdictStrip.svelte
-src/lib/components/RacingStrip.svelte
-src/lib/components/RunStorylineCard.svelte
-src/lib/components/OverviewSubtabStrip.svelte
-src/lib/components/EventFeed.svelte
+# PR 5 (dead-code purge) — DONE. Files DELETED so the ignore entries below
+# are no longer reachable; left here as a record of the deletion list.
+# - src/lib/components/ChronographDial.svelte (deleted)
+# - src/lib/components/CausalVerdictStrip.svelte (deleted)
+# - src/lib/components/RacingStrip.svelte (deleted)
+# - src/lib/components/RunStorylineCard.svelte (deleted)
+# - src/lib/components/OverviewSubtabStrip.svelte (deleted)
+# - src/lib/components/EventFeed.svelte (deleted)
+# - src/lib/components/OverviewView.svelte (deleted; orphan dial-era version)
+# - src/lib/components/EndpointRail.svelte (deleted)
+# - src/lib/components/LatencyLegend.svelte (deleted)
 
 # PR 4 (router + shell calmness) — REMOVED from ignore: violations cleaned in PR 4
 # (Topbar: tokenized rgba shell-backdrop + cyan-gradient color-mix; ViewSwitcher: same).
 
-# PR 6 (NetworkTopology + Overview placement) — FigmaOverviewView renamed to OverviewView; clean during rename.
-src/lib/components/FigmaOverviewView.svelte
+# PR 6 (NetworkTopology + Overview placement) — FigmaOverviewView renamed to
+# OverviewView in PR 5. The file's CSS violations get cleaned during PR 6's
+# NetworkTopology placement and verdict-card geometry tightening.
+src/lib/components/OverviewView.svelte
 
 # PR 7 (EndpointDetail + DiagnoseView decomposition) — DiagnoseView heavily modified; clean during decomposition.
 src/lib/components/DiagnoseView.svelte
