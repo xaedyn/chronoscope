@@ -54,11 +54,14 @@ src/lib/components/SettingsDrawer.svelte
 src/lib/components/CompanionPanel.svelte
 src/lib/components/ConfigStagingBanner.svelte
 src/lib/components/LiveView.svelte
-src/lib/components/SharedResultsBanner.svelte
 src/lib/components/IntelligencePanel.svelte
 src/lib/components/EndpointDrawer.svelte
 src/lib/components/EndpointRow.svelte
-src/lib/components/KeyboardOverlay.svelte
 src/lib/components/ScopeCanvas.svelte
 src/lib/components/LocalProofPanel.svelte
 src/app.css
+
+# v2 aesthetic arc PR 7 — REMOVED from ignore (raw values tokenised to
+# the v2 neutral palette):
+# - SharedResultsBanner.svelte (1 raw rgba → shell-panel color-mix)
+# - KeyboardOverlay.svelte (3 raw rgba → shell-panel + t1 + black color-mix)
