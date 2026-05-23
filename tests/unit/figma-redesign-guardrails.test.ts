@@ -25,11 +25,10 @@ describe('Figma redesign guardrails', () => {
     expect(deps).not.toHaveProperty('tailwindcss');
   });
 
-  it('keeps PR 1 shell files free of prototype data and unsupported cause claims', () => {
+  it('keeps shell files free of prototype data and unsupported cause claims', () => {
     const shellSource = [
       'src/lib/components/Layout.svelte',
-      'src/lib/components/Topbar.svelte',
-      'src/lib/components/ViewSwitcher.svelte',
+      'src/lib/components/Masthead.svelte',
     ].map(readRepoFile).join('\n');
 
     expect(shellSource).not.toMatch(/Math\.random\(/);
@@ -50,13 +49,13 @@ describe('Figma redesign guardrails', () => {
     expect(layoutSource).not.toContain('EndpointRail');
   });
 
-  it('exposes the Figma-aligned primary shell navigation', () => {
-    const switcherSource = readRepoFile('src/lib/components/ViewSwitcher.svelte');
+  it('exposes the Vessel v4 primary shell navigation', () => {
+    const mastheadSource = readRepoFile('src/lib/components/Masthead.svelte');
 
-    expect(switcherSource).toContain("label: 'Overview'");
-    expect(switcherSource).toContain("label: 'Live'");
-    expect(switcherSource).toContain("label: 'Investigate'");
-    expect(switcherSource).toContain("label: 'Report'");
-    expect(switcherSource).not.toMatch(/label:\s*['"]Status['"]/);
+    expect(mastheadSource).toContain("label: 'Overview'");
+    expect(mastheadSource).toContain("label: 'Live'");
+    expect(mastheadSource).toContain("label: 'Investigate'");
+    expect(mastheadSource).toContain("label: 'Report'");
+    expect(mastheadSource).not.toMatch(/label:\s*['"]Status['"]/);
   });
 });

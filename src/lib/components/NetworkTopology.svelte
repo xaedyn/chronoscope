@@ -333,11 +333,11 @@
     align-items: stretch;
     justify-content: center;
     padding: 24px;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     /* v2 alignment: larger 24px radius matches the verdict card panel so
        the hero row reads as two surfaces in the same family. */
     border-radius: 24px;
-    background: var(--shell-panel);
+    background: var(--bg-2);
     box-shadow: 0 25px 50px -12px color-mix(in srgb, black 35%, transparent);
   }
 
@@ -352,7 +352,7 @@
      connection without competing with the glyphs. v2 uses h-px bg-white/
      [0.03]; we approximate with the lightest border token at 1px stroke. */
   .topology-path {
-    stroke: color-mix(in srgb, var(--t1) 6%, transparent);
+    stroke: color-mix(in srgb, var(--fg) 6%, transparent);
     fill: none;
     stroke-width: 1;
   }
@@ -371,24 +371,24 @@
     transition: stroke 200ms ease, fill 200ms ease;
   }
   [data-role='origin'] .topology-node-circle {
-    fill: color-mix(in srgb, var(--t1) 6%, transparent);
-    stroke: color-mix(in srgb, var(--t1) 12%, transparent);
+    fill: color-mix(in srgb, var(--fg) 6%, transparent);
+    stroke: color-mix(in srgb, var(--fg) 12%, transparent);
   }
   [data-tone='good'] .topology-node-rect {
-    fill: color-mix(in srgb, var(--accent-green) 14%, transparent);
-    stroke: color-mix(in srgb, var(--accent-green) 32%, transparent);
+    fill: color-mix(in srgb, var(--station-b) 14%, transparent);
+    stroke: color-mix(in srgb, var(--station-b) 32%, transparent);
   }
   [data-tone='watch'] .topology-node-rect {
-    fill: color-mix(in srgb, var(--accent-amber) 14%, transparent);
-    stroke: color-mix(in srgb, var(--accent-amber) 32%, transparent);
+    fill: color-mix(in srgb, var(--sev-warn) 14%, transparent);
+    stroke: color-mix(in srgb, var(--sev-warn) 32%, transparent);
   }
   [data-tone='bad'] .topology-node-rect {
-    fill: color-mix(in srgb, var(--accent-pink) 14%, transparent);
-    stroke: color-mix(in srgb, var(--accent-pink) 32%, transparent);
+    fill: color-mix(in srgb, var(--station-d) 14%, transparent);
+    stroke: color-mix(in srgb, var(--station-d) 32%, transparent);
   }
   [data-tone='collecting'] .topology-node-rect {
-    fill: color-mix(in srgb, var(--accent-cyan) 14%, transparent);
-    stroke: color-mix(in srgb, var(--accent-cyan) 32%, transparent);
+    fill: color-mix(in srgb, var(--station-b) 14%, transparent);
+    stroke: color-mix(in srgb, var(--station-b) 32%, transparent);
   }
 
   .topology-node-clickable,
@@ -399,7 +399,7 @@
   .topology-node-clickable:focus-visible .topology-node-rect,
   .topology-overflow-chip:hover .topology-node-rect,
   .topology-overflow-chip:focus-visible .topology-node-rect {
-    fill: var(--shell-panel-hover);
+    fill: var(--bg-hover);
   }
   .topology-node-clickable:focus-visible,
   .topology-overflow-chip:focus-visible {
@@ -411,11 +411,11 @@
   }
 
   .topology-overflow-rect {
-    stroke: var(--shell-border-strong);
-    fill: var(--shell-panel-hover);
+    stroke: var(--rule-strong);
+    fill: var(--bg-hover);
   }
   .topology-overflow-count {
-    fill: var(--t1);
+    fill: var(--fg);
     font-family: var(--mono);
     font-size: 11px;
     font-weight: 800;
@@ -426,7 +426,7 @@
      rather than mono for the endpoint labels (the BROWSER kicker stays
      uppercase tracked-out so it reads as a label, not a value). */
   .topology-label {
-    fill: var(--t3);
+    fill: var(--fg-3);
     font-family: var(--sans);
     font-size: 10px;
     font-weight: 500;
@@ -434,7 +434,7 @@
     pointer-events: none;
   }
   [data-role='origin'] .topology-label {
-    fill: var(--t4);
+    fill: var(--fg-3);
     font-family: var(--mono);
     font-weight: 600;
     letter-spacing: var(--tr-label);
@@ -444,7 +444,7 @@
   [data-tone='watch'] .topology-label,
   [data-tone='bad'] .topology-label,
   [data-tone='collecting'] .topology-label {
-    fill: var(--t2);
+    fill: var(--fg-2);
   }
 
   /* Inline SVG icons inside each glyph. The wrapper SVG inside each <g>
@@ -452,16 +452,16 @@
      SVG strokes inherits the per-tone accent. Origin gets a muted t-2
      stroke so the device glyph reads as neutral, not on-state. */
   .topology-glyph-icon {
-    color: var(--t2);
+    color: var(--fg-2);
     pointer-events: none;
   }
   [data-role='origin'] .topology-glyph-icon {
-    color: var(--t2);
+    color: var(--fg-2);
   }
-  [data-tone='good'] .topology-glyph-icon       { color: var(--accent-green); }
-  [data-tone='watch'] .topology-glyph-icon      { color: var(--accent-amber); }
-  [data-tone='bad'] .topology-glyph-icon        { color: var(--accent-pink); }
-  [data-tone='collecting'] .topology-glyph-icon { color: var(--accent-cyan); }
+  [data-tone='good'] .topology-glyph-icon       { color: var(--station-b); }
+  [data-tone='watch'] .topology-glyph-icon      { color: var(--sev-warn); }
+  [data-tone='bad'] .topology-glyph-icon        { color: var(--station-d); }
+  [data-tone='collecting'] .topology-glyph-icon { color: var(--station-b); }
 
   /* Pulse packets — v2 alignment: smaller circle, lower peak opacity so
      the pulses read as quiet evidence of ongoing measurement rather than
@@ -473,10 +473,10 @@
     transform-box: fill-box;
     r: 2.5;
   }
-  [data-tone='good'].topology-pulse { fill: var(--accent-green); }
-  [data-tone='watch'].topology-pulse { fill: var(--accent-amber); }
-  [data-tone='bad'].topology-pulse { fill: var(--accent-pink); }
-  [data-tone='collecting'].topology-pulse { fill: var(--accent-cyan); }
+  [data-tone='good'].topology-pulse { fill: var(--station-b); }
+  [data-tone='watch'].topology-pulse { fill: var(--sev-warn); }
+  [data-tone='bad'].topology-pulse { fill: var(--station-d); }
+  [data-tone='collecting'].topology-pulse { fill: var(--station-b); }
 
   @keyframes pulse-travel {
     0%   { transform: translate(0, 0);                            opacity: 0; }
@@ -493,14 +493,14 @@
   }
   .empty-headline {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--sans);
     font-size: var(--ts-base);
     font-weight: 700;
   }
   .empty-detail {
     margin: 0;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--sans);
     font-size: var(--ts-sm);
   }
@@ -508,16 +508,16 @@
     margin-top: 8px;
     min-height: 36px;
     padding: 0 16px;
-    border: 1px solid var(--shell-border-strong);
-    background: var(--shell-bg-cyan);
-    color: var(--accent-cyan);
+    border: 1px solid var(--rule-strong);
+    background: var(--station-b-bg);
+    color: var(--station-b);
     font-family: var(--sans);
     font-size: var(--ts-sm);
     font-weight: 700;
     cursor: pointer;
     border-radius: 8px;
   }
-  .empty-cta:hover { background: var(--shell-panel-hover); }
+  .empty-cta:hover { background: var(--bg-hover); }
 
   @media (prefers-reduced-motion: reduce) {
     .topology-pulse { animation: none; opacity: 0; }

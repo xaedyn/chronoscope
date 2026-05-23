@@ -712,9 +712,9 @@
     min-height: 360px;
     max-height: 460px;
     padding: clamp(28px, 3.4vw, 44px);
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 24px;
-    background: var(--shell-panel);
+    background: var(--bg-2);
     box-shadow: 0 25px 50px -12px color-mix(in srgb, black 35%, transparent);
     overflow: hidden;
     position: relative;
@@ -768,26 +768,26 @@
   }
 
   .severity-pill[data-tone='good'] {
-    color: var(--accent-green);
-    border: 1px solid color-mix(in srgb, var(--accent-green) 20%, transparent);
-    background: color-mix(in srgb, var(--accent-green) 10%, transparent);
+    color: var(--station-b);
+    border: 1px solid color-mix(in srgb, var(--station-b) 20%, transparent);
+    background: color-mix(in srgb, var(--station-b) 10%, transparent);
   }
   .severity-pill[data-tone='warn'],
   .severity-pill[data-tone='watch'] {
-    color: var(--accent-amber);
-    border: 1px solid color-mix(in srgb, var(--accent-amber) 20%, transparent);
-    background: color-mix(in srgb, var(--accent-amber) 10%, transparent);
+    color: var(--sev-warn);
+    border: 1px solid color-mix(in srgb, var(--sev-warn) 20%, transparent);
+    background: color-mix(in srgb, var(--sev-warn) 10%, transparent);
   }
   .severity-pill[data-tone='collecting'] {
-    color: var(--accent-cyan);
-    border: 1px solid color-mix(in srgb, var(--accent-cyan) 20%, transparent);
-    background: color-mix(in srgb, var(--accent-cyan) 10%, transparent);
+    color: var(--station-b);
+    border: 1px solid color-mix(in srgb, var(--station-b) 20%, transparent);
+    background: color-mix(in srgb, var(--station-b) 10%, transparent);
   }
 
   /* Live affordance — v2's pinging-dot pattern. Less chrome than the
      prior Measuring pill; the dot itself carries the live-state signal. */
   .measuring-pill {
-    color: var(--accent-cyan);
+    color: var(--station-b);
     border: 0;
     background: transparent;
     padding-left: 0;
@@ -803,7 +803,7 @@
     position: absolute;
     inset: 0;
     border-radius: 50%;
-    background: var(--accent-cyan);
+    background: var(--station-b);
     opacity: 0.55;
     animation: measuring-ping 1.4s cubic-bezier(0, 0, 0.2, 1) infinite;
   }
@@ -812,7 +812,7 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--accent-cyan);
+    background: var(--station-b);
   }
   @keyframes measuring-ping {
     0% { transform: scale(1); opacity: 0.6; }
@@ -830,7 +830,7 @@
     font-weight: 600;
     line-height: 1.1;
     letter-spacing: var(--tr-tight);
-    color: var(--t1);
+    color: var(--fg);
   }
 
   /* Inline endpoint name highlight — v2 pattern: same typographic size as
@@ -840,19 +840,19 @@
      prose) so the name pops without enlarging. */
   .headline-endpoint-name,
   .body-endpoint-name {
-    color: var(--t1);
+    color: var(--fg);
     font-weight: 600;
   }
   .headline-endpoint-name[data-tone='good'],
-  .body-endpoint-name[data-tone='good']      { color: var(--accent-green); }
+  .body-endpoint-name[data-tone='good']      { color: var(--station-b); }
   .headline-endpoint-name[data-tone='warn'],
   .headline-endpoint-name[data-tone='watch'],
   .body-endpoint-name[data-tone='warn'],
-  .body-endpoint-name[data-tone='watch']     { color: var(--accent-amber); }
+  .body-endpoint-name[data-tone='watch']     { color: var(--sev-warn); }
   .headline-endpoint-name[data-tone='bad'],
-  .body-endpoint-name[data-tone='bad']       { color: var(--accent-pink); }
+  .body-endpoint-name[data-tone='bad']       { color: var(--station-d); }
   .headline-endpoint-name[data-tone='collecting'],
-  .body-endpoint-name[data-tone='collecting']{ color: var(--accent-cyan); }
+  .body-endpoint-name[data-tone='collecting']{ color: var(--station-b); }
 
   /* Body paragraphs — v2 drops the "Measured Fact:" / "Interpretation:"
      labels. Sentence separation survives through typography (slightly
@@ -865,14 +865,14 @@
   }
   .verdict-body p {
     margin: 0;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--sans);
     font-size: clamp(14px, 1.4vw, 17px);
     font-weight: 500;
     line-height: 1.6;
   }
   .verdict-body .interpretation {
-    color: var(--t3);
+    color: var(--fg-3);
   }
 
   .verdict-actions {
@@ -895,14 +895,14 @@
     padding: 0 18px 0 16px;
     border: 0;
     border-radius: 12px;
-    background: var(--t1);
-    color: var(--shell-bg);
+    background: var(--fg);
+    color: var(--bg);
     font-family: var(--sans);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: transform 160ms ease, background 160ms ease;
-    box-shadow: 0 0 20px color-mix(in srgb, var(--t1) 15%, transparent);
+    box-shadow: 0 0 20px color-mix(in srgb, var(--fg) 15%, transparent);
   }
 
   /* v2 primary-action icon — small SVG glyph that inherits the button's
@@ -920,7 +920,7 @@
     height: 100%;
   }
   .primary-action:hover {
-    background: color-mix(in srgb, var(--t1) 88%, transparent);
+    background: color-mix(in srgb, var(--fg) 88%, transparent);
     transform: translateY(-1px);
   }
   .primary-action:disabled {
@@ -941,7 +941,7 @@
     border: 0;
     border-radius: 12px;
     background: transparent;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--sans);
     font-size: 14px;
     font-weight: 600;
@@ -949,12 +949,12 @@
     transition: color 160ms ease, background 160ms ease;
   }
   .secondary-action:hover {
-    color: var(--t1);
-    background: color-mix(in srgb, var(--t1) 5%, transparent);
+    color: var(--fg);
+    background: color-mix(in srgb, var(--fg) 5%, transparent);
   }
   .panel-header button:hover,
   .event-more:hover {
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
   @media (prefers-reduced-motion: reduce) {
     .primary-action,
@@ -997,13 +997,13 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: var(--tr-label);
-    color: var(--t3);
+    color: var(--fg-3);
   }
 
   .panel-header-icon {
     width: 14px;
     height: 14px;
-    color: var(--t3);
+    color: var(--fg-3);
     display: inline-grid;
     place-items: center;
   }
@@ -1024,14 +1024,14 @@
     line-height: 1;
     letter-spacing: var(--tr-label);
     text-transform: uppercase;
-    color: var(--t4);
+    color: var(--fg-3);
   }
 
   /* Live chart link — quieter cyan, single line, hover lifts brightness. */
   .panel-header .panel-link {
     border: 0;
     background: transparent;
-    color: var(--accent-cyan);
+    color: var(--station-b);
     font-family: var(--sans);
     font-size: 12px;
     font-weight: 600;
@@ -1041,7 +1041,7 @@
     transition: background 160ms ease;
   }
   .panel-header .panel-link:hover {
-    background: color-mix(in srgb, var(--accent-cyan) 8%, transparent);
+    background: color-mix(in srgb, var(--station-b) 8%, transparent);
   }
 
   /* v2 polish: smaller, more recessive time axis. Was 24 px tall + bright
@@ -1051,7 +1051,7 @@
     position: relative;
     height: 16px;
     margin-top: 4px;
-    color: var(--t4);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: 9px;
     letter-spacing: var(--tr-label);
@@ -1066,7 +1066,7 @@
     right: 0;
     top: 11px;
     height: 1px;
-    background: linear-gradient(90deg, transparent, var(--shell-border-strong), transparent);
+    background: linear-gradient(90deg, transparent, var(--rule-strong), transparent);
   }
 
   .overview-time-axis span {
@@ -1077,7 +1077,7 @@
   }
 
   .overview-time-axis span:first-child { transform: translateX(0); }
-  .overview-time-axis span:last-child { transform: translateX(-100%); color: var(--accent-cyan); }
+  .overview-time-axis span:last-child { transform: translateX(-100%); color: var(--station-b); }
 
   /* v2 endpoint stack — each row is its own rounded card inside the
      panel. No outer border or background; the panel container above
@@ -1105,16 +1105,16 @@
     align-items: center;
     min-height: 76px;
     padding: 12px 16px;
-    border: 1px solid color-mix(in srgb, var(--t1) 4%, transparent);
+    border: 1px solid color-mix(in srgb, var(--fg) 4%, transparent);
     border-radius: 16px;
     background: color-mix(in srgb, black 40%, transparent);
-    color: var(--t1);
+    color: var(--fg);
     text-align: left;
     cursor: pointer;
     transition: background 160ms ease, border-color 160ms ease;
   }
   .endpoint-row:hover {
-    background: color-mix(in srgb, var(--t1) 4%, transparent);
+    background: color-mix(in srgb, var(--fg) 4%, transparent);
   }
 
   /* v2 status indicator — small tinted square (rounded full) with a
@@ -1125,7 +1125,7 @@
     border-radius: 999px;
     border: 1px solid currentColor;
     background: color-mix(in srgb, currentColor 12%, transparent);
-    color: var(--t4);
+    color: var(--fg-3);
     display: grid;
     place-items: center;
   }
@@ -1137,10 +1137,10 @@
     background: currentColor;
   }
 
-  .endpoint-row[data-tone='good'] .endpoint-state { color: var(--accent-green); }
-  .endpoint-row[data-tone='warn'] .endpoint-state { color: var(--accent-amber); }
-  .endpoint-row[data-tone='bad'] .endpoint-state { color: var(--accent-pink); }
-  .endpoint-row[data-tone='collecting'] .endpoint-state { color: var(--accent-cyan); }
+  .endpoint-row[data-tone='good'] .endpoint-state { color: var(--station-b); }
+  .endpoint-row[data-tone='warn'] .endpoint-state { color: var(--sev-warn); }
+  .endpoint-row[data-tone='bad'] .endpoint-state { color: var(--station-d); }
+  .endpoint-row[data-tone='collecting'] .endpoint-state { color: var(--station-b); }
 
   /* v2 endpoint metadata stack — mono name, smaller status descriptor,
      no underline under the name. The recent-samples summary collapses
@@ -1160,7 +1160,7 @@
     font-family: var(--mono);
     font-size: 13px;
     font-weight: 500;
-    color: var(--t1);
+    color: var(--fg);
   }
 
   .endpoint-main small,
@@ -1168,7 +1168,7 @@
   .endpoint-metric em,
   .event-list small {
     font-style: normal;
-    color: var(--t4);
+    color: var(--fg-3);
   }
 
   .endpoint-main small {
@@ -1183,7 +1183,7 @@
     white-space: nowrap;
     font-family: var(--sans);
     font-size: 11px;
-    color: var(--t4);
+    color: var(--fg-3);
   }
 
   /* v2-quieted sparkline — half the height, no inset baseline line, no
@@ -1213,13 +1213,13 @@
     stroke-width: 2;
     stroke-linecap: round;
     stroke-linejoin: round;
-    color: var(--accent-green);
+    color: var(--station-b);
     opacity: 0.75;
   }
 
-  .endpoint-row[data-tone='warn'] .endpoint-trace path { color: var(--accent-amber); }
-  .endpoint-row[data-tone='bad'] .endpoint-trace path { color: var(--accent-pink); }
-  .endpoint-row[data-tone='collecting'] .endpoint-trace path { color: var(--accent-cyan); }
+  .endpoint-row[data-tone='warn'] .endpoint-trace path { color: var(--sev-warn); }
+  .endpoint-row[data-tone='bad'] .endpoint-trace path { color: var(--station-d); }
+  .endpoint-row[data-tone='collecting'] .endpoint-trace path { color: var(--station-b); }
 
   .endpoint-history-marker {
     position: absolute;
@@ -1227,17 +1227,17 @@
     height: 8px;
     border-radius: 50%;
     transform: translate(-50%, -50%);
-    background: var(--accent-amber);
+    background: var(--sev-warn);
     border: 1px solid color-mix(in srgb, black 60%, transparent);
   }
   .endpoint-history-marker[data-status='slow'] {
-    background: var(--accent-pink);
+    background: var(--station-d);
   }
   .endpoint-history-marker[data-status='failed'] {
     width: 10px;
     height: 10px;
     border-radius: 3px;
-    background: var(--accent-pink);
+    background: var(--station-d);
   }
 
   /* v2 endpoint metric — right-aligned latency value with units in a
@@ -1257,17 +1257,17 @@
     gap: 4px;
     font-size: 17px;
     font-weight: 500;
-    color: var(--t1);
+    color: var(--fg);
   }
   .endpoint-metric strong small {
     font-size: 11px;
     font-weight: 500;
-    color: var(--t4);
+    color: var(--fg-3);
   }
   .endpoint-metric em {
     font-style: normal;
     font-size: 11px;
-    color: var(--t4);
+    color: var(--fg-3);
   }
 
   /* v2 chevron — right-edge cue that the row is clickable. Dim by default,
@@ -1278,7 +1278,7 @@
     place-items: center;
     width: 16px;
     height: 16px;
-    color: var(--t4);
+    color: var(--fg-3);
     transition: color 160ms ease, transform 160ms ease;
   }
   .endpoint-chevron svg {
@@ -1287,7 +1287,7 @@
   }
   .endpoint-row:hover .endpoint-chevron,
   .endpoint-row:focus-visible .endpoint-chevron {
-    color: var(--t2);
+    color: var(--fg-2);
     transform: translateX(2px);
   }
   @media (prefers-reduced-motion: reduce) {
@@ -1299,9 +1299,9 @@
   .event-timeline {
     margin-top: 12px;
     padding: 12px 14px 14px;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
-    background: color-mix(in srgb, var(--shell-base) 62%, transparent);
+    background: color-mix(in srgb, var(--bg) 62%, transparent);
   }
 
   .event-timeline-window {
@@ -1312,7 +1312,7 @@
     line-height: 1.2;
     letter-spacing: var(--tr-label);
     text-transform: uppercase;
-    color: var(--t4);
+    color: var(--fg-3);
   }
 
   .event-timeline .overview-time-axis {
@@ -1343,23 +1343,23 @@
     height: 16px;
     border-radius: 50%;
     transform: translate(-50%, -50%);
-    background: var(--accent-cyan);
+    background: var(--station-b);
     border: 2px solid rgba(8, 14, 24, 0.95);
     box-shadow: 0 0 18px rgba(103, 232, 249, 0.4);
   }
 
   .event-pin[data-tone='good'] {
-    background: var(--accent-green);
+    background: var(--station-b);
     box-shadow: 0 0 18px rgba(44, 245, 169, 0.34);
   }
 
   .event-pin[data-tone='watch'] {
-    background: var(--accent-amber);
+    background: var(--sev-warn);
     box-shadow: 0 0 18px rgba(250, 204, 21, 0.34);
   }
 
   .event-pin[data-tone='bad'] {
-    background: var(--accent-pink);
+    background: var(--station-d);
     box-shadow: 0 0 18px rgba(251, 113, 133, 0.38);
   }
 
@@ -1386,7 +1386,7 @@
     align-items: center;
     min-height: 48px;
     padding: 10px 14px;
-    border: 1px solid color-mix(in srgb, var(--t1) 4%, transparent);
+    border: 1px solid color-mix(in srgb, var(--fg) 4%, transparent);
     border-radius: 12px;
     background: color-mix(in srgb, black 30%, transparent);
     color: inherit;
@@ -1395,11 +1395,11 @@
     transition: background 160ms ease;
   }
   .event-entry:hover {
-    background: color-mix(in srgb, var(--t1) 4%, transparent);
+    background: color-mix(in srgb, var(--fg) 4%, transparent);
   }
 
   .event-list time {
-    color: var(--t4);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: 11px;
   }
@@ -1412,7 +1412,7 @@
   }
 
   .event-list strong {
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--sans);
     font-size: 13px;
     font-weight: 500;
@@ -1424,25 +1424,25 @@
     font-style: normal;
     font-family: var(--mono);
     font-size: 11px;
-    color: var(--t4);
+    color: var(--fg-3);
     white-space: nowrap;
   }
 
   .event-entry:hover strong,
   .event-entry:focus-visible strong {
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
 
-  .event-list li[data-tone='good'] strong { color: var(--accent-green); }
-  .event-list li[data-tone='watch'] strong { color: var(--accent-amber); }
-  .event-list li[data-tone='bad'] strong { color: var(--accent-pink); }
+  .event-list li[data-tone='good'] strong { color: var(--station-b); }
+  .event-list li[data-tone='watch'] strong { color: var(--sev-warn); }
+  .event-list li[data-tone='bad'] strong { color: var(--station-d); }
 
   .event-more {
     width: 100%;
     margin-top: 14px;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     background: transparent;
-    color: var(--t2);
+    color: var(--fg-2);
     text-transform: uppercase;
     letter-spacing: var(--tr-label);
     font-family: var(--mono);
@@ -1450,7 +1450,7 @@
   }
 
   button:focus-visible {
-    outline: 2px solid var(--accent-cyan);
+    outline: 2px solid var(--station-b);
     outline-offset: 3px;
   }
 

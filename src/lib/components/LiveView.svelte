@@ -292,7 +292,7 @@
     min-height: 0;
     overflow-y: auto;
     flex: 1;
-    color: var(--t1);
+    color: var(--fg);
   }
 
   /* v2 polish: the header is no longer a wrapping panel. Title block +
@@ -322,12 +322,12 @@
     line-height: 1.1;
     font-weight: 600;
     letter-spacing: var(--tr-tight);
-    color: var(--t1);
+    color: var(--fg);
   }
   .live-title-icon {
     width: 22px;
     height: 22px;
-    color: var(--accent-cyan);
+    color: var(--station-b);
     display: inline-grid;
     place-items: center;
   }
@@ -345,7 +345,7 @@
      from your browser" line under its Live title. */
   .live-subtitle {
     margin: 6px 0 0;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--sans);
     font-size: 14px;
     font-weight: 500;
@@ -368,7 +368,7 @@
     align-items: center;
     gap: 10px;
     padding: 10px 14px;
-    border: 1px solid color-mix(in srgb, var(--t1) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--fg) 6%, transparent);
     border-radius: 12px;
     background: color-mix(in srgb, black 40%, transparent);
     min-width: 96px;
@@ -381,7 +381,7 @@
     flex-shrink: 0;
   }
   .live-glance-name {
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: 10px;
     font-weight: 700;
@@ -390,7 +390,7 @@
     line-height: 1.1;
   }
   .live-glance-val {
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--mono);
     font-size: 16px;
     font-weight: 600;
@@ -417,7 +417,7 @@
     flex-wrap: wrap;
     justify-content: flex-end;
     padding: 6px 10px;
-    border: 1px solid color-mix(in srgb, var(--t1) 6%, transparent);
+    border: 1px solid color-mix(in srgb, var(--fg) 6%, transparent);
     border-radius: 10px;
     background: color-mix(in srgb, black 65%, transparent);
     backdrop-filter: blur(8px);
@@ -428,7 +428,7 @@
     font-family: var(--mono);
     font-size: 8.5px;
     letter-spacing: 0.2em;
-    color: var(--t2);
+    color: var(--fg-2);
     text-transform: uppercase;
   }
   .live-segment {
@@ -436,7 +436,7 @@
     padding: 2px;
     background: rgba(255, 255, 255, 0.04);
     border-radius: 7px;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     gap: 2px;
   }
   .live-chip {
@@ -444,7 +444,7 @@
     border-radius: 5px;
     background: transparent;
     border: 1px solid transparent;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: 0.06em;
@@ -452,24 +452,24 @@
     transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
   }
   .live-chip:hover {
-    color: var(--t1);
-    border-color: var(--shell-border-strong);
+    color: var(--fg);
+    border-color: var(--rule-strong);
   }
   .live-chip.on {
-    background: var(--shell-panel-active);
-    color: var(--t1);
+    background: var(--bg-active);
+    color: var(--fg);
     border-color: transparent;
   }
   .live-chip:focus-visible {
-    outline: 2px solid var(--accent-cyan);
+    outline: 2px solid var(--station-b);
     outline-offset: 2px;
   }
   .live-chip-back {
     padding: 6px 12px;
     border-radius: 5px;
     background: transparent;
-    border: 1px solid var(--shell-border);
-    color: var(--t2);
+    border: 1px solid var(--rule);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: 0.06em;
@@ -477,9 +477,9 @@
     transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
     align-self: flex-end;
   }
-  .live-chip-back:hover { color: var(--t1); border-color: var(--shell-border-strong); }
+  .live-chip-back:hover { color: var(--fg); border-color: var(--rule-strong); }
   .live-chip-back:focus-visible {
-    outline: 2px solid var(--accent-cyan);
+    outline: 2px solid var(--station-b);
     outline-offset: 2px;
   }
 
@@ -488,7 +488,7 @@
     border-radius: 6px;
     background: rgba(251, 191, 36, 0.1);
     border: 1px solid rgba(251, 191, 36, 0.3);
-    color: var(--accent-amber);
+    color: var(--sev-warn);
     font-family: var(--mono);
     font-size: var(--ts-md);
     font-weight: 500;
@@ -505,9 +505,9 @@
     min-width: 0;
     position: relative;
     padding: clamp(12px, 2vw, 18px);
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 24px;
-    background: var(--shell-panel);
+    background: var(--bg-2);
     box-shadow: 0 25px 50px -12px color-mix(in srgb, black 35%, transparent);
     overflow: hidden;
   }
@@ -534,16 +534,16 @@
     align-items: center;
     gap: 8px;
     padding: 24px 32px;
-    border: 1px solid color-mix(in srgb, var(--t1) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--fg) 8%, transparent);
     border-radius: 16px;
-    background: var(--shell-panel-raised);
+    background: var(--bg-3);
     text-align: center;
     max-width: 320px;
   }
   .live-paused-icon {
     width: 28px;
     height: 28px;
-    color: var(--t3);
+    color: var(--fg-3);
     display: inline-grid;
     place-items: center;
     margin-bottom: 4px;
@@ -551,24 +551,24 @@
   .live-paused-icon svg { width: 100%; height: 100%; }
   .live-paused-headline {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--sans);
     font-size: 15px;
     font-weight: 600;
   }
   .live-paused-detail {
     margin: 0;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--sans);
     font-size: 13px;
     line-height: 1.5;
   }
   .live-paused-detail strong {
-    color: var(--t1);
+    color: var(--fg);
     font-weight: 600;
     padding: 1px 6px;
     border-radius: 4px;
-    background: color-mix(in srgb, var(--t1) 8%, transparent);
+    background: color-mix(in srgb, var(--fg) 8%, transparent);
   }
   @media (prefers-reduced-motion: reduce) {
     .live-paused-overlay { backdrop-filter: none; -webkit-backdrop-filter: none; }
@@ -587,14 +587,14 @@
     flex-wrap: wrap;
     padding: 10px 12px;
     background: color-mix(in srgb, black 40%, transparent);
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
   }
   .live-footer-kicker {
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
-    color: var(--t3);
+    color: var(--fg-3);
     text-transform: uppercase;
     margin-right: 6px;
   }
@@ -605,8 +605,8 @@
     padding: 5px 10px;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.03);
-    border: 1px solid var(--shell-border);
-    color: var(--t2);
+    border: 1px solid var(--rule);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: 0.06em;
@@ -614,16 +614,16 @@
     transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
   }
   .live-footer-chip:hover {
-    color: var(--t1);
-    border-color: var(--shell-border-strong);
+    color: var(--fg);
+    border-color: var(--rule-strong);
   }
   .live-footer-chip.on {
     background: rgba(255, 255, 255, 0.06);
-    color: var(--t1);
-    border-color: var(--shell-border-strong);
+    color: var(--fg);
+    border-color: var(--rule-strong);
   }
   .live-footer-chip:focus-visible {
-    outline: 2px solid var(--accent-cyan);
+    outline: 2px solid var(--station-b);
     outline-offset: 2px;
   }
   .live-footer-pip {
@@ -637,15 +637,15 @@
     align-items: baseline;
     gap: 4px;
     font-variant-numeric: tabular-nums;
-    color: var(--t3);
+    color: var(--fg-3);
     margin-left: 3px;
   }
   .live-footer-val span {
-    color: var(--t4);
+    color: var(--fg-3);
     text-transform: uppercase;
   }
   .live-footer-p95 {
-    color: var(--t2);
+    color: var(--fg-2);
     margin-left: 6px;
     font-variant-numeric: tabular-nums;
   }

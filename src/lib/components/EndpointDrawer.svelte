@@ -67,11 +67,6 @@
   style:--glass-border={tokens.color.glass.border}
   style:--glass-highlight={tokens.color.glass.highlight}
   style:--topbar-bg={tokens.color.topbar.bg}
-  style:--accent-cyan={tokens.color.accent.cyan}
-  style:--accent-pink={tokens.color.accent.pink}
-  style:--t1={tokens.color.text.t1}
-  style:--t2={tokens.color.text.t2}
-  style:--t3={tokens.color.text.t3}
   style:--radius-sm="{tokens.radius.sm}px"
   style:--radius-md="{tokens.radius.md}px"
   style:--radius-lg="{tokens.radius.lg}px"
@@ -249,7 +244,7 @@
     font-family: var(--sans);
     font-size: 18px;
     font-weight: 600;
-    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-pink));
+    background: linear-gradient(135deg, var(--station-b), var(--station-d));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -266,13 +261,13 @@
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    color: var(--t3);
+    color: var(--fg-3);
     cursor: pointer;
     transition: all var(--timing-btn) ease;
   }
 
   .close-btn:hover {
-    color: var(--t1);
+    color: var(--fg);
     background: var(--glass-highlight);
     border-color: rgba(103,232,249,.2);
     box-shadow: 0 0 12px rgba(103,232,249,.2);
