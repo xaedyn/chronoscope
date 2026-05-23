@@ -58,7 +58,7 @@
     justify-content: space-between;
     gap: var(--spacing-sm);
     padding: var(--spacing-xs) var(--spacing-md);
-    background: color-mix(in srgb, var(--shell-panel) 65%, transparent);
+    background: color-mix(in srgb, var(--bg-2) 65%, transparent);
     backdrop-filter: blur(24px) saturate(1.3);
     -webkit-backdrop-filter: blur(24px) saturate(1.3);
     border-bottom: 1px solid var(--glass-border);
@@ -74,14 +74,14 @@
 
   .banner-icon {
     font-size: 14px;
-    color: var(--accent-cyan);
+    color: var(--station-b);
     flex-shrink: 0;
   }
 
   .banner-text {
     font-family: var(--sans);
     font-size: 13px;
-    color: var(--t2);
+    color: var(--fg-2);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -97,10 +97,10 @@
   .btn-banner {
     flex-shrink: 0;
     padding: var(--spacing-xs) var(--spacing-sm);
-    border: 1px solid var(--accent-cyan);
+    border: 1px solid var(--station-b);
     border-radius: var(--radius-sm);
     background: transparent;
-    color: var(--accent-cyan);
+    color: var(--station-b);
     font-family: var(--sans);
     font-size: 12px;
     font-weight: 500;
@@ -113,8 +113,8 @@
   }
 
   .btn-banner:hover {
-    background: var(--accent-cyan);
-    color: var(--bg-base);
+    background: var(--station-b);
+    color: var(--bg);
   }
 
   /* ── Mobile ────────────────────────────────────────────────────────────── */

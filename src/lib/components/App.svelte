@@ -30,69 +30,91 @@
 
   let engine: MeasurementEngine | null = null;
 
-  // ── Bridge tokens to CSS custom properties ──────────────────────────────────
+  // ── Bridge tokens to CSS custom properties (Vessel v4) ─────────────────────
+  // Emits v4 canonical CSS variable names only. No bridge aliases — every var
+  // here has exactly one name. v3 emissions (--accent-*, --t1..--t5, --shell-*,
+  // --bg-base, --border-mid, --status-timeout, --svg-threshold) were dropped
+  // when their tokens were retired; callsites migrated in the Phase A sweep.
   function bridgeTokensToCss(): void {
     const root = document.documentElement;
 
-    // Background
-    root.style.setProperty('--bg-base', tokens.color.surface.base);
+    // Background tiers
+    root.style.setProperty('--bg',   tokens.color.surface.base);
+    root.style.setProperty('--bg-2', tokens.color.surface.mid);
+    root.style.setProperty('--bg-3', tokens.color.surface.raised);
+    root.style.setProperty('--bg-4', tokens.color.surface.elevated);
 
-    // Figma redesign shell foundation
-    root.style.setProperty('--shell-bg',             tokens.color.shell.base);
-    root.style.setProperty('--shell-panel',          tokens.color.shell.panel);
-    root.style.setProperty('--shell-panel-raised',   tokens.color.shell.panelRaised);
-    root.style.setProperty('--shell-panel-hover',    tokens.color.shell.panelHover);
-    root.style.setProperty('--shell-panel-active',   tokens.color.shell.panelActive);
-    root.style.setProperty('--shell-border',         tokens.color.shell.border);
-    root.style.setProperty('--shell-border-strong',  tokens.color.shell.borderStrong);
-    root.style.setProperty('--shell-divider',        tokens.color.shell.divider);
-    root.style.setProperty('--shell-backdrop',       tokens.color.shell.backdrop);
-    root.style.setProperty('--shell-popover',        tokens.color.shell.popover);
-    root.style.setProperty('--shell-bg-cyan',        tokens.color.shell.bgCyan);
-    root.style.setProperty('--shell-bg-amber',       tokens.color.shell.bgAmber);
-    root.style.setProperty('--shell-success-bg',     tokens.color.shell.successBg);
-    root.style.setProperty('--shell-success-border', tokens.color.shell.successBorder);
-    root.style.setProperty('--shell-stop-bg',        tokens.color.shell.stopBg);
-    root.style.setProperty('--shell-stop-border',    tokens.color.shell.stopBorder);
+    // Foreground tiers
+    root.style.setProperty('--fg',   tokens.color.text.fg);
+    root.style.setProperty('--fg-2', tokens.color.text.fg2);
+    root.style.setProperty('--fg-3', tokens.color.text.fg3);
+    root.style.setProperty('--fg-4', tokens.color.text.fg4);
 
-    // Text opacity layers
-    root.style.setProperty('--t1', tokens.color.text.t1);
-    root.style.setProperty('--t2', tokens.color.text.t2);
-    root.style.setProperty('--t3', tokens.color.text.t3);
-    root.style.setProperty('--t4', tokens.color.text.t4);
-    root.style.setProperty('--t5', tokens.color.text.t5);
+    // Rules
+    root.style.setProperty('--rule',        tokens.color.surface.border.mid);
+    root.style.setProperty('--rule-strong', tokens.color.surface.border.bright);
+    root.style.setProperty('--rule-faint',  tokens.color.surface.border.dim);
 
-    // Accent
-    root.style.setProperty('--accent-cyan',       tokens.color.accent.cyan);
-    root.style.setProperty('--accent-pink',       tokens.color.accent.pink);
-    root.style.setProperty('--accent-pink-glow',  tokens.color.accent.pinkGlow);
-    root.style.setProperty('--accent-amber',      tokens.color.accent.amber);
-    root.style.setProperty('--accent-amber-glow', tokens.color.accent.amberGlow);
-    root.style.setProperty('--accent-green',      tokens.color.accent.green);
-    root.style.setProperty('--green-glow',        tokens.color.accent.greenGlow);
+    // Stations
+    root.style.setProperty('--station-a', tokens.color.station.A);
+    root.style.setProperty('--station-b', tokens.color.station.B);
+    root.style.setProperty('--station-c', tokens.color.station.C);
+    root.style.setProperty('--station-d', tokens.color.station.D);
 
-    // Glass
-    root.style.setProperty('--glass-bg',        tokens.color.glass.bg);
-    root.style.setProperty('--glass-border',    tokens.color.glass.border);
-    root.style.setProperty('--glass-highlight', tokens.color.glass.highlight);
+    // Severity
+    root.style.setProperty('--sev-warn', tokens.color.severity.warn);
+    root.style.setProperty('--sev-bad',  tokens.color.severity.bad);
+    root.style.setProperty('--sev-crit', tokens.color.severity.crit);
+
+    // Phase decomposition
+    root.style.setProperty('--phase-dns',  tokens.color.phase.dns);
+    root.style.setProperty('--phase-tcp',  tokens.color.phase.tcp);
+    root.style.setProperty('--phase-tls',  tokens.color.phase.tls);
+    root.style.setProperty('--phase-ttfb', tokens.color.phase.ttfb);
+    root.style.setProperty('--phase-xfer', tokens.color.phase.xfer);
+
+    // Bg variants (interaction states + modal backdrops)
+    root.style.setProperty('--bg-hover',    tokens.color.shell.panelHover);
+    root.style.setProperty('--bg-active',   tokens.color.shell.panelActive);
+    root.style.setProperty('--bg-backdrop', tokens.color.shell.backdrop);
+    root.style.setProperty('--bg-overlay',  tokens.color.surface.overlay);
+    root.style.setProperty('--bg-popover',  tokens.color.shell.popover);
+
+    // Tinted backgrounds (station-B and sev-warn at low alpha)
+    root.style.setProperty('--station-b-bg', tokens.color.shell.bgCyan);
+    root.style.setProperty('--sev-warn-bg',  tokens.color.shell.bgAmber);
+
+    // Banner surfaces
+    root.style.setProperty('--success-bg',     tokens.color.shell.successBg);
+    root.style.setProperty('--success-border', tokens.color.shell.successBorder);
+    root.style.setProperty('--stop-bg',        tokens.color.shell.stopBg);
+    root.style.setProperty('--stop-border',    tokens.color.shell.stopBorder);
+
+    // Glass surfaces (kept from infrastructure; values updated to bone-white)
+    root.style.setProperty('--glass-bg',               tokens.color.glass.bg);
+    root.style.setProperty('--glass-border',           tokens.color.glass.border);
+    root.style.setProperty('--glass-highlight',        tokens.color.glass.highlight);
+    root.style.setProperty('--glass-bg-rail-hover',    tokens.color.glass.bgRailHover);
+    root.style.setProperty('--glass-bg-rail-selected', tokens.color.glass.bgRailSelected);
 
     // Fonts
     root.style.setProperty('--sans', tokens.typography.sans.fontFamily);
     root.style.setProperty('--mono', tokens.typography.mono.fontFamily);
 
     // Spacing
-    root.style.setProperty('--spacing-xs',  `${tokens.spacing.xs}px`);
-    root.style.setProperty('--spacing-sm',  `${tokens.spacing.sm}px`);
-    root.style.setProperty('--spacing-md',  `${tokens.spacing.md}px`);
-    root.style.setProperty('--spacing-lg',  `${tokens.spacing.lg}px`);
-    root.style.setProperty('--spacing-xl',  `${tokens.spacing.xl}px`);
+    root.style.setProperty('--spacing-xs', `${tokens.spacing.xs}px`);
+    root.style.setProperty('--spacing-sm', `${tokens.spacing.sm}px`);
+    root.style.setProperty('--spacing-md', `${tokens.spacing.md}px`);
+    root.style.setProperty('--spacing-lg', `${tokens.spacing.lg}px`);
+    root.style.setProperty('--spacing-xl', `${tokens.spacing.xl}px`);
 
     // Radius
+    root.style.setProperty('--radius-xs', `${tokens.radius.xs}px`);
     root.style.setProperty('--radius-sm', `${tokens.radius.sm}px`);
     root.style.setProperty('--radius-md', `${tokens.radius.md}px`);
     root.style.setProperty('--radius-lg', `${tokens.radius.lg}px`);
 
-    // v2 typography scale (--ts-*) + tracking (--tr-*)
+    // Typography scale + tracking
     root.style.setProperty('--ts-xs',   tokens.typography.scale.xs);
     root.style.setProperty('--ts-sm',   tokens.typography.scale.sm);
     root.style.setProperty('--ts-md',   tokens.typography.scale.md);
@@ -100,59 +122,45 @@
     root.style.setProperty('--ts-lg',   tokens.typography.scale.lg);
     root.style.setProperty('--ts-xl',   tokens.typography.scale.xl);
     root.style.setProperty('--ts-2xl',  tokens.typography.scale.xl2);
-    root.style.setProperty('--tr-kicker',  tokens.typography.tracking.kicker);
-    root.style.setProperty('--tr-label',   tokens.typography.tracking.label);
-    root.style.setProperty('--tr-tight',   tokens.typography.tracking.tight);
-    root.style.setProperty('--tr-body',    tokens.typography.tracking.body);
+    root.style.setProperty('--tr-kicker', tokens.typography.tracking.kicker);
+    root.style.setProperty('--tr-label',  tokens.typography.tracking.label);
+    root.style.setProperty('--tr-tight',  tokens.typography.tracking.tight);
+    root.style.setProperty('--tr-body',   tokens.typography.tracking.body);
 
-    // v2 structural chrome + surface border (used by topbar/rail/switcher)
-    root.style.setProperty('--topbar-height',       `${tokens.lane.topbarHeight}px`);
-    root.style.setProperty('--rail-width',          `${tokens.lane.railWidth}px`);
-    root.style.setProperty('--border-mid',          tokens.color.surface.border.mid);
-    root.style.setProperty('--border-bright',       tokens.color.surface.border.bright);
-    root.style.setProperty('--surface-topbar-bg',   tokens.color.surface.overlayDeep);
-    root.style.setProperty('--shell-topbar-height', `${tokens.shell.topbarHeight}px`);
-    root.style.setProperty('--shell-popover-width', `${tokens.shell.popoverWidth}px`);
-    root.style.setProperty('--shell-topbar-backdrop', tokens.shell.topbarBackdropFilter);
-    root.style.setProperty('--shell-popover-backdrop', tokens.shell.popoverBackdropFilter);
-    root.style.setProperty('--shell-brand-highlight-shadow', tokens.shell.brandHighlightShadow);
-    root.style.setProperty('--shell-nav-height', `${tokens.shell.navHeight}px`);
-    root.style.setProperty('--shell-control-size', `${tokens.shell.controlSize}px`);
-    root.style.setProperty('--shell-mobile-control-size', `${tokens.shell.mobileControlSize}px`);
-    root.style.setProperty('--content-max-w', `${tokens.shell.contentMaxWidth}px`);
-    root.style.setProperty('--shadow-popover', tokens.shadow.popover);
+    // Shell structural chrome (dimensions, filters, shadows — non-color)
+    root.style.setProperty('--topbar-height',                `${tokens.lane.topbarHeight}px`);
+    root.style.setProperty('--rail-width',                   `${tokens.lane.railWidth}px`);
+    root.style.setProperty('--shell-topbar-height',          `${tokens.shell.topbarHeight}px`);
+    root.style.setProperty('--shell-popover-width',          `${tokens.shell.popoverWidth}px`);
+    root.style.setProperty('--shell-topbar-backdrop',         tokens.shell.topbarBackdropFilter);
+    root.style.setProperty('--shell-popover-backdrop',        tokens.shell.popoverBackdropFilter);
+    root.style.setProperty('--shell-brand-highlight-shadow',  tokens.shell.brandHighlightShadow);
+    root.style.setProperty('--shell-nav-height',             `${tokens.shell.navHeight}px`);
+    root.style.setProperty('--shell-control-size',           `${tokens.shell.controlSize}px`);
+    root.style.setProperty('--shell-mobile-control-size',    `${tokens.shell.mobileControlSize}px`);
+    root.style.setProperty('--content-max-w',                `${tokens.shell.contentMaxWidth}px`);
 
-    // v2 tooltip variants
-    root.style.setProperty('--tooltip-bg-deep',      tokens.color.tooltip.bgDeep);
-    root.style.setProperty('--tooltip-border',       tokens.color.tooltip.border);
-    root.style.setProperty('--tooltip-text',         tokens.color.tooltip.text);
+    // Tooltip surfaces (kept from v2; values updated to bone-white)
+    root.style.setProperty('--tooltip-bg-deep', tokens.color.tooltip.bgDeep);
+    root.style.setProperty('--tooltip-border',  tokens.color.tooltip.border);
+    root.style.setProperty('--tooltip-text',    tokens.color.tooltip.text);
 
-    // v2 SVG primitives (dial, orbit ring, scope)
-    root.style.setProperty('--svg-grid-line', tokens.color.svg.gridLine);
-    root.style.setProperty('--svg-grid-cyan', tokens.color.svg.gridLineCyan);
-    root.style.setProperty('--svg-grid-major', tokens.color.svg.gridLineMajor);
-    root.style.setProperty('--svg-tick-minor', tokens.color.svg.tickMinor);
-    root.style.setProperty('--svg-tick-major', tokens.color.svg.tickMajor);
+    // SVG primitives (kept from v2; values updated to bone-white)
+    root.style.setProperty('--svg-grid-line',   tokens.color.svg.gridLine);
+    root.style.setProperty('--svg-grid-cyan',   tokens.color.svg.gridLineCyan);
+    root.style.setProperty('--svg-grid-major',  tokens.color.svg.gridLineMajor);
+    root.style.setProperty('--svg-tick-minor',  tokens.color.svg.tickMinor);
+    root.style.setProperty('--svg-tick-major',  tokens.color.svg.tickMajor);
     root.style.setProperty('--svg-hand-stroke', tokens.color.svg.handStroke);
-    root.style.setProperty('--svg-dial-rim',   tokens.color.svg.dialRim);
+    root.style.setProperty('--svg-dial-rim',    tokens.color.svg.dialRim);
     root.style.setProperty('--svg-orbit-track', tokens.color.svg.orbitTrack);
-    root.style.setProperty('--svg-orbit-edge', tokens.color.svg.orbitEdge);
-    root.style.setProperty('--svg-threshold',  tokens.color.svg.thresholdStroke);
+    root.style.setProperty('--svg-orbit-edge',  tokens.color.svg.orbitEdge);
 
-    // v2 rail surfaces
-    root.style.setProperty('--glass-bg-rail-hover',    tokens.color.glass.bgRailHover);
-    root.style.setProperty('--glass-bg-rail-selected', tokens.color.glass.bgRailSelected);
-
-    // v2 motion primitives
-    root.style.setProperty('--timing-pulse-rim',        `${tokens.timing.pulseRim}ms`);
-    root.style.setProperty('--timing-pulse-dial-glow',  `${tokens.timing.pulseDialGlow}ms`);
-
-    // Shared with Settings/Share drawers
-    root.style.setProperty('--surface-raised',   tokens.color.surface.raised);
-    root.style.setProperty('--status-timeout',   tokens.color.status.timeout);
-    root.style.setProperty('--surface-overlay', tokens.color.surface.overlay);
-    root.style.setProperty('--timing-btn',           `${tokens.timing.btnHover}ms`);
-    root.style.setProperty('--radius-xs', `${tokens.radius.xs}px`);
+    // Motion timings + shadows
+    root.style.setProperty('--timing-pulse-rim',       `${tokens.timing.pulseRim}ms`);
+    root.style.setProperty('--timing-pulse-dial-glow', `${tokens.timing.pulseDialGlow}ms`);
+    root.style.setProperty('--timing-btn',             `${tokens.timing.btnHover}ms`);
+    root.style.setProperty('--shadow-popover',          tokens.shadow.popover);
   }
 
   // ── Persistence save subscription ───────────────────────────────────────────

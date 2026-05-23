@@ -134,11 +134,11 @@
   // ── Segments with computed widths for the hero bar ───────────────────────
   const PHASE_ORDER: readonly Tier2Phase[] = ['dns', 'tcp', 'tls', 'ttfb', 'transfer'];
   const PHASE_COLORS: Record<Tier2Phase, string> = {
-    dns:      tokens.color.tier2.dns,
-    tcp:      tokens.color.tier2.tcp,
-    tls:      tokens.color.tier2.tls,
-    ttfb:     tokens.color.tier2.ttfb,
-    transfer: tokens.color.tier2.transfer,
+    dns:      tokens.color.phase.dns,
+    tcp:      tokens.color.phase.tcp,
+    tls:      tokens.color.phase.tls,
+    ttfb:     tokens.color.phase.ttfb,
+    transfer: tokens.color.phase.xfer,
   };
   const SHORT_LABELS: Record<Tier2Phase, string> = {
     dns:      'DNS',
@@ -634,7 +634,7 @@
                       style:background={seg.color}
                     >
                       {#if seg.pctWidth >= 8}
-                        <span class="diagnose-bar-label" style:color={tokens.color.tier2.labelText}>
+                        <span class="diagnose-bar-label" style:color={tokens.color.text.fg3}>
                           {seg.short} · {fmt(seg.ms)}<span class="diagnose-bar-ms">ms</span>
                         </span>
                       {/if}
@@ -928,18 +928,18 @@
     gap: 24px;
     flex-wrap: wrap;
     padding: clamp(20px, 3vw, 30px);
-    border: 1px solid var(--shell-border-strong);
+    border: 1px solid var(--rule-strong);
     border-radius: 18px;
     background:
-      radial-gradient(circle at 12% 40%, var(--shell-bg-cyan), transparent 32%),
-      linear-gradient(135deg, var(--shell-panel-raised), rgba(16, 23, 34, 0.72));
+      radial-gradient(circle at 12% 40%, var(--station-b-bg), transparent 32%),
+      linear-gradient(135deg, var(--bg-3), rgba(16, 23, 34, 0.72));
     box-shadow: 0 28px 90px rgba(0, 0, 0, 0.18);
   }
   .diagnose-kicker {
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
-    color: var(--accent-cyan);
+    color: var(--station-b);
     text-transform: uppercase;
     margin-bottom: 4px;
   }
@@ -951,7 +951,7 @@
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
-    color: var(--t3);
+    color: var(--fg-3);
     text-transform: uppercase;
     margin-bottom: 8px;
   }
@@ -963,7 +963,7 @@
     gap: 8px;
     padding: 16px;
     background: color-mix(in srgb, black 40%, transparent);
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
   }
   .distro-stats {
@@ -973,17 +973,17 @@
     flex-wrap: wrap;
     font-family: var(--mono);
     font-size: var(--ts-sm);
-    color: var(--t1);
+    color: var(--fg);
   }
   .distro-stat-label {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
     text-transform: uppercase;
     margin-right: 6px;
   }
   .distro-stat-meta {
-    color: var(--t2);
+    color: var(--fg-2);
     font-size: var(--ts-xs);
     margin-left: auto;
   }
@@ -1002,8 +1002,8 @@
   }
   .distro-bar {
     width: 100%;
-    background: linear-gradient(to top, color-mix(in srgb, var(--accent-cyan) 30%, transparent), color-mix(in srgb, var(--accent-cyan) 12%, transparent));
-    border: 1px solid color-mix(in srgb, var(--accent-cyan) 40%, transparent);
+    background: linear-gradient(to top, color-mix(in srgb, var(--station-b) 30%, transparent), color-mix(in srgb, var(--station-b) 12%, transparent));
+    border: 1px solid color-mix(in srgb, var(--station-b) 40%, transparent);
     border-radius: 2px;
     min-height: 1px;
     transition: height 200ms ease;
@@ -1013,10 +1013,10 @@
     justify-content: space-between;
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--t2);
+    color: var(--fg-2);
   }
   .distro-empty {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-sm);
     margin: 0;
     padding: 8px 0;
@@ -1028,27 +1028,27 @@
   .distro-interpretation {
     margin-top: 12px;
     padding: 10px 12px;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 10px;
-    background: var(--shell-panel-hover);
+    background: var(--bg-hover);
   }
   .distro-interpretation-headline {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--sans);
     font-size: var(--ts-sm);
     font-weight: 700;
   }
   .distro-interpretation-detail {
     margin: 4px 0 0;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--sans);
     font-size: var(--ts-xs);
     line-height: 1.45;
   }
-  .distro-interpretation[data-kind='bimodal'] { border-color: var(--shell-stop-border); }
-  .distro-interpretation[data-kind='tail-spikes'] { border-color: var(--shell-stop-border); }
-  .distro-interpretation[data-kind='unimodal-tight'] { border-color: var(--shell-success-border); }
+  .distro-interpretation[data-kind='bimodal'] { border-color: var(--stop-border); }
+  .distro-interpretation[data-kind='tail-spikes'] { border-color: var(--stop-border); }
+  .distro-interpretation[data-kind='unimodal-tight'] { border-color: var(--success-border); }
 
   /* ── Diagnostic answer + browser visibility ───────────────────────────── */
   .diagnose-answer,
@@ -1061,8 +1061,8 @@
     flex-direction: column;
     gap: 10px;
     padding: 18px;
-    background: var(--shell-panel);
-    border: 1px solid var(--shell-border);
+    background: var(--bg-2);
+    border: 1px solid var(--rule);
     border-radius: 16px;
   }
   .diagnose-brief {
@@ -1075,8 +1075,8 @@
     /* v2 alignment: flat panel surface in the same family as the other
        diagnose panels — drops the cyan-tinted gradient that previously
        singled this surface out. */
-    background: var(--shell-panel);
-    border-color: var(--shell-border);
+    background: var(--bg-2);
+    border-color: var(--rule);
     border-radius: 24px;
     box-shadow: 0 25px 50px -12px color-mix(in srgb, black 35%, transparent);
   }
@@ -1089,13 +1089,13 @@
     place-items: center;
     align-content: center;
     gap: 4px;
-    color: var(--accent-cyan);
+    color: var(--station-b);
     background: rgba(103, 232, 249, 0.08);
-    border: 2px solid color-mix(in srgb, var(--accent-cyan) 68%, transparent);
+    border: 2px solid color-mix(in srgb, var(--station-b) 68%, transparent);
     box-shadow: inset 0 0 0 12px rgba(3, 7, 18, 0.88), 0 0 34px rgba(103, 232, 249, 0.16);
   }
   .diagnose-brief-score-value {
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--mono);
     font-size: 2.625rem;
     line-height: 0.95;
@@ -1105,7 +1105,7 @@
   .diagnose-brief-score-label {
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--accent-cyan);
+    color: var(--station-b);
     letter-spacing: var(--tr-label);
     text-transform: uppercase;
   }
@@ -1118,13 +1118,13 @@
   .diagnose-answer-fact,
   .diagnose-answer-interpretation {
     margin: 0;
-    color: var(--t2);
+    color: var(--fg-2);
     font-size: var(--ts-base);
     line-height: 1.55;
   }
   .diagnose-answer-fact strong,
   .diagnose-answer-interpretation strong {
-    color: var(--t1);
+    color: var(--fg);
     font-weight: 650;
   }
   .diagnose-evidence-layout {
@@ -1148,11 +1148,11 @@
   }
   .diagnose-column-head .diagnose-section-kicker {
     margin-bottom: 0;
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
   .diagnose-column-head p {
     margin: 0;
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-sm);
     line-height: 1.45;
   }
@@ -1171,7 +1171,7 @@
   .diagnose-answer-headline {
     flex: 1 1 240px;
     min-width: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-md);
     line-height: 1.4;
   }
@@ -1179,8 +1179,8 @@
     flex: 0 0 auto;
     padding: 3px 7px;
     border-radius: 999px;
-    border: 1px solid var(--border-mid);
-    color: var(--t2);
+    border: 1px solid var(--rule);
+    color: var(--fg-2);
     background: rgba(255, 255, 255, 0.035);
     font-family: var(--mono);
     font-size: var(--ts-xs);
@@ -1189,17 +1189,17 @@
     white-space: nowrap;
   }
   .diagnose-confidence.high {
-    color: var(--accent-green);
+    color: var(--station-b);
     border-color: rgba(134, 239, 172, 0.24);
     background: rgba(134, 239, 172, 0.06);
   }
   .diagnose-confidence.medium {
-    color: var(--accent-cyan);
+    color: var(--station-b);
     border-color: rgba(103, 232, 249, 0.24);
     background: rgba(103, 232, 249, 0.05);
   }
   .diagnose-confidence.low {
-    color: var(--t3);
+    color: var(--fg-3);
   }
   .diagnose-answer-evidence {
     margin: 0;
@@ -1210,11 +1210,11 @@
   .diagnose-answer-evidence div {
     min-width: 0;
     padding-top: 8px;
-    border-top: 1px solid var(--border-mid);
+    border-top: 1px solid var(--rule);
   }
   .diagnose-answer-evidence dt {
     margin: 0 0 3px;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
@@ -1222,24 +1222,24 @@
   }
   .diagnose-answer-evidence dd {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--mono);
     font-size: var(--ts-sm);
     line-height: 1.35;
     overflow-wrap: anywhere;
   }
   .visibility-headline {
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-md);
   }
   .visibility-detail,
   .visibility-action {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-sm);
     line-height: 1.45;
   }
   .visibility-action {
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
 
   .diagnose-remote.local-path {
@@ -1264,22 +1264,22 @@
     margin: 0;
   }
   .remote-headline {
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-md);
     line-height: 1.4;
   }
   .remote-detail,
   .remote-action,
   .remote-error {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-sm);
     line-height: 1.45;
   }
   .remote-action {
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
   .remote-error {
-    color: var(--accent-amber);
+    color: var(--sev-warn);
   }
   .remote-evidence {
     margin: 0;
@@ -1290,11 +1290,11 @@
   .remote-evidence div {
     min-width: 0;
     padding-top: 8px;
-    border-top: 1px solid var(--border-mid);
+    border-top: 1px solid var(--rule);
   }
   .remote-evidence dt {
     margin: 0 0 3px;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
@@ -1302,7 +1302,7 @@
   }
   .remote-evidence dd {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--mono);
     font-size: var(--ts-sm);
     overflow: hidden;
@@ -1336,22 +1336,22 @@
     margin: 0;
   }
   .loaded-headline {
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-md);
     line-height: 1.4;
   }
   .loaded-detail,
   .loaded-action,
   .loaded-error {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-sm);
     line-height: 1.45;
   }
   .loaded-action {
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
   .loaded-error {
-    color: var(--accent-amber);
+    color: var(--sev-warn);
   }
   .loaded-evidence {
     margin: 0;
@@ -1362,11 +1362,11 @@
   .loaded-evidence div {
     min-width: 0;
     padding-top: 8px;
-    border-top: 1px solid var(--border-mid);
+    border-top: 1px solid var(--rule);
   }
   .loaded-evidence dt {
     margin: 0 0 3px;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
@@ -1374,7 +1374,7 @@
   }
   .loaded-evidence dd {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--mono);
     font-size: var(--ts-sm);
     overflow: hidden;
@@ -1396,7 +1396,7 @@
     margin: 0;
   }
   .network-context-headline {
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-md);
     line-height: 1.4;
   }
@@ -1404,15 +1404,15 @@
   .network-context-action,
   .network-context-error,
   .network-context-evidence p {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-sm);
     line-height: 1.45;
   }
   .network-context-action {
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
   .network-context-error {
-    color: var(--accent-amber);
+    color: var(--sev-warn);
   }
   .network-context-evidence {
     margin: 0;
@@ -1423,11 +1423,11 @@
   .network-context-evidence div {
     min-width: 0;
     padding-top: 8px;
-    border-top: 1px solid var(--border-mid);
+    border-top: 1px solid var(--rule);
   }
   .network-context-evidence dt {
     margin: 0 0 3px;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
@@ -1435,7 +1435,7 @@
   }
   .network-context-evidence dd {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-sm);
     line-height: 1.4;
   }
@@ -1455,19 +1455,19 @@
     margin: 0;
   }
   .local-proof-headline {
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-md);
     line-height: 1.4;
   }
   .local-proof-detail {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-sm);
     line-height: 1.45;
   }
   .local-proof-embed {
     margin-top: 4px;
     padding-top: 12px;
-    border-top: 1px solid var(--border-mid);
+    border-top: 1px solid var(--rule);
   }
   .local-proof-embed :global(.local-proof-panel) {
     margin: 0;
@@ -1480,12 +1480,12 @@
     gap: 10px;
     padding: 16px;
     background: rgba(8, 14, 24, 0.62);
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
   }
   .correlation-headline {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-md);
     line-height: 1.4;
   }
@@ -1504,13 +1504,13 @@
   .correlation-label {
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--t3);
+    color: var(--fg-3);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .correlation-row.focused .correlation-label {
-    color: var(--accent-cyan);
+    color: var(--station-b);
     font-weight: 500;
   }
   .correlation-cells {
@@ -1520,19 +1520,19 @@
   }
   .correlation-cell {
     height: 16px;
-    background: color-mix(in srgb, var(--t1) 12%, transparent);
+    background: color-mix(in srgb, var(--fg) 12%, transparent);
     border-radius: 2px;
   }
   .correlation-cell.spike {
-    background: var(--accent-pink);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--accent-pink) 50%, transparent);
+    background: var(--station-d);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--station-d) 50%, transparent);
   }
   .correlation-cell.missing {
     background: transparent;
-    border: 1px dashed color-mix(in srgb, var(--t1) 12%, transparent);
+    border: 1px dashed color-mix(in srgb, var(--fg) 12%, transparent);
   }
   .correlation-row.focused .correlation-cell:not(.spike):not(.missing) {
-    background: color-mix(in srgb, var(--accent-cyan) 35%, transparent);
+    background: color-mix(in srgb, var(--station-b) 35%, transparent);
   }
   .correlation-legend {
     display: flex;
@@ -1541,7 +1541,7 @@
     margin: 4px 0 0;
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--t4);
+    color: var(--fg-3);
     flex-wrap: wrap;
   }
   .correlation-legend-swatch {
@@ -1552,14 +1552,14 @@
     margin-right: 4px;
     vertical-align: middle;
   }
-  .correlation-legend-normal { background: color-mix(in srgb, var(--t1) 12%, transparent); }
-  .correlation-legend-spike { background: var(--accent-pink); }
-  .correlation-legend-missing { background: transparent; border: 1px dashed color-mix(in srgb, var(--t1) 12%, transparent); }
+  .correlation-legend-normal { background: color-mix(in srgb, var(--fg) 12%, transparent); }
+  .correlation-legend-spike { background: var(--station-d); }
+  .correlation-legend-missing { background: transparent; border: 1px dashed color-mix(in srgb, var(--fg) 12%, transparent); }
 
   /* ── Phase breakdown (collapsed by default) ────────────────────────────── */
   .diagnose-phases {
     background: rgba(8, 14, 24, 0.62);
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
     padding: 16px;
   }
@@ -1574,7 +1574,7 @@
   .diagnose-phases summary::-webkit-details-marker { display: none; }
   .diagnose-phases summary::before {
     content: '▸';
-    color: var(--t3);
+    color: var(--fg-3);
     transition: transform 150ms ease;
     display: inline-block;
   }
@@ -1584,7 +1584,7 @@
   .phases-summary-hint {
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--t4);
+    color: var(--fg-3);
   }
   .diagnose-phases[open] > *:not(summary) {
     margin-top: 12px;
@@ -1593,9 +1593,9 @@
     margin: 12px 0 0;
     padding: 10px 12px;
     background: rgba(255, 255, 255, 0.025);
-    border-left: 2px solid var(--t4);
+    border-left: 2px solid var(--fg-3);
     border-radius: 4px;
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-xs);
     line-height: 1.5;
   }
@@ -1618,14 +1618,14 @@
   .phase-unavailable-detail,
   .phase-unavailable-action {
     margin: 0;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     line-height: 1.55;
     letter-spacing: 0.01em;
   }
   .phase-unavailable-action {
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
 
   /* ── Browser Visibility chip + ghost rows (PR 3 of synthesis arc) ──────── */
@@ -1641,20 +1641,20 @@
     text-transform: uppercase;
   }
   .visibility-chip[data-visibility-level='none'] {
-    color: var(--accent-cyan);
-    background: var(--shell-bg-cyan);
-    border: 1px solid var(--shell-border-strong);
+    color: var(--station-b);
+    background: var(--station-b-bg);
+    border: 1px solid var(--rule-strong);
   }
   .visibility-chip[data-visibility-level='total-only'],
   .visibility-chip[data-visibility-level='mixed'] {
-    color: var(--accent-amber);
-    background: var(--shell-bg-amber);
-    border: 1px solid var(--shell-stop-border);
+    color: var(--sev-warn);
+    background: var(--sev-warn-bg);
+    border: 1px solid var(--stop-border);
   }
   .visibility-chip[data-visibility-level='phase'] {
-    color: var(--accent-green);
-    background: var(--shell-success-bg);
-    border: 1px solid var(--shell-success-border);
+    color: var(--station-b);
+    background: var(--success-bg);
+    border: 1px solid var(--success-border);
   }
   .visibility-rows {
     margin: 8px 0 0;
@@ -1671,7 +1671,7 @@
     gap: 12px;
     padding: 6px 10px;
     border-radius: 6px;
-    background: var(--shell-bg-cyan);
+    background: var(--station-b-bg);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     line-height: 1.4;
@@ -1681,16 +1681,16 @@
     opacity: 0.4;
   }
   .timing-row-label {
-    color: var(--t2);
+    color: var(--fg-2);
   }
   .timing-row-value {
-    color: var(--t3);
+    color: var(--fg-3);
     letter-spacing: var(--tr-label);
     text-transform: uppercase;
     font-weight: 600;
   }
   .timing-row[data-hidden='false'] .timing-row-value {
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
   @media (prefers-reduced-motion: reduce) {
     .timing-row { transition: none; }
@@ -1701,7 +1701,7 @@
     line-height: 1.06;
     font-weight: 700;
     letter-spacing: var(--tr-tight);
-    color: var(--t1);
+    color: var(--fg);
     display: flex;
     align-items: baseline;
     gap: 10px;
@@ -1716,11 +1716,11 @@
   .diagnose-title-url {
     font-family: var(--mono);
     font-size: var(--ts-sm);
-    color: var(--t3);
+    color: var(--fg-3);
     font-weight: 400;
     letter-spacing: var(--tr-body);
   }
-  .diagnose-title-placeholder { color: var(--t4); font-weight: 300; }
+  .diagnose-title-placeholder { color: var(--fg-3); font-weight: 300; }
 
   .diagnose-actions { display: flex; align-items: center; gap: 10px; }
   .diagnose-segment {
@@ -1728,7 +1728,7 @@
     padding: 2px;
     background: rgba(255, 255, 255, 0.04);
     border-radius: 7px;
-    border: 1px solid var(--border-mid);
+    border: 1px solid var(--rule);
     gap: 2px;
   }
   .diagnose-chip {
@@ -1736,32 +1736,32 @@
     border-radius: 5px;
     background: transparent;
     border: 1px solid transparent;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: 0.06em;
     cursor: pointer;
     transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
   }
-  .diagnose-chip:hover { color: var(--t1); border-color: var(--border-bright); }
+  .diagnose-chip:hover { color: var(--fg); border-color: var(--rule-strong); }
   .diagnose-chip.on {
     background: rgba(255, 255, 255, 0.08);
-    color: var(--t1);
+    color: var(--fg);
     border-color: transparent;
   }
   .diagnose-chip:focus-visible {
-    outline: 2px solid var(--accent-cyan);
+    outline: 2px solid var(--station-b);
     outline-offset: 2px;
   }
   .diagnose-chip-action {
     background: rgba(8, 14, 24, 0.44);
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
   }
 
   /* Empty states */
   .diagnose-empty {
     padding: 32px 24px;
-    border: 1px dashed var(--border-mid);
+    border: 1px dashed var(--rule);
     border-radius: 14px;
     text-align: center;
     display: flex;
@@ -1771,14 +1771,14 @@
   }
   .diagnose-empty-title {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--sans);
     font-size: var(--ts-base);
     font-weight: 500;
   }
   .diagnose-empty-hint {
     margin: 0;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: var(--ts-sm);
     letter-spacing: 0.02em;
@@ -1796,8 +1796,8 @@
     height: 80px;
     border-radius: 10px;
     overflow: hidden;
-    background: var(--surface-raised);
-    border: 1px solid var(--border-mid);
+    background: var(--bg-3);
+    border: 1px solid var(--rule);
   }
   .diagnose-bar-seg {
     height: 100%;
@@ -1834,7 +1834,7 @@
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-label);
-    color: var(--t4);
+    color: var(--fg-3);
     text-transform: uppercase;
     min-width: 0;
   }
@@ -1843,7 +1843,7 @@
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
-    color: var(--t4);
+    color: var(--fg-3);
     text-transform: uppercase;
   }
 
@@ -1860,7 +1860,7 @@
     grid-template-columns: 10px 140px 80px 1fr 40px;
     gap: 10px;
     align-items: center;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: var(--ts-sm);
     font-variant-numeric: tabular-nums;
@@ -1868,7 +1868,7 @@
     border-radius: 4px;
   }
   .diagnose-evidence-row.dominant {
-    color: var(--t1);
+    color: var(--fg);
     background: rgba(255, 255, 255, 0.03);
   }
   .diagnose-evidence-pip {
@@ -1877,7 +1877,7 @@
     align-self: center;
   }
   .diagnose-evidence-name { color: inherit; }
-  .diagnose-evidence-ms { color: var(--t1); }
+  .diagnose-evidence-ms { color: var(--fg); }
   .diagnose-evidence-bar {
     position: relative;
     height: 6px;
@@ -1894,14 +1894,14 @@
   }
   .diagnose-evidence-pct {
     text-align: right;
-    color: var(--t4);
+    color: var(--fg-3);
     letter-spacing: var(--tr-label);
   }
 
   /* Samples */
   .diagnose-samples {
     background: rgba(8, 14, 24, 0.62);
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
     padding: 14px 18px;
     display: flex;
@@ -1921,7 +1921,7 @@
   .diagnose-sample-round {
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--t4);
+    color: var(--fg-3);
     letter-spacing: var(--tr-label);
     width: 58px;
   }
@@ -1937,13 +1937,13 @@
   .diagnose-sample-neutral {
     display: block;
     width: 100%; height: 100%;
-    background: var(--t5, rgba(255, 255, 255, 0.07));
+    background: var(--fg-4, #36322B);
   }
   .diagnose-sample-total-only {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-label);
@@ -1954,7 +1954,7 @@
     justify-content: center;
     width: 100%; height: 100%;
     background: rgba(249, 168, 212, 0.2);
-    color: var(--accent-pink);
+    color: var(--station-d);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-label);
@@ -1962,7 +1962,7 @@
   .diagnose-sample-total {
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--t2);
+    color: var(--fg-2);
     text-align: right;
     font-variant-numeric: tabular-nums;
     width: 80px;

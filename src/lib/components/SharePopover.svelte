@@ -183,12 +183,6 @@
   style:--glass-border={tokens.color.glass.border}
   style:--glass-highlight={tokens.color.glass.highlight}
   style:--topbar-bg={tokens.color.topbar.bg}
-  style:--t1={tokens.color.text.t1}
-  style:--t2={tokens.color.text.t2}
-  style:--t3={tokens.color.text.t3}
-  style:--accent-cyan={tokens.color.accent.cyan}
-  style:--accent-pink={tokens.color.accent.pink}
-  style:--accent-green={tokens.color.accent.green}
   style:--radius-lg="{tokens.radius.lg}px"
   style:--radius-sm="{tokens.radius.sm}px"
   style:--btn-radius="{tokens.radius.btn}px"
@@ -401,7 +395,7 @@
     font-family: var(--sans);
     font-size: 16px;
     font-weight: 600;
-    background: linear-gradient(135deg, var(--accent-cyan), var(--accent-pink));
+    background: linear-gradient(135deg, var(--station-b), var(--station-d));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -418,7 +412,7 @@
     background: var(--glass-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: 20px;
     cursor: pointer;
     line-height: 1;
@@ -429,7 +423,7 @@
   .btn-close:hover {
     background: var(--glass-highlight);
     border-color: rgba(103,232,249,.2);
-    color: var(--t1);
+    color: var(--fg);
     box-shadow: 0 0 12px rgba(103,232,249,.2);
   }
 
@@ -448,13 +442,13 @@
   .notice {
     background: rgba(103,232,249,.08);
     border: 1px solid rgba(103,232,249,.25);
-    color: var(--t2);
+    color: var(--fg-2);
   }
 
   .warning {
     background: rgba(255,140,0,.08);
     border: 1px solid rgba(255,140,0,.25);
-    color: var(--t2);
+    color: var(--fg-2);
   }
 
   .privacy-option {
@@ -464,11 +458,11 @@
     gap: var(--spacing-sm);
     background: rgba(134,239,172,.055);
     border: 1px solid rgba(134,239,172,.2);
-    color: var(--t2);
+    color: var(--fg-2);
   }
   .privacy-option input {
     margin-top: 2px;
-    accent-color: var(--accent-green);
+    accent-color: var(--station-b);
   }
   .privacy-option span {
     display: flex;
@@ -477,12 +471,12 @@
     gap: 2px;
   }
   .privacy-option strong {
-    color: var(--t1);
+    color: var(--fg);
     font-size: 12px;
     font-weight: 600;
   }
   .privacy-option small {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: 11px;
     line-height: 1.35;
   }
@@ -541,7 +535,7 @@
     font-family: var(--mono);
     font-size: 11px;
     font-weight: 400;
-    color: var(--t1);
+    color: var(--fg);
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
@@ -549,7 +543,7 @@
   .action-desc {
     font-family: var(--sans);
     font-size: 11px;
-    color: var(--t3);
+    color: var(--fg-3);
     line-height: 1.35;
   }
 
@@ -561,7 +555,7 @@
     background: var(--topbar-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    color: var(--accent-cyan);
+    color: var(--station-b);
     font-family: var(--sans);
     font-size: 12px;
     font-weight: 500;
@@ -573,7 +567,7 @@
   .btn-copy:hover:not(:disabled) {
     background: var(--glass-highlight);
     border-color: var(--glass-highlight);
-    color: var(--t1);
+    color: var(--fg);
     transform: translateY(-1px);
     box-shadow: 0 2px 12px rgba(103,232,249,.15);
   }
@@ -582,19 +576,19 @@
     opacity: 0.4;
     cursor: not-allowed;
     border-color: var(--glass-border);
-    color: var(--t3);
+    color: var(--fg-3);
   }
 
   .btn-copy.copied {
-    background: var(--accent-green);
-    border-color: var(--accent-green);
+    background: var(--station-b);
+    border-color: var(--station-b);
     color: rgba(12,10,20,.9);
   }
 
   .btn-primary {
     background: rgba(103,232,249,.14);
     border-color: rgba(103,232,249,.34);
-    color: var(--t1);
+    color: var(--fg);
     box-shadow: 0 0 14px rgba(103,232,249,.08);
   }
 
@@ -610,7 +604,7 @@
   .fallback-label {
     font-family: var(--mono);
     font-size: 11px;
-    color: var(--t3);
+    color: var(--fg-3);
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
@@ -621,7 +615,7 @@
     background: rgba(0,0,0,.2);
     border: 1px solid var(--glass-border);
     border-radius: var(--btn-radius);
-    color: var(--t1);
+    color: var(--fg);
     font-size: 12px;
     font-family: var(--mono);
     box-sizing: border-box;
@@ -631,7 +625,7 @@
 
   .fallback-input:focus {
     outline: none;
-    border-color: var(--accent-cyan);
+    border-color: var(--station-b);
     box-shadow: inset 0 1px 4px rgba(0,0,0,.3), 0 0 12px rgba(103,232,249,.15);
   }
 

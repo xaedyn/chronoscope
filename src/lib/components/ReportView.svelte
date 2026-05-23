@@ -295,10 +295,6 @@
 <section
   class="report report-surface"
   aria-label="Diagnostic report"
-  style:--accent-cyan={tokens.color.accent.cyan}
-  style:--accent-green={tokens.color.accent.green}
-  style:--accent-amber={tokens.color.accent.amber}
-  style:--accent-pink={tokens.color.accent.pink}
 >
   <header class="report-hero" data-report-kind={report.reportKind}>
     <div class="report-hero-grid">
@@ -606,19 +602,19 @@
     max-width: min(1320px, calc(100vw - 32px));
     margin: 0 auto;
     padding: clamp(24px, 4vw, 48px) 0 44px;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--sans);
   }
 
   .report-hero {
     position: relative;
     overflow: hidden;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     /* v2 alignment: 24 px radius, flat panel surface, soft shadow. Drops
        the cyan radial-gradient that previously singled this surface out
        and the cyan underline accent below the hero. */
     border-radius: 24px;
-    background: var(--shell-panel);
+    background: var(--bg-2);
     box-shadow: 0 25px 50px -12px color-mix(in srgb, black 35%, transparent);
   }
   .report-hero-grid {
@@ -641,7 +637,7 @@
   .metric-note {
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--t3);
+    color: var(--fg-3);
     letter-spacing: var(--tr-label);
     text-transform: uppercase;
   }
@@ -670,7 +666,7 @@
   .report-lede {
     margin: 0;
     max-width: 820px;
-    color: var(--t2);
+    color: var(--fg-2);
     font-size: var(--ts-lg);
     line-height: 1.55;
   }
@@ -682,26 +678,26 @@
     flex-direction: column;
     gap: 8px;
     padding: 16px;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
     background: rgba(7,11,18,.62);
   }
   .report-fact-card span {
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--t3);
+    color: var(--fg-3);
     text-transform: uppercase;
     letter-spacing: var(--tr-label);
   }
   .report-fact-card strong {
     font-size: 30px;
     line-height: 1;
-    color: var(--t1);
+    color: var(--fg);
     font-variant-numeric: tabular-nums;
   }
   .report-fact-card p {
     margin: 0;
-    color: var(--t2);
+    color: var(--fg-2);
     line-height: 1.45;
   }
   .fact-card-divider {
@@ -723,9 +719,9 @@
     text-transform: uppercase;
     white-space: nowrap;
   }
-  .confidence.low { color: var(--accent-amber); border: 1px solid rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
-  .confidence.medium { color: var(--accent-cyan); border: 1px solid rgba(103,232,249,.32); background: rgba(103,232,249,.08); }
-  .confidence.high { color: var(--accent-green); border: 1px solid rgba(74,222,128,.34); background: rgba(74,222,128,.08); }
+  .confidence.low { color: var(--sev-warn); border: 1px solid rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
+  .confidence.medium { color: var(--station-b); border: 1px solid rgba(103,232,249,.32); background: rgba(103,232,249,.08); }
+  .confidence.high { color: var(--station-b); border: 1px solid rgba(74,222,128,.34); background: rgba(74,222,128,.08); }
 
   .report-actions {
     display: flex;
@@ -736,20 +732,20 @@
   .action {
     min-height: 44px;
     border-radius: 8px;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     background: rgba(255,255,255,.025);
-    color: var(--t2);
+    color: var(--fg-2);
     padding: 0 13px;
     font-family: var(--sans);
     font-size: var(--ts-sm);
     cursor: pointer;
   }
   .action:hover {
-    color: var(--t1);
-    border-color: var(--shell-border-strong);
+    color: var(--fg);
+    border-color: var(--rule-strong);
   }
   .action-primary {
-    color: var(--accent-cyan);
+    color: var(--station-b);
     border-color: rgba(103,232,249,.35);
     background: rgba(103,232,249,.08);
   }
@@ -764,12 +760,12 @@
     border: 1px solid rgba(134,239,172,.22);
     border-radius: 8px;
     background: rgba(134,239,172,.055);
-    color: var(--t2);
+    color: var(--fg-2);
     font-size: var(--ts-sm);
   }
   .local-proof-export input {
     margin-top: 2px;
-    accent-color: var(--accent-green);
+    accent-color: var(--station-b);
   }
   .local-proof-export span {
     display: flex;
@@ -778,12 +774,12 @@
     gap: 2px;
   }
   .local-proof-export strong {
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-sm);
     font-weight: 600;
   }
   .local-proof-export small {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-xs);
     line-height: 1.45;
   }
@@ -793,15 +789,15 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 1px;
     margin: 18px 0;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
     overflow: hidden;
-    background: var(--shell-border);
+    background: var(--rule);
   }
   .report-strip > div {
     min-width: 0;
     padding: 13px 14px;
-    background: var(--shell-panel);
+    background: var(--bg-2);
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -813,7 +809,7 @@
 
   .evidence-trail {
     margin-bottom: 18px;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
     background: color-mix(in srgb, black 40%, transparent);
     padding: 14px;
@@ -848,7 +844,7 @@
     background: rgba(249,168,212,.065);
   }
   .timeline-event span {
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     text-transform: uppercase;
@@ -856,12 +852,12 @@
   .timeline-event strong {
     display: block;
     margin-top: 6px;
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-base);
   }
   .timeline-event p {
     margin: 6px 0 0;
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-sm);
     line-height: 1.4;
   }
@@ -898,14 +894,14 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     text-transform: uppercase;
   }
   .trail-item p {
     margin: 0;
-    color: var(--t2);
+    color: var(--fg-2);
     font-size: var(--ts-sm);
     line-height: 1.35;
   }
@@ -914,7 +910,7 @@
     padding: 3px 7px;
     border: 1px solid rgba(255,255,255,.1);
     border-radius: 999px;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     white-space: nowrap;
@@ -929,7 +925,7 @@
 
   .report-panel,
   .next-steps {
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
     background: rgba(8, 14, 24, 0.62);
     padding: 16px;
@@ -958,7 +954,7 @@
   .evidence-item small,
   .limitations small,
   .endpoint-name small {
-    color: var(--t3);
+    color: var(--fg-3);
   }
   .evidence-item strong {
     font-size: var(--ts-xl);
@@ -966,7 +962,7 @@
   }
 
   .report-panel p {
-    color: var(--t2);
+    color: var(--fg-2);
     line-height: 1.5;
   }
   .baseline-panel {
@@ -974,7 +970,7 @@
   }
   .privacy-note {
     margin-top: 8px;
-    color: var(--t3) !important;
+    color: var(--fg-3) !important;
     font-size: var(--ts-xs);
   }
   .baseline-list {
@@ -999,7 +995,7 @@
   }
   .baseline-row span,
   .baseline-row small {
-    color: var(--t3);
+    color: var(--fg-3);
     line-height: 1.4;
   }
   .remote-list {
@@ -1024,12 +1020,12 @@
   }
   .remote-row span,
   .remote-row small {
-    color: var(--t3);
+    color: var(--fg-3);
     line-height: 1.4;
   }
   .guidance {
     padding-left: 10px;
-    border-left: 2px solid var(--accent-cyan);
+    border-left: 2px solid var(--station-b);
   }
   .limitations {
     display: flex;
@@ -1047,7 +1043,7 @@
     border: 1px solid rgba(251,191,36,.16);
   }
   .limitation span {
-    color: var(--t2);
+    color: var(--fg-2);
   }
 
   .endpoint-panel {
@@ -1101,13 +1097,13 @@
     border-top: 1px solid rgba(255,255,255,.06);
   }
   .endpoint-card-metrics small {
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     text-transform: uppercase;
   }
   .endpoint-card-metrics strong {
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-base);
     font-variant-numeric: tabular-nums;
   }
@@ -1130,7 +1126,7 @@
   .endpoint-head {
     padding: 10px 12px;
     background: rgba(255,255,255,.035);
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     text-transform: uppercase;
@@ -1138,7 +1134,7 @@
   .endpoint-row {
     padding: 12px;
     border-top: 1px solid rgba(255,255,255,.055);
-    color: var(--t2);
+    color: var(--fg-2);
     font-variant-numeric: tabular-nums;
   }
   .endpoint-row.implicated {
@@ -1173,13 +1169,13 @@
     min-height: 24px;
     padding: 0 8px;
     border: 1px solid rgba(255,255,255,.12);
-    color: var(--t3);
+    color: var(--fg-3);
     background: rgba(255,255,255,.035);
   }
-  .status-pill.ok { color: var(--accent-green); border-color: rgba(74,222,128,.25); background: rgba(74,222,128,.07); }
+  .status-pill.ok { color: var(--station-b); border-color: rgba(74,222,128,.25); background: rgba(74,222,128,.07); }
   .status-pill.slow,
-  .endpoint-row.implicated .status-pill { color: var(--accent-pink); border-color: rgba(249,168,212,.28); background: rgba(249,168,212,.08); }
-  .status-pill.loss { color: var(--accent-amber); border-color: rgba(251,191,36,.28); background: rgba(251,191,36,.08); }
+  .endpoint-row.implicated .status-pill { color: var(--station-d); border-color: rgba(249,168,212,.28); background: rgba(249,168,212,.08); }
+  .status-pill.loss { color: var(--sev-warn); border-color: rgba(251,191,36,.28); background: rgba(251,191,36,.08); }
   .status-pill.muted { opacity: .75; }
 
   .triage-grid {
@@ -1219,7 +1215,7 @@
     align-items: center;
     justify-content: center;
     border: 1px solid rgba(103,232,249,.25);
-    color: var(--accent-cyan);
+    color: var(--station-b);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     font-variant-numeric: tabular-nums;
@@ -1233,36 +1229,36 @@
     padding: 3px 7px;
     border-radius: 999px;
     border: 1px solid rgba(255,255,255,.1);
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     white-space: nowrap;
   }
   .triage-status.good {
-    color: var(--accent-green);
+    color: var(--station-b);
     border-color: rgba(74,222,128,.25);
     background: rgba(74,222,128,.07);
   }
   .triage-status.watch {
-    color: var(--accent-amber);
+    color: var(--sev-warn);
     border-color: rgba(251,191,36,.25);
     background: rgba(251,191,36,.07);
   }
   .triage-status.bad {
-    color: var(--accent-pink);
+    color: var(--station-d);
     border-color: rgba(249,168,212,.28);
     background: rgba(249,168,212,.08);
   }
   .triage-card p {
     margin: 6px 0 0;
-    color: var(--t3);
+    color: var(--fg-3);
     line-height: 1.45;
   }
   .triage-action {
-    color: var(--t1) !important;
+    color: var(--fg) !important;
   }
   .triage-watch strong {
-    color: var(--t2);
+    color: var(--fg-2);
   }
   .triage-button {
     align-self: flex-start;
@@ -1271,7 +1267,7 @@
     border-radius: 7px;
     border: 1px solid rgba(103,232,249,.24);
     background: rgba(103,232,249,.07);
-    color: var(--accent-cyan);
+    color: var(--station-b);
     padding: 0 11px;
     font-family: var(--sans);
     font-size: var(--ts-sm);
@@ -1279,7 +1275,7 @@
   }
   .triage-button:hover:not(:disabled) {
     border-color: rgba(103,232,249,.42);
-    color: var(--t1);
+    color: var(--fg);
   }
   .triage-button:disabled {
     cursor: not-allowed;

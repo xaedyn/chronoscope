@@ -53,7 +53,7 @@
   let latencyColor = $derived(
     lastStatus === 'timeout' || lastStatus === 'error'
       ? tokens.color.status.timeout
-      : tokens.color.text.secondary
+      : tokens.color.text.fg2
   );
 
   // ── Edit mode state ───────────────────────────────────────────────────────────
@@ -129,11 +129,6 @@
   style:--glass-border={tokens.color.glass.border}
   style:--glass-highlight={tokens.color.glass.highlight}
   style:--glass-bg={tokens.color.glass.bg}
-  style:--t1={tokens.color.text.t1}
-  style:--t2={tokens.color.text.t2}
-  style:--t3={tokens.color.text.t3}
-  style:--accent-cyan={tokens.color.accent.cyan}
-  style:--accent-pink={tokens.color.accent.pink}
   style:--btn-radius="{tokens.radius.btn}px"
   style:--radius-sm="{tokens.radius.sm}px"
   style:--spacing-xs="{tokens.spacing.xs}px"
@@ -338,7 +333,7 @@
     background: rgba(0,0,0,.2);
     border: 1px solid var(--glass-border);
     border-radius: var(--btn-radius);
-    color: var(--t1);
+    color: var(--fg);
     font-size: 13px;
     font-family: var(--mono);
     padding: var(--spacing-xs) var(--spacing-sm);
@@ -348,7 +343,7 @@
   }
 
   .url-input:focus {
-    border-color: var(--accent-cyan);
+    border-color: var(--station-b);
     box-shadow: inset 0 1px 4px rgba(0,0,0,.3), 0 0 12px rgba(103,232,249,.15);
   }
 
@@ -359,7 +354,7 @@
   .row-label {
     flex: 1;
     min-width: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-size: 13px;
     font-family: var(--sans);
     font-weight: 500;
@@ -417,20 +412,20 @@
     transition: background var(--timing-btn) ease, border-color var(--timing-btn) ease;
   }
   .btn-primary {
-    background: color-mix(in srgb, var(--accent-cyan) 18%, transparent);
-    color: var(--accent-cyan);
-    border-color: color-mix(in srgb, var(--accent-cyan) 35%, transparent);
+    background: color-mix(in srgb, var(--station-b) 18%, transparent);
+    color: var(--station-b);
+    border-color: color-mix(in srgb, var(--station-b) 35%, transparent);
   }
   .btn-primary:hover {
-    background: color-mix(in srgb, var(--accent-cyan) 28%, transparent);
+    background: color-mix(in srgb, var(--station-b) 28%, transparent);
   }
   .btn-secondary {
     background: transparent;
-    color: var(--t2);
+    color: var(--fg-2);
     border-color: var(--glass-border);
   }
   .btn-secondary:hover {
-    color: var(--t1);
+    color: var(--fg);
     border-color: var(--glass-highlight);
   }
 
@@ -440,7 +435,7 @@
     background: rgba(0,0,0,.2);
     border: 1px solid var(--glass-border);
     border-radius: var(--btn-radius);
-    color: var(--t1);
+    color: var(--fg);
     font-size: 13px;
     font-family: var(--sans);
     padding: var(--spacing-xs) var(--spacing-sm);
@@ -450,12 +445,12 @@
   }
 
   .nickname-input:focus {
-    border-color: var(--accent-cyan);
+    border-color: var(--station-b);
     box-shadow: inset 0 1px 4px rgba(0,0,0,.3), 0 0 12px rgba(103,232,249,.15);
   }
 
   .nickname-input[aria-invalid='true'] {
-    border-color: var(--accent-pink);
+    border-color: var(--station-d);
     box-shadow: inset 0 1px 4px rgba(0,0,0,.3), 0 0 8px rgba(249,168,212,.2);
   }
 
@@ -463,7 +458,7 @@
   .nickname-error {
     font-size: 10px;
     font-family: var(--mono);
-    color: var(--accent-pink);
+    color: var(--station-d);
     white-space: nowrap;
     line-height: 1.2;
   }
@@ -489,7 +484,7 @@
     border: 1px solid transparent;
     border-radius: var(--btn-radius);
     background: transparent;
-    color: var(--t3);
+    color: var(--fg-3);
     cursor: pointer;
     transition: opacity var(--timing-btn) ease, color var(--timing-btn) ease,
       background var(--timing-btn) ease, border-color var(--timing-btn) ease;
@@ -507,7 +502,7 @@
   .edit-btn:hover:not(:disabled) {
     background: var(--glass-bg);
     border-color: rgba(103,232,249,.15);
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
 
   /* Touch devices: always show edit button */
@@ -552,12 +547,12 @@
     width: 14px;
     height: 14px;
     border-radius: 50%;
-    background: var(--t3);
+    background: var(--fg-3);
     transition: transform var(--timing-btn) ease, background var(--timing-btn) ease;
   }
 
   .toggle-input:checked + .toggle-track {
-    background: var(--accent-cyan);
+    background: var(--station-b);
     box-shadow: 0 0 10px rgba(103,232,249,.25);
   }
 
@@ -567,7 +562,7 @@
   }
 
   .toggle-input:focus-visible + .toggle-track {
-    outline: 2px solid var(--accent-cyan);
+    outline: 2px solid var(--station-b);
     outline-offset: 2px;
   }
 
@@ -587,7 +582,7 @@
     border: 1px solid transparent;
     border-radius: 50%;
     background: transparent;
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: 12px;
     cursor: pointer;
     transition: all var(--timing-btn) ease;
@@ -596,7 +591,7 @@
   .remove-btn:hover:not(:disabled) {
     background: var(--glass-bg);
     border-color: rgba(249,168,212,.15);
-    color: var(--accent-pink);
+    color: var(--station-d);
     box-shadow: 0 0 8px rgba(249,168,212,.1);
   }
 

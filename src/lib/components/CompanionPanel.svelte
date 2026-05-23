@@ -272,7 +272,7 @@
     font-family: var(--mono);
     font-size: 11px;
     font-weight: 400;
-    color: var(--t2);
+    color: var(--fg-2);
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
@@ -282,7 +282,7 @@
     padding: 2px 7px;
     border: 1px solid var(--glass-border);
     border-radius: 999px;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: 10px;
     letter-spacing: 0;
@@ -290,7 +290,7 @@
 
   .agent-note {
     margin: 0;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--sans);
     font-size: 12px;
     line-height: 1.45;
@@ -298,7 +298,7 @@
   }
 
   .agent-note.subtle {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: 11px;
   }
 
@@ -311,7 +311,7 @@
     border: 1px solid var(--glass-border);
     border-radius: var(--btn-radius);
     background: rgba(0,0,0,.14);
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: 10px;
     letter-spacing: 0;
@@ -319,12 +319,12 @@
 
   .status-pill[data-status="connected"] {
     border-color: rgba(103,232,249,.28);
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
 
   .status-pill[data-status="error"] {
-    border-color: var(--pink20);
-    color: var(--accent-pink);
+    border-color: var(--stop-border);
+    color: var(--station-d);
   }
 
   .field-line {
@@ -337,7 +337,7 @@
   .field-line span {
     font-family: var(--mono);
     font-size: 10px;
-    color: var(--t3);
+    color: var(--fg-3);
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }
@@ -347,7 +347,7 @@
     background: rgba(0,0,0,.2);
     border: 1px solid var(--glass-border);
     border-radius: var(--btn-radius);
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--mono);
     font-size: 12px;
     width: 100%;
@@ -358,7 +358,7 @@
 
   .field-input:focus {
     outline: none;
-    border-color: var(--accent-cyan);
+    border-color: var(--station-b);
     box-shadow: inset 0 1px 4px rgba(0,0,0,.3), 0 0 12px rgba(103,232,249,.15);
   }
 
@@ -374,7 +374,7 @@
     border: 1px solid var(--glass-border);
     border-radius: var(--btn-radius);
     background: rgba(0,0,0,.16);
-    color: var(--t2);
+    color: var(--fg-2);
     cursor: pointer;
     font-family: var(--sans);
     font-size: 12px;
@@ -383,7 +383,7 @@
   }
 
   .agent-btn.primary {
-    color: var(--accent-cyan);
+    color: var(--station-b);
     border-color: rgba(103,232,249,.22);
   }
 
@@ -393,7 +393,7 @@
 
   .agent-btn:hover:not(:disabled) {
     border-color: var(--glass-highlight);
-    color: var(--t1);
+    color: var(--fg);
     background: var(--glass-bg-strong);
     transform: translateY(-1px);
   }
@@ -415,14 +415,14 @@
     padding: 3px 7px;
     border: 1px solid var(--glass-border);
     border-radius: 999px;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: 10px;
     letter-spacing: 0;
   }
 
   .capability-row span.available {
-    color: var(--accent-cyan);
+    color: var(--station-b);
     border-color: rgba(103,232,249,.22);
   }
 
@@ -448,7 +448,7 @@
     border: 1px solid var(--glass-border);
     border-radius: var(--btn-radius);
     background: rgba(0,0,0,.14);
-    color: var(--t2);
+    color: var(--fg-2);
     cursor: pointer;
   }
 
@@ -459,7 +459,7 @@
 
   .probe-toggle input {
     flex: 0 0 auto;
-    accent-color: var(--accent-cyan);
+    accent-color: var(--station-b);
   }
 
   .probe-toggle span {
@@ -484,9 +484,9 @@
   }
 
   .agent-message.error {
-    color: var(--accent-pink);
-    background: var(--pink06);
-    border: 1px solid var(--pink12);
+    color: var(--station-d);
+    background: var(--stop-bg);
+    border: 1px solid var(--stop-bg);
   }
 
   .agent-result {
@@ -495,18 +495,18 @@
     gap: 2px;
     background: rgba(0,0,0,.16);
     border: 1px solid var(--glass-border);
-    color: var(--t2);
+    color: var(--fg-2);
     min-width: 0;
   }
 
   .result-host {
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--mono);
     overflow-wrap: anywhere;
   }
 
   .result-summary {
-    color: var(--t3);
+    color: var(--fg-3);
     overflow-wrap: anywhere;
   }
 

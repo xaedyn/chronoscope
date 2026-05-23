@@ -1,5 +1,5 @@
 <!-- src/lib/components/Layout.svelte -->
-<!-- Figma-aligned shell. Topbar + top-level nav + active content.             -->
+<!-- App shell. Vessel v4 masthead + top-level nav + active content.            -->
 <!-- Routes activeView to Overview / Live / Investigate / Report. The legacy   -->
 <!-- Lanes family was retired in Phase 7 — the v6→v7 migration rewrites         -->
 <!-- 'lanes' / 'timeline' / 'heatmap' / 'split' to 'overview' so nothing        -->
@@ -10,8 +10,7 @@
   import { measurementStore } from '$lib/stores/measurements';
   import { endpointStore } from '$lib/stores/endpoints';
   import { uiStore } from '$lib/stores/ui';
-  import { tokens } from '$lib/tokens';
-  import Topbar from './Topbar.svelte';
+  import Masthead from './Masthead.svelte';
   import OverviewView from './OverviewView.svelte';
   import LiveView from './LiveView.svelte';
   import DiagnoseView from './DiagnoseView.svelte';
@@ -55,24 +54,10 @@
 
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
-<div
-  class="bg"
-  aria-hidden="true"
-  style:--bg-base={tokens.color.surface.base}
-  style:--shell-bg={tokens.color.shell.base}
-  style:--shell-bg-cyan={tokens.color.shell.bgCyan}
-  style:--shell-bg-amber={tokens.color.shell.bgAmber}
-></div>
+<div class="bg" aria-hidden="true"></div>
 
-<div
-  class="app"
-  style:--bg-base={tokens.color.surface.base}
-  style:--shell-bg={tokens.color.shell.base}
-  style:--shell-bg-cyan={tokens.color.shell.bgCyan}
-  style:--shell-bg-amber={tokens.color.shell.bgAmber}
-  style:--t1={tokens.color.text.t1}
->
-  <Topbar {onStart} {onStop} />
+<div class="app">
+  <Masthead {onStart} {onStop} />
 
   {#if sharedReportMode}
     <main id="main-content" class="shell-main report-main" tabindex="-1">
@@ -114,7 +99,7 @@
 <style>
   .skip-link {
     position: absolute; top: -40px; left: 0; z-index: 9999;
-    padding: 8px 16px; background: var(--accent-cyan); color: var(--bg-base);
+    padding: 8px 16px; background: var(--station-b); color: var(--bg);
     font-weight: 600; text-decoration: none;
     border-radius: 0 0 4px 0; transition: top 100ms ease;
   }
@@ -127,7 +112,7 @@
      raster, which is overkill for this surface. */
   .bg {
     position: fixed; inset: 0; z-index: 0;
-    background: var(--shell-bg);
+    background: var(--bg);
   }
 
   .app {
@@ -140,7 +125,7 @@
     height: 100svh;
     display: flex; flex-direction: column;
     overflow: hidden;
-    color: var(--t1);
+    color: var(--fg);
   }
 
   .shell-body {
