@@ -18,6 +18,7 @@
   import { monitoredEndpointsStore } from '$lib/stores/derived';
   import { uiStore } from '$lib/stores/ui';
   import { navigateTo } from '$lib/router';
+  import { remoteVantageClient } from '$lib/remote-vantage/client';
 
   type VantageKey = 'local' | 'iad' | 'lhr' | 'nrt';
 
@@ -66,11 +67,16 @@
     };
   })());
 
-  // ── Simulated probe results ────────────────────────────────────────────────
-  // Numbers mirror the v4 prototype's "upstream slow" case (all four
-  // vantages agree on a slow band). Phase D will replace this constant
-  // with the actual worker round-trip results.
-  const probes: readonly VantageProbe[] = [
+  // ── Probe state ────────────────────────────────────────────────────────────
+  // Initial state mirrors the v4 prototype's "upstream slow" worked example
+  // so the surface renders meaningfully before any backend call. Re-run
+  // dispatches the real /api/transit-probe endpoint + a local browser probe
+  // loop and replaces these values with measured data.
+  const PROBES_PER_VANTAGE = 10;
+  const BASELINE_MS = 30;
+  const RUN_DURATION_S = 3.1;
+
+  const DEFAULT_PROBES: readonly VantageProbe[] = [
     {
       key: 'local', name: 'Your browser', meta: 'Chrome · macOS · US-W',
       location: 'Local · US-W',
@@ -92,15 +98,14 @@
       last: 79, p50: 76, p95: 91, sigma: 6, bad: true,
     },
   ];
-
-  const PROBES_PER_VANTAGE = 10;
-  const BASELINE_MS = 30;
-  const RUN_DURATION_S = 3.1;
+  let probes = $state<readonly VantageProbe[]>(DEFAULT_PROBES);
+  let runState = $state<'idle' | 'running' | 'error'>('idle');
+  let runError = $state<string | null>(null);
 
   // ── Verdict aggregates ─────────────────────────────────────────────────────
   const agreementCount = $derived(probes.filter((p) => p.bad).length);
-  const totalVantages = probes.length;
-  const probesTotal = totalVantages * PROBES_PER_VANTAGE;
+  const totalVantages = $derived(probes.length);
+  const probesTotal = $derived(totalVantages * PROBES_PER_VANTAGE);
   const medianLast = $derived.by(() => {
     const sorted = [...probes].map((p) => p.last).sort((a, b) => a - b);
     if (sorted.length === 0) return 0;
@@ -210,10 +215,98 @@
       navigateTo({ name: 'investigate', endpointId: null });
     }
   }
-  function rerunTransit(): void {
-    // Phase D will dispatch the worker probe here. In Phase C, the
-    // re-run button is a no-op visual affordance so the surface
-    // demonstrates the recovery flow without hitting any backend.
+  // ── Real probe execution ──────────────────────────────────────────────────
+  // Runs PROBES_PER_VANTAGE HEAD requests against the target URL from the
+  // browser. Returns stats matching the VantageProbe shape; on errors,
+  // returns null so the caller can surface a fallback.
+  async function runLocalProbeLoop(targetUrl: string, count: number): Promise<VantageProbe | null> {
+    const latencies: number[] = [];
+    for (let i = 0; i < count; i++) {
+      const t0 = performance.now();
+      try {
+        await fetch(targetUrl, { method: 'HEAD', mode: 'no-cors', cache: 'no-store' });
+        latencies.push(performance.now() - t0);
+      } catch {
+        // Probe-loop failures are counted implicitly via missing latencies;
+        // p50/p95/sigma are computed over what arrived.
+      }
+    }
+    if (latencies.length === 0) return null;
+    const sorted = [...latencies].sort((a, b) => a - b);
+    const p = (q: number): number => sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * q))];
+    const mean = sorted.reduce((s, v) => s + v, 0) / sorted.length;
+    const variance = sorted.reduce((s, v) => s + (v - mean) ** 2, 0) / sorted.length;
+    return {
+      key: 'local',
+      name: 'Your browser',
+      meta: 'Local',
+      location: 'Local · this browser',
+      last: Math.round(latencies[latencies.length - 1]),
+      p50: Math.round(p(0.5)),
+      p95: Math.round(p(0.95)),
+      sigma: Math.round(Math.sqrt(variance)),
+      bad: p(0.5) > BASELINE_MS * 1.5,
+    };
+  }
+
+  // Map a Cloudflare colo code to one of our four canonical vantage slots
+  // when it matches; otherwise return 'iad' as a stand-in (the response
+  // populates whichever slot best represents where the probe ran).
+  function coloToKey(colo: string | undefined): VantageKey {
+    const c = (colo ?? '').toUpperCase();
+    if (['IAD', 'DCA', 'BOS', 'EWR', 'ATL', 'ORD'].includes(c)) return 'iad';
+    if (['LHR', 'CDG', 'AMS', 'FRA', 'DUB'].includes(c)) return 'lhr';
+    if (['NRT', 'KIX', 'HND', 'ICN', 'HKG', 'SIN'].includes(c)) return 'nrt';
+    return 'iad';
+  }
+
+  async function rerunTransit(): Promise<void> {
+    if (runState === 'running') return;
+    runState = 'running';
+    runError = null;
+
+    const targetUrl = focusedId !== null
+      ? monitored.find((ep) => ep.id === focusedId)?.url ?? null
+      : monitored[0]?.url ?? null;
+    if (!targetUrl) {
+      runError = 'No target endpoint configured';
+      runState = 'error';
+      return;
+    }
+
+    try {
+      const [localProbe, transitResp] = await Promise.all([
+        runLocalProbeLoop(targetUrl, PROBES_PER_VANTAGE),
+        remoteVantageClient.runTransitProbe({ target: targetUrl, probeCount: PROBES_PER_VANTAGE }),
+      ]);
+
+      const next: VantageProbe[] = DEFAULT_PROBES.map((p) => ({ ...p }));
+      if (localProbe) next[0] = localProbe;
+      if (transitResp.ok) {
+        const key = coloToKey(transitResp.region);
+        const slot = next.findIndex((p) => p.key === key);
+        if (slot >= 0) {
+          next[slot] = {
+            key,
+            name: `Cloudflare ${transitResp.region}`,
+            meta: `${transitResp.edge.city ?? '—'} · ${transitResp.edge.country ?? '—'}`,
+            location: `${transitResp.edge.city ?? '—'} · ${transitResp.edge.country ?? '—'}`,
+            last: Math.round(transitResp.last),
+            p50: Math.round(transitResp.p50),
+            p95: Math.round(transitResp.p95),
+            sigma: Math.round(transitResp.sigma),
+            bad: transitResp.p50 > BASELINE_MS * 1.5,
+          };
+        }
+      } else {
+        runError = transitResp.error;
+      }
+      probes = next;
+      runState = transitResp.ok ? 'idle' : 'error';
+    } catch (err) {
+      runError = err instanceof Error ? err.message : 'Transit probe failed';
+      runState = 'error';
+    }
   }
   function backCrumbLabel(): string {
     if (focusedId !== null) {
@@ -455,10 +548,15 @@
         Your local network is clear. The slowdown lives on {target.displayName}'s path to <em>{target.host}</em>. <strong>If this is your service:</strong> check the region health and ingress metrics. <strong>If you're a consumer:</strong> there's nothing local you can fix — the upstream needs to recover. Re-run this transit in <em>5 min</em> to see if it lifts.
       </p>
       <div class="row">
-        <button type="button" class="primary" onclick={rerunTransit}>Re-run transit →</button>
+        <button type="button" class="primary" onclick={rerunTransit} disabled={runState === 'running'}>
+          {runState === 'running' ? 'Running probe…' : 'Re-run transit →'}
+        </button>
         <button type="button" class="ghost" onclick={() => {}}>Schedule monitor</button>
         <button type="button" class="ghost" onclick={() => {}}>Share this verdict</button>
       </div>
+      {#if runError}
+        <p class="run-error" role="alert">Probe error: {runError}</p>
+      {/if}
     </div>
   </div>
 </section>
@@ -1320,6 +1418,17 @@
   .next-step .ghost:focus-visible {
     outline: 2px solid var(--station-b);
     outline-offset: 2px;
+  }
+  .next-step .primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .run-error {
+    margin-top: 12px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--sev-bad);
+    letter-spacing: 0.04em;
   }
 
   /* ── RESPONSIVE ─────────────────────────────────────────────────────────── */

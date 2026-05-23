@@ -112,8 +112,25 @@ export function navigateTo(state: RouteState, options?: NavigateOptions): void {
       history.pushState({}, '', path);
     }
   }
-  applyRouteToStore(state);
-  notify(state);
+  applyAndNotify(state);
+}
+
+// Wrap the state-write + notify pair in document.startViewTransition() so the
+// browser cross-fades the old DOM into the new one. Feature-detected — Safari
+// < 18 and older Firefox fall through to the instant-swap path. Wrapping the
+// notify() call alongside applyRouteToStore() ensures any subscriber-driven
+// DOM work (Layout's {#if activeView} swap, focus restoration, etc.) lands
+// inside the same transition snapshot the browser captures.
+function applyAndNotify(state: RouteState): void {
+  if (typeof document !== 'undefined' && typeof document.startViewTransition === 'function') {
+    document.startViewTransition(() => {
+      applyRouteToStore(state);
+      notify(state);
+    });
+  } else {
+    applyRouteToStore(state);
+    notify(state);
+  }
 }
 
 export function subscribeRoute(handler: (state: RouteState) => void): () => void {
@@ -175,8 +192,8 @@ function handlePopstate(): void {
     }
     return;
   }
-  applyRouteToStore(next);
-  notify(next);
+  // Back/forward gets the same cross-fade treatment as forward navigation.
+  applyAndNotify(next);
 }
 
 function notify(state: RouteState): void {

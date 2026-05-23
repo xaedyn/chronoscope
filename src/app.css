@@ -57,3 +57,21 @@ html, body {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── View Transitions (route navigation cross-fade) ──
+   Used by src/lib/router.ts navigateTo() / popstate handlers. Feature-detected
+   in JS, so this only applies on Chrome/Edge 111+, Safari 18+, etc. The
+   default UA animation is a 250ms cross-fade; we tune it to 220ms with a
+   gentler easing curve to match the v4 cinematic feel. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}

@@ -5,6 +5,8 @@ import type {
   RemoteVantageProbeRequest,
   RemoteVantageProbeResponse,
   RemoteVantageTarget,
+  TransitProbeRequest,
+  TransitProbeResponse,
 } from './types';
 
 export interface RemoteVantageHealth {
@@ -25,6 +27,7 @@ export interface RemoteVantageHealth {
 export interface RemoteVantageClient {
   checkHealth(): Promise<RemoteVantageHealth>;
   runProbe(request: RemoteVantageProbeRequest): Promise<RemoteVantageProbeResponse>;
+  runTransitProbe(request: TransitProbeRequest): Promise<TransitProbeResponse>;
   createHostedReport(payload: SharePayload): Promise<HostedReportCreateResponse>;
   loadHostedReport(id: string): Promise<HostedReportLoadResponse>;
 }
@@ -69,6 +72,18 @@ export function createRemoteVantageClient(fetcher: typeof fetch = fetch): Remote
         body: JSON.stringify(request),
       });
       return parseJsonResponse<RemoteVantageProbeResponse>(response);
+    },
+
+    async runTransitProbe(request: TransitProbeRequest): Promise<TransitProbeResponse> {
+      const response = await fetcher('/api/transit-probe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      });
+      // The transit endpoint returns 200 on success and 4xx on validation
+      // errors; both shapes are caught by the discriminated TransitProbeResponse
+      // union, so accept the typical client-error statuses without throwing.
+      return parseJsonResponse<TransitProbeResponse>(response, [400, 422, 503]);
     },
 
     async createHostedReport(payload: SharePayload): Promise<HostedReportCreateResponse> {
