@@ -341,9 +341,9 @@
     destroyShortcuts = initShortcuts();
 
     // 9. Safe auto-start for ordinary public sessions only — but suppress
-    //    when the user hasn't onboarded yet (we want them to see ColdVisit /
-    //    LandingView and click Begin themselves). Returning visitors with the
-    //    onboarded flag set still auto-start as before.
+    //    when the user hasn't onboarded yet (we want them to see LandingView
+    //    and click Begin themselves). Returning visitors with the onboarded
+    //    flag set still auto-start as before.
     const ui = get(uiStore);
     const decision = autoStartDecision({
       endpoints: get(endpointStore),
@@ -354,9 +354,9 @@
     uiStore.setAutoStartSuppressionReason(decision.reason);
 
     // Also suppress auto-start when the localStorage onboarded flag is absent:
-    // first-time visitors should see LandingView (or ColdVisit) and click Begin
-    // explicitly. The onStart handler fires engine.start() and writes the flag,
-    // so subsequent visits auto-start.
+    // first-time visitors should see LandingView and click Begin explicitly.
+    // The onStart handler fires engine.start() and writes the flag, so
+    // subsequent visits auto-start.
     const onboarded = (() => {
       try {
         return localStorage.getItem('chronoscope-onboarded') === 'true';

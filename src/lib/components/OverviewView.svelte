@@ -17,22 +17,12 @@
   import type { MeasurementSample } from '$lib/types';
   import type { VerdictRow } from '$lib/utils/verdict';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
-  import ColdVisit from './ColdVisit.svelte';
-
-  let { onStart }: { onStart?: () => void } = $props();
 
   const monitored = $derived($monitoredEndpointsStore);
   const stats = $derived($statisticsStore);
   const settings = $derived($settingsStore);
   const measurements = $derived($measurementStore);
   const threshold = $derived(settings.healthThreshold);
-
-  // Cold-visit gate: lifecycle has never advanced past 'idle' and no rounds
-  // have been recorded. After Begin (or auto-start) lifecycle moves to
-  // 'starting' and the normal mission-status surface takes over.
-  const showColdVisit = $derived(
-    measurements.lifecycle === 'idle' && measurements.roundCounter === 0,
-  );
 
   // ── Station mapping ────────────────────────────────────────────────────────
   const STATION_IDS = ['A', 'B', 'C', 'D'] as const;
@@ -379,9 +369,6 @@
   }
 </script>
 
-{#if showColdVisit}
-  <ColdVisit {onStart} />
-{:else}
 <div class="overview-surface">
   <div class="titlestrip">
     <h2>Overview<span class="sub">Mission status</span></h2>
@@ -523,7 +510,6 @@
     <div class="right">Auto end at round <span class="v">{settings.cap}</span></div>
   </footer>
 </div>
-{/if}
 
 <style>
   .overview-surface {
