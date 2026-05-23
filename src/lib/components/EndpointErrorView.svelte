@@ -26,7 +26,7 @@
   import { tokens } from '$lib/tokens';
   import { navigateTo } from '$lib/router';
   import type { MeasurementSample } from '$lib/types';
-  import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
+  import OrbitalScene, { type OrbitalStation, type OrbitalGap } from './OrbitalScene.svelte';
 
   const monitored = $derived($monitoredEndpointsStore);
   const measurements = $derived($measurementStore);
@@ -54,6 +54,9 @@
   );
   const epToStation = $derived<Record<string, string>>(
     Object.fromEntries(monitored.slice(0, 4).map((ep, i) => [ep.id, STATION_IDS[i]])),
+  );
+  const stationLabelsForScene = $derived<Record<string, string>>(
+    Object.fromEntries(monitored.slice(0, 4).map((ep, i) => [STATION_IDS[i], ep.label])),
   );
 
   // ── Sample windowing for OrbitalScene ──────────────────────────────────────
@@ -85,6 +88,36 @@
   const focusedStation = $derived<string | null>(
     focusedId === null ? null : (epToStation[focusedId] ?? null),
   );
+
+  // Walk the focused station's windowed buffer for contiguous runs of null
+  // slots, emit each as a gap arc. The arc spans the angular range covered
+  // by the slot indices; OrbitalScene's ring shader renders these as
+  // crimson arcs over the orbit.
+  function slotAngle(slot: number, total: number): number {
+    return -Math.PI / 2 + (slot / total) * Math.PI * 2;
+  }
+  const focusedGapRegions = $derived<readonly OrbitalGap[]>((() => {
+    const fs = focusedStation;
+    if (fs === null) return [];
+    const data = stationData[fs];
+    if (!data) return [];
+    const halfSlot = (Math.PI * 2) / WINDOW / 2;
+    const out: OrbitalGap[] = [];
+    let runStart = -1;
+    for (let i = 0; i <= WINDOW; i++) {
+      const missed = i < WINDOW && data[i] === null;
+      if (missed && runStart < 0) {
+        runStart = i;
+      } else if (!missed && runStart >= 0) {
+        const startAngle = slotAngle(runStart, WINDOW) - halfSlot;
+        const endAngle   = slotAngle(i - 1, WINDOW) + halfSlot;
+        out.push({ stationId: fs, startAngle, endAngle });
+        runStart = -1;
+        if (out.length >= 8) break; // shader uniform cap
+      }
+    }
+    return out;
+  })());
 
   // ── Focused endpoint metadata ─────────────────────────────────────────────
   const focusedEndpoint = $derived(
@@ -248,6 +281,8 @@
           windowSeconds={WINDOW}
           windowRounds={WINDOW}
           assemble={false}
+          gapRegions={focusedGapRegions}
+          stationLabels={stationLabelsForScene}
         />
       {/if}
     </div>

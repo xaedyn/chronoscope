@@ -45,6 +45,9 @@
   const epToStation = $derived<Record<string, string>>(
     Object.fromEntries(monitored.slice(0, 4).map((ep, i) => [ep.id, STATION_IDS[i]])),
   );
+  const stationLabelsForScene = $derived<Record<string, string>>(
+    Object.fromEntries(monitored.slice(0, 4).map((ep, i) => [STATION_IDS[i], ep.label])),
+  );
 
   // ── Sample windowing for OrbitalScene ──────────────────────────────────────
   const WINDOW = tokens.lane.chartWindow;
@@ -594,6 +597,7 @@
           windowSeconds={WINDOW}
           windowRounds={WINDOW}
           assemble={false}
+          stationLabels={stationLabelsForScene}
         />
       {/if}
     </div>

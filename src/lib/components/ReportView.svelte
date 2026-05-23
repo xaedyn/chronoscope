@@ -623,6 +623,8 @@
           windowSeconds={WINDOW}
           windowRounds={WINDOW}
           assemble={true}
+          revealProgress={scrubT}
+          showTooltip={false}
         />
       {/if}
     </div>

@@ -13,6 +13,26 @@
     readonly radius: number;    // orbit radius in scene units (~6–12)
     readonly baseline?: number; // expected baseline latency; if absent, median of data is used
   }
+
+  // A gap arc to render in crimson on a station's orbit ring. Used by the
+  // EndpointErrorView surface to highlight missed-pulse regions. Angles in
+  // radians, range [-π, π]; if startAngle > endAngle, the gap wraps the seam.
+  export interface OrbitalGap {
+    readonly stationId: string;
+    readonly startAngle: number;
+    readonly endAngle: number;
+  }
+
+  // A pulse hovered by the cursor — used internally for the tooltip overlay.
+  export interface PulseHover {
+    readonly stationId: string;
+    readonly stationLabel: string;
+    readonly slot: number;
+    readonly latency: number;
+    readonly drift: number | null;
+    readonly screenX: number;
+    readonly screenY: number;
+  }
 </script>
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
@@ -35,6 +55,10 @@
     windowSeconds = 60,
     windowRounds = 60,
     assemble = true,
+    revealProgress = 1,
+    gapRegions = [],
+    stationLabels = {},
+    showTooltip = true,
   }: {
     stations: readonly OrbitalStation[];
     stationData: Readonly<Record<string, readonly (number | null)[]>>;
@@ -43,6 +67,16 @@
     windowSeconds?: number;
     windowRounds?: number;
     assemble?: boolean;
+    // 0..1; pulses with slot index > revealProgress * windowRounds are hidden.
+    // Default 1 = all pulses visible. Drives Report scrub-driven playback.
+    revealProgress?: number;
+    // Crimson arcs in station orbit rings where pulses are missing.
+    gapRegions?: readonly OrbitalGap[];
+    // Optional friendly labels for stations (used in the hover tooltip).
+    // Keyed by station id; falls back to id if absent.
+    stationLabels?: Readonly<Record<string, string>>;
+    // Set false to disable the hover tooltip entirely (e.g. Report scrub mode).
+    showTooltip?: boolean;
   } = $props();
 
   // Element refs (Svelte 5: bind:this fills these at mount)
@@ -67,12 +101,16 @@
     readonly colors: Float32Array;
     readonly sizes: Float32Array;
     readonly ages: Float32Array;
+    readonly reveals: Float32Array;
     readonly writeAt: number[];
     readonly prevValues: (number | null)[];
   }
 
   const orbits: Record<string, OrbitObjects> = {};
   const pulses: Record<string, PulseBuffer> = {};
+
+  // ── Hover tooltip state ────────────────────────────────────────────────────
+  let hover = $state<PulseHover | null>(null);
   let stars: THREE.Points | null = null;
   let home: THREE.Mesh | null = null;
   let homeHalo: THREE.Mesh | null = null;
@@ -153,6 +191,83 @@
     mouseTargetY = ((e.clientY / window.innerHeight) - 0.5) * 2;
   }
 
+  // Hover picking: project every visible pulse to NDC each mousemove, find
+  // the closest within a threshold. Threshold tightens with screen DPR so
+  // it feels like a ~12 px target regardless of viewport. Mirrors the
+  // proposal-live-v4.html pickPulse() approach (manual projection, not
+  // THREE.Raycaster — raycaster doesn't pick custom-shader Points reliably).
+  const tmpVec3 = new THREE.Vector3();
+  const NDC_PICK_RADIUS = 0.03;
+
+  function handleCanvasMouseMove(e: MouseEvent): void {
+    if (!showTooltip || !camera || !canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+    let bestD2 = NDC_PICK_RADIUS * NDC_PICK_RADIUS;
+    let bestStationId: string | null = null;
+    let bestSlot = -1;
+
+    for (const station of stations) {
+      const buf = pulses[station.id];
+      if (!buf) continue;
+      for (let i = 0; i < windowRounds; i++) {
+        if (buf.positions[i * 3] >= 9000) continue; // hidden slot
+        if (buf.reveals[i] > revealProgress) continue; // gated by scrub
+        tmpVec3.set(
+          buf.positions[i * 3],
+          buf.positions[i * 3 + 1],
+          buf.positions[i * 3 + 2],
+        );
+        tmpVec3.project(camera);
+        if (tmpVec3.z < -1 || tmpVec3.z > 1) continue;
+        const dx = tmpVec3.x - ndcX;
+        const dy = tmpVec3.y - ndcY;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) {
+          bestD2 = d2;
+          bestStationId = station.id;
+          bestSlot = i;
+        }
+      }
+    }
+
+    if (bestStationId === null || bestSlot < 0) {
+      if (hover !== null) hover = null;
+      return;
+    }
+
+    const stationObj = stations.find((s) => s.id === bestStationId);
+    if (!stationObj) return;
+    const data = stationData[bestStationId] ?? [];
+    const latency = data[bestSlot];
+    if (typeof latency !== 'number') return;
+
+    const filtered = data.filter((v): v is number => v !== null && v !== undefined);
+    let baseline = stationObj.baseline;
+    if (baseline === undefined && filtered.length > 0) {
+      const sorted = [...filtered].sort((a, b) => a - b);
+      baseline = sorted[Math.floor(sorted.length / 2)];
+    }
+    const drift = baseline === undefined ? null : Math.round(latency - baseline);
+    const stationLabel = stationLabels[bestStationId] ?? bestStationId;
+
+    hover = {
+      stationId: bestStationId,
+      stationLabel,
+      slot: bestSlot,
+      latency,
+      drift,
+      screenX: e.clientX - rect.left,
+      screenY: e.clientY - rect.top,
+    };
+  }
+
+  function handleCanvasMouseLeave(): void {
+    if (hover !== null) hover = null;
+  }
+
   function buildStars(): void {
     if (!scene) return;
     const positions = new Float32Array(STAR_COUNT * 3);
@@ -188,10 +303,13 @@
     scene.add(stars);
   }
 
+  const MAX_GAPS = 8;
+
   function buildOrbits(): void {
     if (!scene) return;
     const fgColor = new THREE.Color(tokens.color.text.fg);
     const sevBadColor = new THREE.Color(tokens.color.severity.bad);
+    const sevCritColor = new THREE.Color(tokens.color.severity.crit);
 
     for (const station of stations) {
       const r = station.radius;
@@ -204,6 +322,10 @@
           uSweep: { value: 0 },
           uOpacity: { value: assembleProgress },
           uColor: { value: fgColor.clone() },
+          uGapStarts: { value: new Float32Array(MAX_GAPS) },
+          uGapEnds:   { value: new Float32Array(MAX_GAPS) },
+          uGapCount:  { value: 0 },
+          uGapColor:  { value: sevCritColor.clone() },
         },
         vertexShader: ringVert,
         fragmentShader: ringFrag,
@@ -256,6 +378,9 @@
       const colors = new Float32Array(windowRounds * 3);
       const sizes = new Float32Array(windowRounds);
       const ages = new Float32Array(windowRounds);
+      // Per-slot reveal index ∈ [0, 1] — index N maps to N/windowRounds.
+      // Pulse fragment shader discards when aReveal > uReveal.
+      const reveals = new Float32Array(windowRounds);
       const writeAt: number[] = new Array(windowRounds).fill(-Infinity);
       const prevValues: (number | null)[] = new Array(windowRounds).fill(null);
 
@@ -269,6 +394,7 @@
         colors[i * 3 + 2] = c.b;
         sizes[i] = 0.075;
         ages[i] = 1;
+        reveals[i] = i / Math.max(1, windowRounds - 1);
       }
 
       const g = new THREE.BufferGeometry();
@@ -276,13 +402,17 @@
       g.setAttribute('color',    new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
       g.setAttribute('aSize',    new THREE.BufferAttribute(sizes, 1).setUsage(THREE.DynamicDrawUsage));
       g.setAttribute('aAge',     new THREE.BufferAttribute(ages, 1).setUsage(THREE.DynamicDrawUsage));
+      g.setAttribute('aReveal',  new THREE.BufferAttribute(reveals, 1));
 
       const m = new THREE.ShaderMaterial({
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         vertexColors: true,
-        uniforms: { uTime: { value: 0 } },
+        uniforms: {
+          uTime: { value: 0 },
+          uReveal: { value: revealProgress },
+        },
         vertexShader: pulseVert,
         fragmentShader: pulseFrag,
       });
@@ -291,7 +421,7 @@
       points.frustumCulled = false;
       scene.add(points);
 
-      pulses[station.id] = { points, positions, colors, sizes, ages, writeAt, prevValues };
+      pulses[station.id] = { points, positions, colors, sizes, ages, reveals, writeAt, prevValues };
     }
   }
 
@@ -522,6 +652,37 @@
     if (scene) refreshPulses();
   });
 
+  // Sync revealProgress prop to the per-station pulse uReveal uniform.
+  $effect(() => {
+    if (!scene) return;
+    for (const buf of Object.values(pulses)) {
+      const mat = buf.points.material as THREE.ShaderMaterial;
+      if (mat.uniforms.uReveal) mat.uniforms.uReveal.value = revealProgress;
+    }
+  });
+
+  // Sync gapRegions prop to per-station ring uGapStarts/uGapEnds uniforms.
+  // Gaps are bucketed by stationId; each ring gets up to MAX_GAPS arcs.
+  $effect(() => {
+    if (!scene) return;
+    const bucketed: Record<string, OrbitalGap[]> = {};
+    for (const g of gapRegions) {
+      (bucketed[g.stationId] ??= []).push(g);
+    }
+    for (const stationId of Object.keys(orbits)) {
+      const orbit = orbits[stationId];
+      const mat = orbit.ring.material as THREE.ShaderMaterial;
+      const list = (bucketed[stationId] ?? []).slice(0, MAX_GAPS);
+      const starts = mat.uniforms.uGapStarts.value as Float32Array;
+      const ends = mat.uniforms.uGapEnds.value as Float32Array;
+      for (let i = 0; i < MAX_GAPS; i++) {
+        starts[i] = list[i]?.startAngle ?? 0;
+        ends[i]   = list[i]?.endAngle ?? 0;
+      }
+      mat.uniforms.uGapCount.value = list.length;
+    }
+  });
+
   onMount(() => {
     buildScene();
     refreshPulses();
@@ -532,9 +693,36 @@
   });
 </script>
 
-<div bind:this={container} class="orbital-scene" role="img" aria-label="Orbital tracker">
+<div
+  bind:this={container}
+  class="orbital-scene"
+  role="img"
+  aria-label="Orbital tracker"
+  onmousemove={handleCanvasMouseMove}
+  onmouseleave={handleCanvasMouseLeave}
+>
   <canvas bind:this={canvas} class="orbital-canvas"></canvas>
   <div class="orbital-vignette" aria-hidden="true"></div>
+  {#if showTooltip && hover}
+    {@const h = hover}
+    <div
+      class="orbital-tooltip"
+      role="tooltip"
+      style:left="{h.screenX}px"
+      style:top="{h.screenY}px"
+      style:--tip-color={stations.find((s) => s.id === h.stationId)?.color ?? 'var(--fg)'}
+    >
+      <div class="t-station">
+        <span class="t-mk" aria-hidden="true"></span>
+        <span class="t-name">{h.stationLabel}</span>
+      </div>
+      <div class="t-row"><span class="t-k">Latency</span><span class="t-v">{Math.round(h.latency)} ms</span></div>
+      {#if h.drift !== null}
+        <div class="t-row"><span class="t-k">Drift</span><span class="t-v">{h.drift >= 0 ? '+' : ''}{h.drift} ms</span></div>
+      {/if}
+      <div class="t-row"><span class="t-k">Slot</span><span class="t-v">#{h.slot}</span></div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -561,4 +749,56 @@
       color-mix(in srgb, var(--bg) 96%, transparent) 100%
     );
   }
+  /* Pulse hover tooltip — offset from cursor, station-colored accent line. */
+  .orbital-tooltip {
+    position: absolute;
+    z-index: 10;
+    pointer-events: none;
+    transform: translate(12px, -50%);
+    background: var(--bg-2);
+    border: 1px solid var(--rule-strong);
+    padding: 8px 12px;
+    min-width: 140px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--fg);
+    box-shadow: 0 8px 24px color-mix(in srgb, black 50%, transparent);
+  }
+  .orbital-tooltip::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 24px;
+    height: 1px;
+    background: var(--tip-color);
+    box-shadow: 0 0 8px var(--tip-color);
+  }
+  .orbital-tooltip .t-station {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-bottom: 6px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid var(--rule);
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .orbital-tooltip .t-mk {
+    width: 6px;
+    height: 6px;
+    background: var(--tip-color);
+    box-shadow: 0 0 6px var(--tip-color);
+  }
+  .orbital-tooltip .t-name { color: var(--fg); }
+  .orbital-tooltip .t-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 2px 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .orbital-tooltip .t-k { color: var(--fg-3); text-transform: uppercase; font-weight: 700; }
+  .orbital-tooltip .t-v { color: var(--fg); font-weight: 700; }
 </style>
