@@ -197,6 +197,11 @@ export interface Settings {
   // request abort). Drives classify()/networkQuality() and the chronograph dial.
   // Must be strictly less than `timeout`; callers enforce.
   healthThreshold: number;
+  // Phase D audio engine on/off. When true, the Web Audio engine (src/lib/audio.ts)
+  // emits round ticks, threshold-cross chimes, carrier-lost descents, and the
+  // session-start swell. Default false — first call requires a user gesture
+  // to unlock the AudioContext, so we never auto-play on page load.
+  audioEnabled: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -207,6 +212,7 @@ export const DEFAULT_SETTINGS: Settings = {
   cap: MAX_CAP, // 3600 — sessions complete after 1 hour by default
   corsMode: 'no-cors',
   healthThreshold: 120,
+  audioEnabled: false,
 };
 
 // ── UI store ───────────────────────────────────────────────────────────────

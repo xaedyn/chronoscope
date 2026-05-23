@@ -20,6 +20,7 @@
   import type { Region } from '$lib/regional-defaults';
   import { isSafeProbeUrl } from '$lib/utils/url-safety';
   import { displayHostname } from '$lib/endpoint/displayLabel';
+  import { setEnabled as setAudioEnabled, playSessionStart } from '$lib/audio';
 
   // ── Dialog plumbing ────────────────────────────────────────────────────────
   let dialogEl: HTMLDialogElement;
@@ -252,7 +253,14 @@
   // The v4 prototype shows these as visual surface controls; chronoscope has no
   // backing setting for them yet. Tracked locally so the UI feels live; not
   // persisted. Wiring is deferred — see report.
-  let audioTick = $state(false);
+  // (audio tick IS now wired through settings.audioEnabled; see toggleAudioTick)
+  const audioTick = $derived(settings.audioEnabled);
+  function toggleAudioTick(): void {
+    const next = !settings.audioEnabled;
+    settingsStore.update((s) => ({ ...s, audioEnabled: next }));
+    setAudioEnabled(next);
+    if (next) playSessionStart();
+  }
   let reducedMotion = $state(false);
   let mouseParallax = $state(true);
   let starField = $state(true);
@@ -696,7 +704,7 @@
             class="toggle"
             aria-pressed={audioTick}
             aria-label="Audio tick"
-            onclick={() => (audioTick = !audioTick)}
+            onclick={toggleAudioTick}
           ></button>
         </div>
 

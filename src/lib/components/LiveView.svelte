@@ -16,6 +16,7 @@
   import type { MeasurementSample } from '$lib/types';
   import type { VerdictRow } from '$lib/utils/verdict';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
+  import { setEnabled, playSessionStart } from '$lib/audio';
 
   const monitored = $derived($monitoredEndpointsStore);
   const measurements = $derived($measurementStore);
@@ -228,13 +229,15 @@
   }
 
   // ── Audio toggle ───────────────────────────────────────────────────────────
-  // Phase D will wire the full Web Audio engine (tick / threshold-cross /
-  // carrier-lost / session-start). For Phase B this is a UI-only affordance
-  // backed by component-local state. When the engine lands, this $state moves
-  // into a persistence-backed store so the user's preference survives reloads.
-  let audioOn = $state(false);
+  // Wires through settingsStore.audioEnabled (persisted). The Web Audio engine
+  // (tick / threshold-cross / carrier-lost / session-start) is driven from
+  // App.svelte's bootstrap subscription; this toggle just flips the gate.
+  const audioOn = $derived(settings.audioEnabled);
   function toggleAudio(): void {
-    audioOn = !audioOn;
+    const next = !settings.audioEnabled;
+    settingsStore.update((s) => ({ ...s, audioEnabled: next }));
+    setEnabled(next);
+    if (next) playSessionStart(); // confirmation chime when user enables
   }
 
   // ── First-visit onboarding callout ─────────────────────────────────────────
@@ -286,6 +289,23 @@
         tourTimerId = null;
       }
     };
+  });
+
+  // Window event listener — shortcuts.ts dispatches `chronoscope:summon-tour`
+  // when `?` is pressed on the Live surface, re-showing the hint with a
+  // fresh 6 s auto-dismiss timer. The flag in localStorage is intentionally
+  // NOT cleared — the hint should resurface for as long as the user keeps
+  // pressing `?`, but next page load returns to "seen" if they ever dismissed.
+  $effect(() => {
+    const handler = (): void => {
+      if (tourTimerId !== null) {
+        clearTimeout(tourTimerId);
+        tourTimerId = null;
+      }
+      showTour = true;
+    };
+    window.addEventListener('chronoscope:summon-tour', handler);
+    return () => window.removeEventListener('chronoscope:summon-tour', handler);
   });
 </script>
 

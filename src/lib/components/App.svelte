@@ -19,6 +19,13 @@
   import { initRouter } from '$lib/router';
   import { initShortcuts } from '$lib/utils/shortcuts';
   import { autoStartDecision } from '$lib/utils/status-intent';
+  import {
+    setEnabled as setAudioEnabled,
+    playTick,
+    playSessionStart,
+    playCarrierLost,
+    playThresholdCross,
+  } from '$lib/audio';
   import type { PersistedSettings } from '$lib/types';
   import Layout from './Layout.svelte';
   import LandingView from './LandingView.svelte';
@@ -265,6 +272,69 @@
     engine.stop();
   }
 
+  let unsubAudio: (() => void) | null = null;
+
+  function setupAudioWiring(): void {
+    // Sync persisted preference to the audio engine module.
+    setAudioEnabled(get(settingsStore).audioEnabled);
+
+    // ── Lifecycle observer: session-start chime + carrier-lost / threshold-cross
+    // per endpoint. We watch the measurement state's transitions and fire the
+    // matching sound primitive. The audio module gates internally on enabled,
+    // so we don't re-check here.
+    let prevLifecycle = get(measurementStore).lifecycle;
+    let prevRound = get(measurementStore).roundCounter;
+    const prevEndpointStatus: Record<string, 'ok' | 'timeout' | 'error' | null> = {};
+    const prevAboveThreshold: Record<string, boolean> = {};
+    // Seed the per-endpoint prior-state maps from current store snapshot.
+    {
+      const m = get(measurementStore);
+      const threshold = get(settingsStore).healthThreshold;
+      for (const [id, ep] of Object.entries(m.endpoints)) {
+        prevEndpointStatus[id] = ep.lastStatus;
+        prevAboveThreshold[id] = ep.lastLatency !== null && ep.lastLatency > threshold;
+      }
+    }
+
+    unsubAudio = measurementStore.subscribe((state) => {
+      const threshold = get(settingsStore).healthThreshold;
+
+      // Session start: idle/stopped → starting/running
+      const wasIdle = prevLifecycle === 'idle' || prevLifecycle === 'stopped' || prevLifecycle === 'completed';
+      const nowStarting = state.lifecycle === 'starting' || state.lifecycle === 'running';
+      if (wasIdle && nowStarting && prevLifecycle !== state.lifecycle) {
+        playSessionStart();
+      }
+      prevLifecycle = state.lifecycle;
+
+      // Round tick: one tick when the roundCounter advances (debounces multi-
+      // endpoint same-round arrivals into a single sound).
+      if (state.roundCounter !== prevRound && state.roundCounter > prevRound) {
+        playTick();
+        prevRound = state.roundCounter;
+      }
+
+      // Per-endpoint carrier-lost + threshold-cross detection.
+      for (const [id, ep] of Object.entries(state.endpoints)) {
+        const lastStatus = ep.lastStatus;
+        const wasStatus = prevEndpointStatus[id] ?? null;
+        // Carrier-lost: prior was 'ok' (or null seed) AND now is 'timeout' or 'error'
+        if ((wasStatus === 'ok' || wasStatus === null) && (lastStatus === 'timeout' || lastStatus === 'error')) {
+          playCarrierLost();
+        }
+        prevEndpointStatus[id] = lastStatus;
+
+        // Threshold cross: latency just crossed above the trigger from below.
+        const above = ep.lastLatency !== null && ep.lastLatency > threshold;
+        const wasAbove = prevAboveThreshold[id] ?? false;
+        if (above && !wasAbove && lastStatus === 'ok') {
+          playThresholdCross();
+        }
+        prevAboveThreshold[id] = above;
+      }
+    });
+  }
+
   function setupHistorySync(): void {
     void historyStore.hydrate();
 
@@ -337,6 +407,9 @@
     // 7. Local-only history baselines
     setupHistorySync();
 
+    // 7b. Wire audio engine to the persisted preference + measurement events.
+    setupAudioWiring();
+
     // 8. Register keyboard shortcuts
     destroyShortcuts = initShortcuts();
 
@@ -382,6 +455,7 @@
     unsubEndpoints?.();
     unsubUi?.();
     unsubHistoryLifecycle?.();
+    unsubAudio?.();
     destroyShortcuts?.();
     if (persistDebounceTimer !== null) clearTimeout(persistDebounceTimer);
   });

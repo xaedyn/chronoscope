@@ -58,10 +58,12 @@ describe('persistence', () => {
     saveSettings(v10);
     const loaded = loadPersistedSettings();
     // v10 payloads are migrated to v11 at load; endpoints gain nickname: undefined
+    // and settings gain audioEnabled defaulting to false (Phase D audio engine).
     expect(loaded).toEqual({
       ...v10,
       version: 11,
       endpoints: v10.endpoints.map((ep) => ({ ...ep, nickname: undefined })),
+      settings: { ...v10.settings, audioEnabled: false },
     });
   });
 

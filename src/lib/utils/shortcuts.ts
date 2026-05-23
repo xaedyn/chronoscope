@@ -73,7 +73,16 @@ function handleKeydown(e: KeyboardEvent): void {
 
     case '?': {
       if (e.altKey) return;
-      uiStore.toggleKeyboardHelp();
+      // On the Live surface, `?` re-summons the orbital tour hint instead of
+      // toggling KeyboardOverlay — the hint is the per-surface help for the
+      // 3D scene and is more contextually useful. LiveView listens on
+      // window for this CustomEvent and re-shows the hint with a fresh timer.
+      const activeView = get(uiStore).activeView;
+      if (activeView === 'live') {
+        window.dispatchEvent(new CustomEvent('chronoscope:summon-tour'));
+      } else {
+        uiStore.toggleKeyboardHelp();
+      }
       e.preventDefault();
       break;
     }
