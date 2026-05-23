@@ -12,12 +12,16 @@
   import { monitoredEndpointsStore } from '$lib/stores/derived';
   import { fmt } from '$lib/utils/format';
   import { tokens } from '$lib/tokens';
+  import { buildDiagnosticNarrative } from '$lib/utils/diagnostic-narrative';
+  import type { MeasurementSample } from '$lib/types';
+  import type { VerdictRow } from '$lib/utils/verdict';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
 
   const monitored = $derived($monitoredEndpointsStore);
   const measurements = $derived($measurementStore);
   const stats = $derived($statisticsStore);
-  const threshold = $derived($settingsStore.healthThreshold);
+  const settings = $derived($settingsStore);
+  const threshold = $derived(settings.healthThreshold);
   const focusedId = $derived($uiStore.focusedEndpointId);
 
   // ── Endpoint → station mapping ─────────────────────────────────────────────
@@ -93,9 +97,80 @@
     return Math.round(values[Math.floor(values.length / 2)]);
   });
 
-  const cadenceMs = $derived($settingsStore.monitorDelay);
+  const cadenceMs = $derived(settings.monitorDelay);
   const cadenceLabel = $derived(`${(cadenceMs / 1000).toFixed(0)} s`);
   const roundCount = $derived(measurements.roundCounter);
+
+  // ── R.A. / Dec coords (synced with OverviewView derivation) ───────────────
+  const elapsedMs = $derived.by(() => {
+    if (!measurements.startedAt) return 0;
+    return Date.now() - measurements.startedAt;
+  });
+  const raCoord = $derived.by(() => {
+    const m = Math.floor(elapsedMs / 60000) % 24;
+    return `06h ${m.toString().padStart(2, '0')}m`;
+  });
+  const decCoord = $derived.by(() => {
+    const m = Math.floor(elapsedMs / 60000) % 90;
+    const s = Math.floor((elapsedMs % 60000) / 1000);
+    return `+${m.toString().padStart(2, '0')}°${s.toString().padStart(2, '0')}′`;
+  });
+
+  // ── Diagnostic narrative for the verdict-band ─────────────────────────────
+  // Mirrors OverviewView's wiring so Live and Overview agree on the verdict.
+  const samplesByEndpoint = $derived.by<Record<string, readonly MeasurementSample[]>>(() => {
+    const out: Record<string, readonly MeasurementSample[]> = {};
+    for (const ep of monitored) {
+      const state = measurements.endpoints[ep.id];
+      out[ep.id] = state ? state.samples.toArray().slice(-WINDOW) : [];
+    }
+    return out;
+  });
+  const verdictRows: readonly VerdictRow[] = $derived.by(() => {
+    const rows: VerdictRow[] = [];
+    for (const ep of monitored) {
+      const rowStats = stats[ep.id];
+      if (rowStats?.ready) rows.push({ ep, stats: rowStats });
+    }
+    return rows;
+  });
+  const diagnosticNarrative = $derived(buildDiagnosticNarrative({
+    rows: verdictRows,
+    threshold,
+    corsMode: settings.corsMode,
+    samplesByEndpoint,
+    monitoredEndpointCount: monitored.length,
+  }));
+
+  type Sigil = 'stable' | 'warn' | 'bad' | 'crit';
+  const sigil = $derived<Sigil>((() => {
+    const kind = diagnosticNarrative.kind;
+    if (kind === 'collecting') return 'stable';
+    if (kind === 'healthy') return 'stable';
+    const sev = diagnosticNarrative.severity;
+    if (sev === 'healthy') return 'stable';
+    if (sev === 'degraded') {
+      const anyCrit = verdictRows.some((r) => r.stats.lossPercent >= 10);
+      return anyCrit ? 'crit' : 'bad';
+    }
+    return 'warn';
+  })());
+
+  const verdictKickerText = $derived<string>((() => {
+    if (diagnosticNarrative.kind === 'collecting') return 'Acquiring · awaiting samples';
+    if (sigil === 'stable') return 'In transit · all stations nominal';
+    if (sigil === 'warn') return 'Carrier wobble · band widening';
+    if (sigil === 'bad') {
+      const ep = diagnosticNarrative.highlightedEndpoint;
+      return ep ? `Doppler · ${ep.label}` : 'Doppler · isolated drift';
+    }
+    const ep = diagnosticNarrative.highlightedEndpoint;
+    return ep ? `Carrier lost · ${ep.label}` : 'Carrier lost · alarm';
+  })());
+
+  const verdictHeadline = $derived(diagnosticNarrative.primaryAnswer.text);
+  const verdictBody = $derived(diagnosticNarrative.supportingSummary);
+  const showVerdictBand = $derived(diagnosticNarrative.kind !== 'collecting' && verdictRows.length > 0);
 
   // ── Per-station chip row ───────────────────────────────────────────────────
   interface StationChip {
@@ -162,7 +237,8 @@
     <span>Round<span class="v">{roundCount}</span></span>
     <span>Cadence<span class="v">{cadenceLabel}</span></span>
     <span>Window<span class="v">{WINDOW} s</span></span>
-    <span>Stations<span class="v">{stations.length}</span></span>
+    <span>R.A.<span class="v">{raCoord}</span></span>
+    <span>Dec<span class="v">{decCoord}</span></span>
   </div>
 
   <div class="hero-num" aria-live="polite">
@@ -175,9 +251,21 @@
       {/if}
     </div>
     <div class="caption">
-      {stations.length === 0 ? 'No stations on transit' : `${stations.length} ${stations.length === 1 ? 'station' : 'stations'} on transit`}
+      {#if stations.length === 0}
+        — No stations on transit —
+      {:else}
+        — {stations.length} {stations.length === 1 ? 'station' : 'stations'} on transit —
+      {/if}
     </div>
   </div>
+
+  {#if showVerdictBand}
+    <div class="verdict-band" data-sigil={sigil}>
+      <div class="tag"><span class="pip"></span>{verdictKickerText}</div>
+      <div class="title">{verdictHeadline}</div>
+      <div class="body">{verdictBody}</div>
+    </div>
+  {/if}
 
   <div class="stage">
     {#if stations.length > 0}
@@ -266,7 +354,9 @@
 <style>
   .live-surface {
     display: grid;
-    grid-template-rows: auto auto 1fr auto auto;
+    /* coords / hero-num / verdict-band? / stage / stations / bottom-controls.
+       The verdict-band row collapses to 0 when the #if is false. */
+    grid-template-rows: auto auto auto 1fr auto auto;
     height: 100%;
     overflow: hidden;
     color: var(--fg);
@@ -337,6 +427,78 @@
     text-transform: uppercase;
     color: var(--fg-3);
     font-weight: 700;
+  }
+
+  /* ── Verdict band (between hero number and stage) ───────────────────────── */
+  /* Mirrors proposal-live-v4.html's .verdict-band. Anchored as a flow row in
+     our grid (the prototype uses position: absolute inside the hero stage). */
+  .verdict-band {
+    padding: 8px clamp(20px, 3vw, 48px) 20px;
+    max-width: 56ch;
+  }
+  .verdict-band .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+  .verdict-band .tag .pip {
+    width: 7px;
+    height: 7px;
+    background: var(--station-b);
+    box-shadow: 0 0 10px var(--station-b);
+    flex-shrink: 0;
+  }
+  .verdict-band[data-sigil="warn"] .tag,
+  .verdict-band[data-sigil="bad"] .tag,
+  .verdict-band[data-sigil="crit"] .tag {
+    color: var(--sev-bad);
+  }
+  .verdict-band[data-sigil="warn"] .tag .pip {
+    background: var(--sev-warn);
+    box-shadow: 0 0 10px var(--sev-warn);
+  }
+  .verdict-band[data-sigil="bad"] .tag .pip {
+    background: var(--sev-bad);
+    box-shadow: 0 0 10px var(--sev-bad);
+  }
+  .verdict-band[data-sigil="crit"] .tag .pip {
+    background: var(--sev-crit);
+    box-shadow: 0 0 10px var(--sev-crit);
+  }
+  .verdict-band .title {
+    font-family: var(--sans);
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    color: var(--fg);
+    margin: 0 0 12px;
+    max-width: 22ch;
+  }
+  .verdict-band .body {
+    font-family: var(--sans);
+    font-size: 14px;
+    color: var(--fg-2);
+    line-height: 1.5;
+    max-width: 52ch;
+    margin: 0;
+  }
+  .verdict-band .body :global(em) {
+    font-style: normal;
+    font-family: var(--mono);
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .verdict-band .body :global(strong) {
+    color: var(--fg);
+    font-weight: 500;
   }
 
   /* ── Orbital stage ──────────────────────────────────────────────────────── */
@@ -541,6 +703,9 @@
     .coords-bar { gap: 14px; font-size: 9px; padding: 10px 14px; }
     .hero-num { padding: 24px 14px 16px; }
     .hero-num .number { font-size: clamp(72px, 18vw, 120px); }
+    .verdict-band { padding: 6px 14px 16px; }
+    .verdict-band .title { font-size: 22px; }
+    .verdict-band .body { font-size: 13px; }
     .stations { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .station-row:nth-child(2) { border-right: 0; }
     .station-row:nth-child(3),

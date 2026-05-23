@@ -7,7 +7,7 @@
   import { uiStore } from '$lib/stores/ui';
   import { navigateTo } from '$lib/router';
   import type { ActiveView, TestLifecycleState } from '$lib/types';
-  import { isStartLifecycle, startStopButtonLabel } from '$lib/utils/lifecycle-copy';
+  import { isStartLifecycle } from '$lib/utils/lifecycle-copy';
 
   let { onStart, onStop }: {
     onStart?: () => void;
@@ -35,7 +35,6 @@
   const isRunning = $derived(lifecycle === 'running');
   const isTransitioning = $derived(lifecycle === 'starting' || lifecycle === 'stopping');
   const isStartButton = $derived(isStartLifecycle(lifecycle));
-  const startStopLabel = $derived(startStopButtonLabel(lifecycle));
 
   // Carrier tag: acquired (running) or stopped (everything else). The alarm
   // state (carrier-lost / error) will wire in when the error-state surface
@@ -51,6 +50,9 @@
     if (lifecycle === 'stopping') return 'Stopping…';
     return isStartButton ? 'Begin' : 'End session';
   });
+  // aria-label tracks the visible text so screen readers and sighted users
+  // see the same action ("End session", not the legacy "Stop").
+  const startStopAriaLabel = $derived(startStopText);
 
   function selectRoute(route: NavRoute): void {
     navigateTo({ name: route, endpointId: null });
@@ -133,7 +135,7 @@
         class:ctl-btn--primary={isStartButton}
         disabled={isTransitioning}
         aria-disabled={isTransitioning}
-        aria-label={startStopLabel}
+        aria-label={startStopAriaLabel}
         onclick={handleStartStop}
       >
         {startStopText}

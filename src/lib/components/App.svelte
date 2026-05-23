@@ -340,7 +340,10 @@
     // 8. Register keyboard shortcuts
     destroyShortcuts = initShortcuts();
 
-    // 9. Safe auto-start for ordinary public sessions only
+    // 9. Safe auto-start for ordinary public sessions only — but suppress
+    //    when the user hasn't onboarded yet (we want them to see ColdVisit /
+    //    LandingView and click Begin themselves). Returning visitors with the
+    //    onboarded flag set still auto-start as before.
     const ui = get(uiStore);
     const decision = autoStartDecision({
       endpoints: get(endpointStore),
@@ -348,17 +351,21 @@
       sharedReportMode: ui.sharedReportMode,
       hasPendingShare: ui.pendingShare !== null,
     });
-    // Landing surface takes precedence over auto-start: a first-time visitor
-    // sees the cinematic intro; the engine only starts once they click Begin.
-    // We don't claim a typed suppression reason here — the Masthead's Start
-    // button is hidden behind LandingView, so no UI needs to render an
-    // explanation. clear the reason instead.
-    if (!onboardedFlag) {
-      uiStore.setAutoStartSuppressionReason(null);
-      return;
-    }
     uiStore.setAutoStartSuppressionReason(decision.reason);
-    if (decision.shouldStart) {
+
+    // Also suppress auto-start when the localStorage onboarded flag is absent:
+    // first-time visitors should see LandingView (or ColdVisit) and click Begin
+    // explicitly. The onStart handler fires engine.start() and writes the flag,
+    // so subsequent visits auto-start.
+    const onboarded = (() => {
+      try {
+        return localStorage.getItem('chronoscope-onboarded') === 'true';
+      } catch {
+        return true; // SSR / no-localStorage safety: don't trap users
+      }
+    })();
+
+    if (decision.shouldStart && onboarded) {
       engine.start();
     }
   }

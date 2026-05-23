@@ -12,6 +12,8 @@
   import { navigateTo } from '$lib/router';
   import { buildDiagnosticNarrative } from '$lib/utils/diagnostic-narrative';
   import { buildRunStoryline, type StoryBeatSeverity } from '$lib/utils/run-storyline';
+  import { deriveEndpointTone, type EndpointTone } from '$lib/utils/endpoint-tone';
+  import { REGION_DISPLAY_NAMES } from '$lib/regional-defaults';
   import type { MeasurementSample } from '$lib/types';
   import type { VerdictRow } from '$lib/utils/verdict';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
@@ -132,6 +134,87 @@
 
   const verdictHeadline = $derived(diagnosticNarrative.primaryAnswer.text);
   const verdictBody = $derived(diagnosticNarrative.supportingSummary);
+  // Second observer's-notes paragraph — distinct from the headline by design.
+  // Each diagnostic kind gets a sentence that says what the headline implies
+  // *for the user*, not a restated version of it. Mirrors the interpretation
+  // copy shipped in PR #190 to v2 and preserved through v4.
+  const interpretation = $derived.by<string>(() => {
+    switch (diagnosticNarrative.kind) {
+      case 'collecting':
+        return 'Chronoscope needs a few successful checks before it can compare endpoints responsibly.';
+      case 'healthy':
+        return 'Chronoscope has not seen a meaningful slowdown or failure in this window.';
+      case 'isolated-endpoint':
+        return "That points to either your browser's route to that one endpoint, or the endpoint itself. An outside check can confirm whether the slowness follows the endpoint from other networks.";
+      case 'shared-network':
+        return 'Multiple endpoints slowing in the same window typically points to a shared link between your browser and them — most often local network or upstream ISP.';
+      case 'multiple-slow':
+        return 'Several endpoints over the threshold without a shared slow phase — likely either a shared upstream issue or coincident endpoint-side slowness. An outside check helps separate the two.';
+      case 'packet-loss':
+        return 'Failed requests in the browser can come from the endpoint, the route to it, or a CORS block. An outside check separates these without changing your local network.';
+      case 'jitter':
+        return "Bouncing latency without a clear failure pattern usually points to congestion somewhere on the path. The path's not down — it's noisy.";
+    }
+  });
+
+  // Per-endpoint tone lookup used by highlightEndpoints to colour inline chips.
+  interface EndpointToneEntry {
+    readonly label: string;
+    readonly tone: EndpointTone;
+  }
+  const endpointToneEntries = $derived<readonly EndpointToneEntry[]>(
+    monitored.map((ep) => {
+      const state = measurements.endpoints[ep.id];
+      const lastStatus = state?.lastStatus ?? null;
+      return {
+        label: ep.label,
+        tone: deriveEndpointTone({
+          stats: stats[ep.id] ?? null,
+          lastStatus,
+          healthThreshold: threshold,
+        }),
+      };
+    }),
+  );
+
+  // v4-style inline endpoint highlight. Splits prose on monitored endpoint
+  // labels (longest-first to avoid partial-overlap matches) and emits
+  // segments the template renders as styled chips. Returns a single
+  // tone-null segment for empty or label-free text.
+  type LedeSegment = { readonly text: string; readonly tone: EndpointTone | null };
+  function highlightEndpoints(text: string): readonly LedeSegment[] {
+    if (text.length === 0) return [{ text: '', tone: null }];
+    const matchable = endpointToneEntries
+      .filter(({ label }) => label.length >= 2)
+      .slice()
+      .sort((a, b) => b.label.length - a.label.length);
+    if (matchable.length === 0) return [{ text, tone: null }];
+
+    const segments: LedeSegment[] = [];
+    let cursor = 0;
+    while (cursor < text.length) {
+      let best: { label: string; tone: EndpointTone; index: number } | null = null;
+      for (const candidate of matchable) {
+        const index = text.indexOf(candidate.label, cursor);
+        if (index < 0) continue;
+        if (best === null || index < best.index) {
+          best = { label: candidate.label, tone: candidate.tone, index };
+        }
+      }
+      if (best === null) {
+        segments.push({ text: text.slice(cursor), tone: null });
+        break;
+      }
+      if (best.index > cursor) segments.push({ text: text.slice(cursor, best.index), tone: null });
+      segments.push({ text: best.label, tone: best.tone });
+      cursor = best.index + best.label.length;
+    }
+    return segments;
+  }
+
+  const verdictBodySegments = $derived(highlightEndpoints(verdictBody));
+  const interpretationSegments = $derived(highlightEndpoints(interpretation));
+
   const verdictKickerText = $derived<string>((() => {
     if (diagnosticNarrative.kind === 'collecting') return 'Acquiring · awaiting samples';
     if (sigil === 'stable') return 'In transit · all stations nominal';
@@ -179,15 +262,16 @@
   });
   const roundsLabel = $derived(`${measurements.roundCounter} / ${settings.cap}`);
   const cadenceLabel = $derived(`${(settings.monitorDelay / 1000).toFixed(0)} s · synchronized`);
-  const vantageLabel = $derived(detectVantage());
-
-  function detectVantage(): string {
+  const vantageLabel = $derived.by(() => {
     if (typeof navigator === 'undefined') return 'Browser · — · —';
     const ua = navigator.userAgent;
     const ch = ua.includes('Chrome') ? 'Chrome' : ua.includes('Safari') ? 'Safari' : ua.includes('Firefox') ? 'Firefox' : 'Browser';
     const os = ua.includes('Mac') ? 'macOS' : ua.includes('Win') ? 'Windows' : ua.includes('Linux') ? 'Linux' : 'OS';
-    return `${ch} · ${os}`;
-  }
+    // Append the user's regional default (e.g. "North America") when one is
+    // configured. Region is optional in settings; omit gracefully when unset.
+    const regionLabel = settings.region ? REGION_DISPLAY_NAMES[settings.region] : '';
+    return regionLabel ? `${ch} · ${os} · ${regionLabel}` : `${ch} · ${os}`;
+  });
 
   // ── Station rows for the card ──────────────────────────────────────────────
   interface StationCardRow {
@@ -318,7 +402,11 @@
         <span class="v-state">{verdictKickerText}</span>
       </div>
       <h1>{verdictHeadline}</h1>
-      <p class="lede">{verdictBody}</p>
+      <p class="lede">
+        {#each verdictBodySegments as segment, i (i)}
+          {#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}
+        {/each}
+      </p>
       <div class="actions">
         <button type="button" class="primary" onclick={openLive}>Open tracker →</button>
         <button type="button" class="ghost" onclick={openReport}>View session record</button>
@@ -406,7 +494,16 @@
     </div>
     <div class="notes">
       <h3>Observer's notes</h3>
-      <p>{diagnosticNarrative.supportingSummary}</p>
+      <p>
+        {#each verdictBodySegments as segment, i (i)}
+          {#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}
+        {/each}
+      </p>
+      <p>
+        {#each interpretationSegments as segment, i (i)}
+          {#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}
+        {/each}
+      </p>
       <div class="field-stats">
         <div class="s">
           <div class="k">Field p50</div>
@@ -519,6 +616,29 @@
     margin-bottom: 36px;
     max-width: 56ch;
   }
+  /* Inline endpoint-name chip — small monospace pill with a station-coloured
+     border. Per-tone colour is set via [data-tone] so each chip carries the
+     endpoint's current health colour. Used in both the verdict lede and the
+     observer's-notes paragraphs. */
+  .ep-chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.85em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 1px 6px;
+    margin: 0 1px;
+    border: 1px solid var(--rule-strong);
+    border-radius: 2px;
+    color: var(--fg);
+    vertical-align: baseline;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+  }
+  .ep-chip[data-tone="good"]       { border-color: var(--station-b); color: var(--station-b); }
+  .ep-chip[data-tone="watch"]      { border-color: var(--sev-warn);  color: var(--sev-warn); }
+  .ep-chip[data-tone="bad"]        { border-color: var(--sev-bad);   color: var(--sev-bad); }
+  .ep-chip[data-tone="collecting"] { border-color: var(--rule-strong); color: var(--fg-3); }
   .hero .actions {
     display: flex;
     gap: 20px;

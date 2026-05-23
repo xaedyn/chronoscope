@@ -13,6 +13,8 @@
   import * as THREE from 'three';
   import { tokens } from '$lib/tokens';
   import { navigateTo } from '$lib/router';
+  import { uiStore } from '$lib/stores/ui';
+  import { monitoredEndpointsStore } from '$lib/stores/derived';
 
   let { onStart, onExplore }: { onStart?: () => void; onExplore?: () => void } = $props();
 
@@ -35,19 +37,39 @@
     onStart?.();
   }
 
-  function handleExplore(event: MouseEvent): void {
-    event.preventDefault();
-    markOnboarded();
-    // Navigate into the app shell without starting measurements. The cold-visit
-    // surface (built by a separate agent) covers the empty-overview state.
-    navigateTo({ name: 'overview', endpointId: null });
-    onExplore?.();
-  }
-
-  function handleNav(event: MouseEvent, route: 'overview' | 'live' | 'investigate' | 'report'): void {
+  function handleNav(event: MouseEvent, route: 'overview' | 'live' | 'investigate' | 'report' | 'transit'): void {
     event.preventDefault();
     markOnboarded();
     navigateTo({ name: route, endpointId: null });
+    onExplore?.();
+  }
+
+  // ── Additional-surfaces row ─────────────────────────────────────────────────
+  // FOCUS / ALARM both want to land on the first monitored endpoint. We read
+  // monitoredEndpointsStore here so the URL is correct once the user clicks;
+  // SSR has no endpoints yet, so we fall back to /investigate (the landing
+  // list) when none are present.
+  const monitored = $derived($monitoredEndpointsStore);
+  const firstEndpointId = $derived<string | null>(monitored[0]?.id ?? null);
+
+  function handleEndpointNav(event: MouseEvent): void {
+    event.preventDefault();
+    markOnboarded();
+    if (firstEndpointId !== null) {
+      navigateTo({ name: 'endpoint', endpointId: firstEndpointId });
+    } else {
+      navigateTo({ name: 'investigate', endpointId: null });
+    }
+    onExplore?.();
+  }
+
+  function handleSettings(event: MouseEvent): void {
+    event.preventDefault();
+    markOnboarded();
+    // Land on overview so the settings drawer has the right surface behind it,
+    // then open the drawer.
+    navigateTo({ name: 'overview', endpointId: null });
+    uiStore.toggleSettings();
     onExplore?.();
   }
 
@@ -597,6 +619,41 @@
         <div class="open">Open Report <span class="arrow">→</span></div>
       </a>
     </div>
+
+    <!-- SECONDARY SURFACES — additional contextual flows + configuration -->
+    <div class="secondary-row">
+      <div class="sec-head">
+        <span class="l">Additional surfaces</span>
+        <span class="r">Contextual flows · system configuration</span>
+      </div>
+      <div class="sec-grid">
+        <a class="sec-card" href="/" onclick={(e) => handleNav(e, 'overview')}>
+          <div class="num">COLD · 01</div>
+          <div class="nm">First visit</div>
+          <p>The empty observatory before any session begins. Click <em>Begin</em> to watch orbits assemble outward and pulses materialize.</p>
+        </a>
+        <a class="sec-card" href={firstEndpointId ? `/endpoint/${firstEndpointId}` : '/investigate'} onclick={handleEndpointNav}>
+          <div class="num">FOCUS · 02</div>
+          <div class="nm">Station focus</div>
+          <p>Drill into one station. Solo orbit at hero scale, full session pulses, switcher for the other three.</p>
+        </a>
+        <a class="sec-card" href="/transit" onclick={(e) => handleNav(e, 'transit')}>
+          <div class="num">TRANSIT · 03</div>
+          <div class="nm">Outside transit</div>
+          <p>Probe a target from four vantages — your browser plus three Cloudflare edges. The shape of agreement diagnoses upstream vs. local.</p>
+        </a>
+        <a class="sec-card" href={firstEndpointId ? `/endpoint/${firstEndpointId}` : '/investigate'} onclick={handleEndpointNav}>
+          <div class="num">ALARM · 04</div>
+          <div class="nm">Carrier lost</div>
+          <p>A station goes dark. Orbit with visible gaps where pulses should be, last-known-good anchor, recovery guidance.</p>
+        </a>
+        <a class="sec-card" href="/" onclick={handleSettings}>
+          <div class="num">CONFIG · 05</div>
+          <div class="nm">Settings drawer</div>
+          <p>Stations, cadence, trigger, vantage, network mode, companion agent, audio &amp; motion. Slides over any surface.</p>
+        </a>
+      </div>
+    </div>
   </section>
 
   <!-- HOW IT WORKS -->
@@ -727,7 +784,6 @@
       </div>
       <div class="row">
         <button type="button" class="primary" onclick={handleBegin}>Begin session →</button>
-        <button type="button" class="ghost" onclick={handleExplore}>Explore without starting</button>
       </div>
     </div>
   </section>
@@ -1337,6 +1393,94 @@
     transition: transform 200ms;
   }
 
+  /* ===== SECONDARY SURFACES (additional flows + configuration) ===== */
+  .secondary-row {
+    margin-top: 64px;
+    padding-top: 48px;
+    border-top: 1px solid var(--rule);
+  }
+  .secondary-row .sec-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 32px;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 18px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    flex-wrap: wrap;
+    gap: 14px;
+  }
+  .secondary-row .sec-head .l {
+    color: var(--fg);
+  }
+  .secondary-row .sec-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+  .secondary-row .sec-card {
+    background: var(--bg);
+    padding: 24px 26px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: background 200ms;
+    position: relative;
+    cursor: pointer;
+  }
+  .secondary-row .sec-card:hover {
+    background: var(--bg-2);
+  }
+  .secondary-row .sec-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 1px;
+    background: var(--station-b);
+    box-shadow: 0 0 10px var(--station-b);
+    transition: width 280ms cubic-bezier(0.16, 0.84, 0.42, 1);
+  }
+  .secondary-row .sec-card:hover::before {
+    width: 32px;
+  }
+  .secondary-row .sec-card .num {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+  }
+  .secondary-row .sec-card .nm {
+    font-family: var(--sans);
+    font-weight: 300;
+    font-size: 24px;
+    letter-spacing: -0.018em;
+    line-height: 1.1;
+    color: var(--fg);
+  }
+  .secondary-row .sec-card p {
+    font-size: 13px;
+    color: var(--fg-2);
+    line-height: 1.55;
+  }
+  .secondary-row .sec-card p em {
+    font-style: normal;
+    font-family: var(--mono);
+    color: var(--fg);
+  }
+
   /* ===== HOW IT WORKS ===== */
   .how {
     padding: 100px var(--pad-x);
@@ -1628,23 +1772,6 @@
     background: var(--station-a);
     border-color: var(--station-a);
   }
-  .cta .row .ghost {
-    color: var(--fg-2);
-    padding: 14px 22px;
-    border: 1px solid var(--rule-strong);
-    background: transparent;
-    transition: color 120ms, border-color 120ms;
-    font-weight: 700;
-    cursor: pointer;
-    font-family: inherit;
-    font-size: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
-  }
-  .cta .row .ghost:hover {
-    color: var(--fg);
-    border-color: var(--fg-3);
-  }
 
   /* ===== FOOTER ===== */
   .foot {
@@ -1751,6 +1878,9 @@
       padding-top: 32px;
     }
     .surface-grid {
+      grid-template-columns: 1fr;
+    }
+    .secondary-row .sec-grid {
       grid-template-columns: 1fr;
     }
     .how .steps {

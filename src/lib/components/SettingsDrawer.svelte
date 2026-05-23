@@ -14,7 +14,7 @@
   import { measurementStore } from '$lib/stores/measurements';
   import { endpointStore, MAX_ENDPOINTS } from '$lib/stores/endpoints';
   import { clearPersistedSettings } from '$lib/utils/persistence';
-  import { DEFAULT_SETTINGS } from '$lib/types';
+  import { DEFAULT_SETTINGS, type Settings, type Endpoint } from '$lib/types';
   import { clampCap, MAX_CAP } from '$lib/limits';
   import { REGIONS, detectRegion } from '$lib/regional-defaults';
   import type { Region } from '$lib/regional-defaults';
@@ -28,16 +28,54 @@
 
   const settings = $derived($settingsStore);
   const endpoints = $derived($endpointStore);
+  const measurements = $derived($measurementStore);
   const isRunning = $derived(
-    $measurementStore.lifecycle === 'running' || $measurementStore.lifecycle === 'starting',
+    measurements.lifecycle === 'running' || measurements.lifecycle === 'starting',
   );
   const historyCount = $derived($historyStore.sessions.length);
   const currentRegion = $derived<Region>(settings.region ?? detectRegion());
 
-  // Manage dialog open/close
+  // Deterministic flight cert — CHR–YYMMDD–HHMM–XXX. Mirrors the
+  // OverviewView / ReportView derivation so the About row matches the
+  // header chips. "CHR–pending" until the first session starts.
+  const flightCert = $derived.by<string>(() => {
+    const startedAt = measurements.startedAt;
+    if (!startedAt) return 'CHR–pending';
+    const d = new Date(startedAt);
+    const yy = d.getUTCFullYear().toString().slice(-2);
+    const mm = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+    const dd = d.getUTCDate().toString().padStart(2, '0');
+    const HH = d.getUTCHours().toString().padStart(2, '0');
+    const MM = d.getUTCMinutes().toString().padStart(2, '0');
+    const seedStr = (d.getTime() % 4096).toString(16).toUpperCase().padStart(3, '0');
+    return `CHR–${yy}${mm}${dd}–${HH}${MM}–${seedStr}`;
+  });
+
+  // ── Snapshot for Cancel (revert) ───────────────────────────────────────────
+  // Snapshot the live settings + endpoint list at the moment the drawer
+  // opens. Cancel restores from this snapshot before closing; Done just
+  // closes (all changes are already applied live). Snapshot is null while
+  // the drawer is closed.
+  let openSnapshot: { settings: Settings; endpoints: Endpoint[] } | null = null;
+
+  function takeSnapshot(): void {
+    openSnapshot = {
+      settings: { ...get(settingsStore) },
+      endpoints: get(endpointStore).map((ep) => ({ ...ep })),
+    };
+  }
+
+  function restoreSnapshot(): void {
+    if (openSnapshot === null) return;
+    settingsStore.set({ ...openSnapshot.settings });
+    endpointStore.setEndpoints(openSnapshot.endpoints.map((ep) => ({ ...ep })));
+  }
+
+  // Manage dialog open/close + snapshot lifecycle
   $effect(() => {
     if (dialogEl) {
       if ($uiStore.showSettings && !dialogEl.open) {
+        takeSnapshot();
         dialogEl.showModal();
       } else if (!$uiStore.showSettings && dialogEl.open && !isClosing) {
         dialogEl.close();
@@ -50,11 +88,15 @@
   }
 
   onMount(() => {
-    if (!dialogEl.open) dialogEl.showModal();
+    if (!dialogEl.open) {
+      takeSnapshot();
+      dialogEl.showModal();
+    }
     dialogEl.addEventListener('close', handleDialogClose);
     dialogEl.addEventListener('cancel', (e) => {
       e.preventDefault();
-      close();
+      // Esc / system-cancel → treat as Cancel: revert before closing.
+      cancel();
     });
   });
 
@@ -65,6 +107,9 @@
 
   function close(): void {
     if (isClosing) return;
+    // Done — keep current state; drop the snapshot so a future open
+    // re-snapshots from whatever's live.
+    openSnapshot = null;
     isClosing = true;
     closeTimeoutId = setTimeout(() => {
       isClosing = false;
@@ -73,8 +118,15 @@
     }, 200);
   }
 
+  function cancel(): void {
+    // Cancel — revert to the snapshot before closing. Backdrop click and
+    // Esc both route here so they don't silently commit edits.
+    restoreSnapshot();
+    close();
+  }
+
   function handleBackdropClick(event: MouseEvent): void {
-    if (event.target === dialogEl) close();
+    if (event.target === dialogEl) cancel();
   }
 
   // ── Settings field handlers ────────────────────────────────────────────────
@@ -207,6 +259,26 @@
   let publishHosted = $state(false);
   let saveLocally = $state(true);
 
+  // ── UI-only Window slider (v4 § 02) ────────────────────────────────────────
+  // The rolling chart window is currently a constant (tokens.lane.chartWindow
+  // = 60). The v4 prototype exposes it as a tunable so users feel it's an
+  // honest control. Until a windowSeconds Settings field exists, this is a
+  // visual-only slider — drag changes the displayed value but does not
+  // persist or affect the engine. Default mirrors the constant.
+  let windowSeconds = $state(60);
+  function applyWindow(e: Event): void {
+    const raw = parseInt((e.target as HTMLInputElement).value, 10);
+    if (isNaN(raw)) return;
+    windowSeconds = Math.max(30, Math.min(300, raw));
+  }
+
+  // ── UI-only Method radiogroup (v4 § 03) ────────────────────────────────────
+  // Chronoscope's engine picks HEAD vs GET per target (favicon.ico GET in
+  // most cases, HEAD where the upstream allows it). The control is
+  // informational — disabled with a tooltip — until a per-session override
+  // exists at the Settings level.
+  let requestMethod = $state<'head' | 'get'>('head');
+
   // ── Danger-zone confirms (preserved from previous SettingsDrawer) ──────────
   let showClearConfirm = $state(false);
   let showClearHistoryConfirm = $state(false);
@@ -309,7 +381,7 @@
         type="button"
         class="drawer-close"
         aria-label="Close settings"
-        onclick={close}
+        onclick={cancel}
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
           <path d="M2 2 L12 12 M12 2 L2 12"/>
@@ -421,6 +493,26 @@
         </div>
 
         <div class="field">
+          <div class="label">Window
+            <span class="help">Rolling window kept in memory.</span>
+          </div>
+          <div class="ctl">
+            <div class="slider">
+              <input
+                type="range"
+                min="30"
+                max="300"
+                step="10"
+                value={windowSeconds}
+                oninput={applyWindow}
+                aria-label="Rolling window in seconds"
+              />
+              <span class="val"><span class="v">{windowSeconds}</span><span class="u">s</span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
           <div class="label">Burst rounds
             <span class="help">Initial fast rounds before monitor cadence begins.</span>
           </div>
@@ -508,6 +600,37 @@
                 disabled={isRunning}
                 onclick={() => applyCorsMode('no-cors')}
               >no-CORS</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <div class="label">Method
+            <span class="help">Set by engine per target — HEAD where supported, GET (favicon) otherwise.</span>
+          </div>
+          <div class="ctl">
+            <div
+              class="seg"
+              role="radiogroup"
+              aria-label="Request method"
+              title="Set by engine per target"
+            >
+              <button
+                type="button"
+                aria-pressed={requestMethod === 'head'}
+                disabled
+                aria-disabled="true"
+                title="Set by engine per target"
+                onclick={() => (requestMethod = 'head')}
+              >HEAD</button>
+              <button
+                type="button"
+                aria-pressed={requestMethod === 'get'}
+                disabled
+                aria-disabled="true"
+                title="Set by engine per target"
+                onclick={() => (requestMethod = 'get')}
+              >GET</button>
             </div>
           </div>
         </div>
@@ -746,6 +869,7 @@
         </div>
         <div class="about">
           <span class="k">Build</span><span class="v">v4 · Vessel</span>
+          <span class="k">Cert</span><span class="v">{flightCert}</span>
           <span class="k">Vantage</span><span class="v">{REGION_SHORT[currentRegion]}</span>
           <span class="k">Browser</span><span class="v">Resident · no install</span>
           <span class="k">License</span><span class="v">MIT</span>
@@ -756,8 +880,9 @@
 
     <!-- ── Foot ─────────────────────────────────────────────────────────── -->
     <div class="drawer-foot">
-      <div class="meta">Changes apply <span class="v">live</span></div>
+      <div class="meta">Changes apply on <span class="v">Done</span></div>
       <div class="actions">
+        <button type="button" class="btn" onclick={cancel}>Cancel</button>
         <button type="button" class="btn btn--primary" onclick={close}>Done</button>
       </div>
     </div>
