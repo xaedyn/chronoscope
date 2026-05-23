@@ -384,6 +384,190 @@
     monitored.slice(0, 4).map((ep, i) => buildStationRow(ep, i)),
   );
 
+  // ── Compare-all overlay (4 stations layered on one polar) ───────────────
+  // Renders all stations' latency distributions overlaid on a single polar
+  // chart for direct comparison, plus per-station mini-summaries (p50/p95)
+  // and a one-sentence narrative naming the tightest, slowest, and widest.
+  // Fixed 0-200 ms ceiling with 10 ms bins so all stations share geometry.
+  const COMPARE_CEIL = 200;
+  const COMPARE_BIN = 10;
+  const COMPARE_NBINS = COMPARE_CEIL / COMPARE_BIN;
+  const COMPARE_MIN_SAMPLES = 4;
+
+  let compareExpanded = $state(false);
+
+  interface CompareStation {
+    readonly endpointId: string;
+    readonly stationId: StationId;
+    readonly name: string;
+    readonly host: string;
+    readonly color: string;
+    readonly p50: number;
+    readonly p95: number;
+    readonly p95Sev: '' | 'warn' | 'bad';
+    readonly pathD: string;
+  }
+  interface CompareOverlay {
+    readonly stations: readonly CompareStation[];
+    readonly arcs: readonly PolarArc[];
+    readonly ticks: readonly PolarTick[];
+    readonly axisLabels: readonly string[];
+    readonly narrative: {
+      readonly tightest: { name: string; p50: number };
+      readonly slowest: { name: string; p50: number };
+      readonly widest: { name: string; spread: number };
+    } | null;
+  }
+
+  function buildCompareOverlay(): CompareOverlay | null {
+    const rows = monitored.slice(0, 4);
+    if (rows.length === 0) return null;
+
+    // Gather per-station bin counts + percentiles, gated on min samples.
+    interface Gathered {
+      endpointId: string;
+      stationId: StationId;
+      name: string;
+      host: string;
+      color: string;
+      bins: number[];
+      p50: number;
+      p95: number;
+    }
+    const gathered: Gathered[] = [];
+    for (let i = 0; i < rows.length; i++) {
+      const ep = rows[i];
+      const stationId = STATION_IDS[i] ?? 'A';
+      const m = measurements.endpoints[ep.id];
+      if (!m) return null;
+      const okLatencies = m.samples
+        .toArray()
+        .filter((x) => x.status === 'ok')
+        .map((x) => x.latency);
+      if (okLatencies.length < COMPARE_MIN_SAMPLES) return null;
+      const bins = new Array<number>(COMPARE_NBINS).fill(0);
+      for (const v of okLatencies) {
+        let bi = Math.floor(v / COMPARE_BIN);
+        if (bi >= COMPARE_NBINS) bi = COMPARE_NBINS - 1;
+        if (bi < 0) bi = 0;
+        bins[bi]++;
+      }
+      const sorted = [...okLatencies].sort((a, b) => a - b);
+      const pickQ = (q: number): number => {
+        const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(q * sorted.length)));
+        return sorted[idx] ?? 0;
+      };
+      gathered.push({
+        endpointId: ep.id,
+        stationId,
+        name: ep.label,
+        host: hostnameOf(ep.url),
+        color: `var(--station-${stationId.toLowerCase()})`,
+        bins,
+        p50: pickQ(0.5),
+        p95: pickQ(0.95),
+      });
+    }
+
+    // Global max across all stations' bins for shared radial scale.
+    let globalMax = 1;
+    for (const g of gathered) {
+      for (const c of g.bins) if (c > globalMax) globalMax = c;
+    }
+
+    const angleFor = (v: number): number =>
+      Math.PI * (1 - Math.min(v, COMPARE_CEIL) / COMPARE_CEIL);
+
+    // Concentric guide arcs (same geometry as per-station polars).
+    const arcs: PolarArc[] = [0.25, 0.5, 0.75, 1.0].map((f) => {
+      const r = RI + (RO - RI) * f;
+      return {
+        d: `M ${(-r).toFixed(2)} 0 A ${r.toFixed(2)} ${r.toFixed(2)} 0 0 1 ${r.toFixed(2)} 0`,
+        stroke: f === 1 ? 'var(--rule-strong)' : 'var(--rule)',
+      };
+    });
+
+    // Ticks: 0, 50, 100, 150, 200.
+    const tickValues = [0, 50, 100, 150, 200];
+    const ticks: PolarTick[] = tickValues.map((t) => {
+      const ang = angleFor(t);
+      return {
+        x1: RI * Math.cos(ang),
+        y1: -RI * Math.sin(ang),
+        x2: (RI - 4) * Math.cos(ang),
+        y2: -(RI - 4) * Math.sin(ang),
+        lx: (RI - 10) * Math.cos(ang),
+        ly: -(RI - 10) * Math.sin(ang) + 3,
+        label: String(t),
+      };
+    });
+    const axisLabels = tickValues.map((t, i) =>
+      i === tickValues.length - 1 ? `${t} ms` : String(t),
+    );
+
+    // Per-station path: connect bin-midpoint radial coordinates as a polyline.
+    const stations: CompareStation[] = gathered.map((g) => {
+      const pts: Array<readonly [number, number]> = [];
+      for (let i = 0; i < COMPARE_NBINS; i++) {
+        const v0 = i * COMPARE_BIN;
+        const v1 = (i + 1) * COMPARE_BIN;
+        if (v0 >= COMPARE_CEIL) continue;
+        const angMid = angleFor((v0 + v1) / 2);
+        const h = (g.bins[i] / globalMax) * (RO - RI);
+        const r = RI + h;
+        pts.push([r * Math.cos(angMid), -r * Math.sin(angMid)] as const);
+      }
+      const d =
+        pts.length < 2
+          ? ''
+          : pts
+              .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0].toFixed(2)} ${p[1].toFixed(2)}`)
+              .join(' ');
+      const p95Sev: '' | 'warn' | 'bad' =
+        g.p95 > threshold ? 'bad' : g.p95 > threshold * 0.6 ? 'warn' : '';
+      return {
+        endpointId: g.endpointId,
+        stationId: g.stationId,
+        name: g.name,
+        host: g.host,
+        color: g.color,
+        p50: g.p50,
+        p95: g.p95,
+        p95Sev,
+        pathD: d,
+      };
+    });
+
+    // Narrative: tightest (smallest p95 - p50), slowest (highest p50),
+    // widest (largest p95 - p50 spread).
+    let tightest = gathered[0];
+    let tightestSpread = gathered[0].p95 - gathered[0].p50;
+    let slowest = gathered[0];
+    let widest = gathered[0];
+    let widestSpread = tightestSpread;
+    for (const g of gathered) {
+      const spread = g.p95 - g.p50;
+      if (spread < tightestSpread) {
+        tightest = g;
+        tightestSpread = spread;
+      }
+      if (g.p50 > slowest.p50) slowest = g;
+      if (spread > widestSpread) {
+        widest = g;
+        widestSpread = spread;
+      }
+    }
+    const narrative = {
+      tightest: { name: tightest.name, p50: tightest.p50 },
+      slowest: { name: slowest.name, p50: slowest.p50 },
+      widest: { name: widest.name, spread: widestSpread },
+    };
+
+    return { stations, arcs, ticks, axisLabels, narrative };
+  }
+
+  const compareOverlay = $derived<CompareOverlay | null>(buildCompareOverlay());
+
   // ── Titlestrip coords ───────────────────────────────────────────────────
   const totalSamples = $derived.by<number>(() => {
     let n = 0;
@@ -444,6 +628,120 @@
     </div>
 
     <main class="investigate-main">
+
+      <!-- ============ COMPARE ALL STATIONS OVERLAY ============ -->
+      <!-- Spans both columns of the main grid so the side-by-side overlay sits
+           above the per-station rows and the outside-vantage column. -->
+      <section class="compare-section" class:expanded={compareExpanded}>
+        <div class="compare-head">
+          <div class="l"><em>Compare</em> all four stations</div>
+          <div class="toggle" role="group" aria-label="Toggle comparison overlay">
+            <button
+              type="button"
+              data-mode="expand"
+              aria-pressed={compareExpanded ? 'false' : 'true'}
+              onclick={() => (compareExpanded = true)}
+            >Show overlay</button>
+            <button
+              type="button"
+              data-mode="collapse"
+              aria-pressed={compareExpanded ? 'true' : 'false'}
+              onclick={() => (compareExpanded = false)}
+            >Hide overlay</button>
+          </div>
+        </div>
+
+        {#if compareExpanded}
+          {#if compareOverlay}
+            <div class="compare-content">
+              <div class="compare-plot">
+                <svg
+                  class="compare-svg"
+                  viewBox="-105 -110 210 125"
+                  preserveAspectRatio="xMidYMid meet"
+                  aria-label="Latency distributions for all stations overlaid"
+                >
+                  {#each compareOverlay.arcs as arc, i (i)}
+                    <path d={arc.d} fill="none" stroke={arc.stroke} stroke-width="0.6"></path>
+                  {/each}
+                  {#each compareOverlay.ticks as tick, i (i)}
+                    <line
+                      x1={tick.x1.toFixed(2)} y1={tick.y1.toFixed(2)}
+                      x2={tick.x2.toFixed(2)} y2={tick.y2.toFixed(2)}
+                      stroke="rgba(242,235,219,0.25)" stroke-width="0.7"
+                    ></line>
+                    <text
+                      x={tick.lx.toFixed(2)} y={tick.ly.toFixed(2)}
+                      font-family="Space Mono" font-size="6" fill="var(--fg-3)"
+                      text-anchor="middle" letter-spacing="0.5"
+                    >{tick.label}</text>
+                  {/each}
+                  {#each compareOverlay.stations as s (s.endpointId)}
+                    {#if s.pathD}
+                      <!-- Glow (wide, low-opacity) underlay -->
+                      <path
+                        d={s.pathD}
+                        stroke={s.color}
+                        stroke-opacity="0.22"
+                        stroke-width="3.5"
+                        fill="none"
+                        stroke-linejoin="round"
+                        stroke-linecap="round"
+                      ></path>
+                      <!-- Filament -->
+                      <path
+                        d={s.pathD}
+                        stroke={s.color}
+                        stroke-opacity="0.92"
+                        stroke-width="1.2"
+                        fill="none"
+                        stroke-linejoin="round"
+                        stroke-linecap="round"
+                      ></path>
+                    {/if}
+                  {/each}
+                  <circle cx="0" cy="0" r="1.8" fill="var(--fg)" fill-opacity="0.7"></circle>
+                </svg>
+                <div class="compare-axis">
+                  {#each compareOverlay.axisLabels as label, i (i)}
+                    <span>{label}</span>
+                  {/each}
+                </div>
+              </div>
+
+              <div class="compare-legend">
+                <div class="legend-head">Side-by-side</div>
+                {#each compareOverlay.stations as s (s.endpointId)}
+                  <div class="legend-row" data-ep={s.stationId}>
+                    <span class="mk" aria-hidden="true"></span>
+                    <div class="nm">
+                      {s.name}
+                      <span class="host">{s.host}</span>
+                    </div>
+                    <div class="p50"><span class="k">p50</span>{fmt(s.p50)}</div>
+                    <div class="p95" data-sev={s.p95Sev}><span class="k">p95</span>{fmt(s.p95)}</div>
+                  </div>
+                {/each}
+                {#if compareOverlay.narrative}
+                  <div class="summary">
+                    <strong>{compareOverlay.narrative.tightest.name}</strong>
+                    holds the tightest band (p50 <em>{fmt(compareOverlay.narrative.tightest.p50)} ms</em>).
+                    <strong>{compareOverlay.narrative.slowest.name}</strong>
+                    sits slowest by baseline.
+                    <strong>{compareOverlay.narrative.widest.name}</strong>
+                    shows the widest distribution — its p95-minus-p50 spread is
+                    <em>{fmt(compareOverlay.narrative.widest.spread)} ms</em>, indicating jitter.
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {:else}
+            <div class="compare-empty">
+              <p>Collecting comparison data. Each station needs at least four successful samples before the overlay can render.</p>
+            </div>
+          {/if}
+        {/if}
+      </section>
 
       <!-- ============ PART I — What the carrier records ============ -->
       <section>
@@ -718,6 +1016,204 @@
     gap: 64px;
     padding: 48px clamp(20px, 3vw, 48px) 64px;
   }
+
+  /* ── Compare-all overlay ────────────────────────────────────────────────── */
+  /* Spans both columns of the investigate-main grid (Part I + Part II share
+     the top of this section). Mirrors the .compare-section block from
+     proposals/v4/proposal-investigate-v4.html, with tokens substituted for
+     the prototype's hard-coded colors. */
+  .compare-section {
+    grid-column: 1 / -1;
+    margin-bottom: 24px;
+    padding: 32px 36px;
+    border: 1px solid var(--rule-strong);
+    background: var(--bg-2);
+    position: relative;
+  }
+  .compare-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 32px;
+    height: 1px;
+    background: var(--station-b);
+    box-shadow: 0 0 12px var(--station-b);
+  }
+  .compare-section .compare-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .compare-section.expanded .compare-head { margin-bottom: 24px; }
+  .compare-section:not(.expanded) .compare-head { border-bottom: 0; padding-bottom: 0; }
+  .compare-section .compare-head .l {
+    font-family: var(--sans);
+    font-weight: 200;
+    font-size: 26px;
+    letter-spacing: -0.025em;
+    color: var(--fg);
+    line-height: 1.05;
+  }
+  .compare-section .compare-head .l em {
+    font-style: italic;
+    color: var(--station-b);
+    font-weight: 300;
+  }
+  .compare-section .toggle {
+    display: flex;
+    border: 1px solid var(--rule-strong);
+  }
+  .compare-section .toggle button {
+    padding: 7px 14px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    background: transparent;
+    border: 0;
+    border-right: 1px solid var(--rule-strong);
+    cursor: pointer;
+    transition: background 120ms, color 120ms;
+  }
+  .compare-section .toggle button:last-child { border-right: 0; }
+  .compare-section .toggle button[aria-pressed="true"] {
+    background: var(--fg);
+    color: var(--bg);
+  }
+  .compare-section .toggle button:hover:not([aria-pressed="true"]) { color: var(--fg); }
+
+  .compare-content {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 40px;
+    align-items: start;
+  }
+  .compare-plot { position: relative; }
+  .compare-svg {
+    width: 100%;
+    aspect-ratio: 2 / 1;
+    display: block;
+    overflow: visible;
+    /* Cap polar height to per-station polar size — don't dominate the view. */
+    max-height: 240px;
+  }
+  .compare-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--fg-4);
+    letter-spacing: 0.12em;
+    font-weight: 700;
+  }
+
+  .compare-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .compare-legend .legend-head {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .compare-legend .legend-row {
+    display: grid;
+    grid-template-columns: 12px minmax(0, 1fr) auto auto;
+    gap: 14px;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--rule-faint);
+  }
+  .compare-legend .legend-row:last-of-type { border-bottom: 0; }
+  .compare-legend .legend-row .mk { width: 8px; height: 8px; display: block; }
+  .compare-legend .legend-row[data-ep="A"] .mk { background: var(--station-a); box-shadow: 0 0 8px var(--station-a); }
+  .compare-legend .legend-row[data-ep="B"] .mk { background: var(--station-b); box-shadow: 0 0 8px var(--station-b); }
+  .compare-legend .legend-row[data-ep="C"] .mk { background: var(--station-c); box-shadow: 0 0 8px var(--station-c); }
+  .compare-legend .legend-row[data-ep="D"] .mk { background: var(--station-d); box-shadow: 0 0 8px var(--station-d); }
+  .compare-legend .nm {
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--fg);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .compare-legend .nm .host {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    color: var(--fg-3);
+    font-weight: 700;
+    margin-top: 2px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .compare-legend .p50,
+  .compare-legend .p95 {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--fg);
+    font-weight: 400;
+    letter-spacing: -0.005em;
+    min-width: 54px;
+    text-align: right;
+  }
+  .compare-legend .p50 .k,
+  .compare-legend .p95 .k {
+    font-size: 9px;
+    color: var(--fg-3);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-right: 4px;
+  }
+  .compare-legend .p95[data-sev="warn"] { color: var(--sev-warn); }
+  .compare-legend .p95[data-sev="bad"]  { color: var(--sev-bad); }
+  .compare-legend .summary {
+    margin-top: 18px;
+    padding: 16px 18px;
+    border: 1px solid var(--rule);
+    background: var(--bg-3);
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--fg-2);
+  }
+  .compare-legend .summary strong { color: var(--fg); font-weight: 500; }
+  .compare-legend .summary em {
+    font-style: normal;
+    font-family: var(--mono);
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .compare-empty {
+    margin-top: 24px;
+    padding: 24px;
+    border: 1px solid var(--rule);
+    background: var(--bg-3);
+    color: var(--fg-3);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .compare-empty p { margin: 0; max-width: 56ch; }
 
   /* ── Part header ────────────────────────────────────────────────────────── */
   .part-head { margin-bottom: 32px; }
@@ -1195,6 +1691,10 @@
       grid-template-columns: 1fr;
       gap: 28px;
     }
+    .compare-content {
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
   }
   @media (max-width: 720px) {
     .titlestrip h2 { font-size: 26px; }
@@ -1222,5 +1722,14 @@
     .phase-legend .it .l { letter-spacing: 0.08em; }
     .sr-head .info .nm { font-size: 18px; }
     .investigate-main { padding: 28px clamp(14px, 3vw, 48px) 40px; gap: 28px; }
+    .compare-section { padding: 22px 18px; }
+    .compare-section .compare-head .l { font-size: 20px; }
+    .compare-section .toggle button { padding: 6px 10px; font-size: 9px; letter-spacing: 0.12em; }
+    .compare-legend .legend-row {
+      grid-template-columns: 12px minmax(0, 1fr) auto auto;
+      gap: 8px;
+    }
+    .compare-legend .p50, .compare-legend .p95 { font-size: 11px; min-width: 44px; }
+    .compare-legend .nm { font-size: 13px; }
   }
 </style>

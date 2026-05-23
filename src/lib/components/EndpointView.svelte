@@ -598,6 +598,8 @@
           windowRounds={WINDOW}
           assemble={false}
           stationLabels={stationLabelsForScene}
+          currentRound={measurements.roundCounter}
+          cadenceMs={settings.monitorDelay}
         />
       {/if}
     </div>

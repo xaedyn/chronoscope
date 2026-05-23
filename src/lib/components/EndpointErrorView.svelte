@@ -26,7 +26,7 @@
   import { tokens } from '$lib/tokens';
   import { navigateTo } from '$lib/router';
   import type { MeasurementSample } from '$lib/types';
-  import OrbitalScene, { type OrbitalStation, type OrbitalGap } from './OrbitalScene.svelte';
+  import OrbitalScene, { type OrbitalStation, type OrbitalGap, type LastGoodMarker } from './OrbitalScene.svelte';
 
   const monitored = $derived($monitoredEndpointsStore);
   const measurements = $derived($measurementStore);
@@ -119,6 +119,7 @@
     return out;
   })());
 
+
   // ── Focused endpoint metadata ─────────────────────────────────────────────
   const focusedEndpoint = $derived(
     focusedId === null ? null : monitored.find((ep) => ep.id === focusedId) ?? null,
@@ -175,6 +176,19 @@
     return null;
   })());
 
+  // Last-known-good marker — green sphere on the focused station's orbit at
+  // the angular slot of the last successful round. Requires lastGood to be
+  // within the current 60-round window; if older, no marker is shown.
+  const focusedLastGoodMarker = $derived<LastGoodMarker | null>((() => {
+    const fs = focusedStation;
+    if (fs === null || !lastGood || focusedSamples.length === 0) return null;
+    const mostRecent = focusedSamples[focusedSamples.length - 1];
+    const roundsAgo = mostRecent.round - lastGood.round;
+    if (roundsAgo < 0 || roundsAgo >= WINDOW) return null;
+    const slotIdx = WINDOW - 1 - roundsAgo;
+    return { stationId: fs, angle: slotAngle(slotIdx, WINDOW) };
+  })());
+
   // Outage duration — time since the FIRST contiguous non-ok sample in the tail.
   const outageStart = $derived<number | null>((() => {
     let start: number | null = null;
@@ -214,6 +228,118 @@
   const lastAttempt = $derived<MeasurementSample | null>(
     focusedSamples.length === 0 ? null : focusedSamples[focusedSamples.length - 1],
   );
+
+  // ── Outage timeline · last 60 s ───────────────────────────────────────────
+  // Renders a 60-round latency curve with carrier-lost bands and a LAST GOOD
+  // marker. Segments break across missing samples so the curve doesn't span
+  // outage gaps. Geometry mirrors the v4 prototype (proposal-error-v4.html).
+  const TIMELINE_WINDOW = 60;
+  interface TimelineSegment {
+    readonly d: string;
+  }
+  interface TimelineDot {
+    readonly cx: number;
+    readonly cy: number;
+    readonly missed: boolean;
+  }
+  interface TimelineBand {
+    readonly x: number;
+    readonly w: number;
+  }
+  interface TimelineLayout {
+    readonly W: number;
+    readonly H: number;
+    readonly padX: number;
+    readonly padY: number;
+    readonly innerW: number;
+    readonly innerH: number;
+    readonly slot: number;
+    readonly maxV: number;
+    readonly triggerY: number;
+    readonly refLines: readonly { readonly y: number; readonly v: number }[];
+    readonly bands: readonly TimelineBand[];
+    readonly segments: readonly TimelineSegment[];
+    readonly dots: readonly TimelineDot[];
+    readonly lastGoodX: number | null;
+  }
+  const timeline = $derived<TimelineLayout>((() => {
+    const W = 1000;
+    const H = 170;
+    const padX = 14;
+    const padY = 14;
+    const innerW = W - padX * 2;
+    const innerH = H - padY * 2;
+    const N = TIMELINE_WINDOW;
+    const slot = innerW / N;
+    const maxV = 200;
+    const triggerY = padY + innerH - (Math.min(threshold, maxV) / maxV) * innerH;
+    const refLines = [25, 50, 75, 100].map((v) => ({
+      y: padY + innerH - (v / maxV) * innerH,
+      v,
+    }));
+
+    // Right-align the window — most recent sample sits at slot N-1.
+    const tail = focusedSamples.slice(-N);
+    const offset = N - tail.length;
+    const slots: (MeasurementSample | null)[] = new Array(N).fill(null);
+    for (let i = 0; i < tail.length; i++) slots[offset + i] = tail[i];
+
+    // CARRIER LOST bands — contiguous runs of missing slots (within data range).
+    const bands: TimelineBand[] = [];
+    let runStart = -1;
+    for (let i = 0; i <= N; i++) {
+      const s = i < N ? slots[i] : null;
+      const missed = i < N && i >= offset && (s === null || s.status !== 'ok');
+      if (missed && runStart < 0) runStart = i;
+      else if (!missed && runStart >= 0) {
+        const x = padX + runStart * slot;
+        const w = (i - runStart) * slot;
+        bands.push({ x, w });
+        runStart = -1;
+      }
+    }
+
+    // Curve segments — break across missing samples.
+    const segments: TimelineSegment[] = [];
+    const dots: TimelineDot[] = [];
+    let current = '';
+    let started = false;
+    for (let i = 0; i < N; i++) {
+      const s = slots[i];
+      const x = padX + i * slot + slot / 2;
+      if (s === null || s.status !== 'ok') {
+        if (started && current) segments.push({ d: current });
+        current = '';
+        started = false;
+        if (s !== null) {
+          // Within data range — render a gap-marker dot at baseline.
+          const y = padY + innerH - 8;
+          dots.push({ cx: x, cy: y, missed: true });
+        }
+        continue;
+      }
+      const y = padY + innerH - (Math.min(s.latency, maxV) / maxV) * innerH;
+      current += (started ? ' L ' : 'M ') + x.toFixed(2) + ' ' + y.toFixed(2);
+      started = true;
+      dots.push({ cx: x, cy: y, missed: false });
+    }
+    if (started && current) segments.push({ d: current });
+
+    // LAST GOOD marker — position from lastGood.round relative to most recent.
+    let lastGoodX: number | null = null;
+    if (lastGood !== null && focusedSamples.length > 0) {
+      const mostRecentRound = focusedSamples[focusedSamples.length - 1].round;
+      const slotIdx = N - 1 - (mostRecentRound - lastGood.round);
+      if (slotIdx >= 0 && slotIdx < N) {
+        lastGoodX = padX + (slotIdx + 1) * slot;
+      }
+    }
+
+    return {
+      W, H, padX, padY, innerW, innerH, slot, maxV,
+      triggerY, refLines, bands, segments, dots, lastGoodX,
+    };
+  })());
 
   // ── Outage history (this session, this station) ───────────────────────────
   // Walks the sample buffer and groups contiguous runs of non-ok samples
@@ -283,6 +409,9 @@
           assemble={false}
           gapRegions={focusedGapRegions}
           stationLabels={stationLabelsForScene}
+          lastGoodMarker={focusedLastGoodMarker}
+          currentRound={measurements.roundCounter}
+          cadenceMs={settings.monitorDelay}
         />
       {/if}
     </div>
@@ -375,6 +504,118 @@
 
   <!-- BELOW HERO -->
   <div class="below">
+
+    <!-- OUTAGE TIMELINE -->
+    <div class="timeline-section">
+      <div class="section-head">
+        <span class="l">Outage timeline · last 60 s</span>
+        <span class="r">
+          <span>Cadence<span class="v">{(settings.monitorDelay / 1000).toFixed(0)} s</span></span>
+          <span>Window<span class="v">{TIMELINE_WINDOW} rounds</span></span>
+        </span>
+      </div>
+      <div class="timeline-chart">
+        <svg viewBox="0 0 {timeline.W} {timeline.H}" preserveAspectRatio="none" aria-label="Carrier latency timeline · last 60 rounds">
+          <!-- Reference grid lines + labels -->
+          {#each timeline.refLines as ref (ref.v)}
+            <line
+              x1={timeline.padX}
+              y1={ref.y.toFixed(2)}
+              x2={timeline.W - timeline.padX}
+              y2={ref.y.toFixed(2)}
+              stroke="var(--fg)"
+              stroke-opacity="0.04"
+              stroke-width="0.5"
+            />
+            <text x={timeline.padX + 4} y={(ref.y - 2).toFixed(2)} class="timeline-ref-text">{ref.v} ms</text>
+          {/each}
+
+          <!-- TRIGGER threshold line -->
+          <line
+            x1={timeline.padX}
+            y1={timeline.triggerY.toFixed(2)}
+            x2={timeline.W - timeline.padX}
+            y2={timeline.triggerY.toFixed(2)}
+            stroke="var(--sev-bad)"
+            stroke-opacity="0.4"
+            stroke-dasharray="3 4"
+            stroke-width="0.8"
+          />
+          <text
+            x={timeline.W - timeline.padX - 2}
+            y={(timeline.triggerY - 4).toFixed(2)}
+            class="timeline-trigger-text"
+            text-anchor="end"
+          >TRIGGER {threshold} ms</text>
+
+          <!-- CARRIER LOST bands -->
+          {#each timeline.bands as band, i (i)}
+            <rect
+              x={band.x.toFixed(2)}
+              y={timeline.padY}
+              width={band.w.toFixed(2)}
+              height={timeline.innerH}
+              fill="var(--sev-crit)"
+              fill-opacity="0.05"
+              stroke="var(--sev-crit)"
+              stroke-opacity="0.4"
+              stroke-width="0.5"
+              stroke-dasharray="2 3"
+            />
+            {#if i === 0}
+              <text
+                x={(band.x + 6).toFixed(2)}
+                y={(timeline.padY + 12).toFixed(2)}
+                class="timeline-band-text"
+              >CARRIER LOST</text>
+            {/if}
+          {/each}
+
+          <!-- Latency curve (glow + crisp pass, segmented across gaps) -->
+          {#each timeline.segments as seg, i (i)}
+            <path d={seg.d} stroke="var(--station-d)" stroke-width="3.5" stroke-opacity="0.18" fill="none" stroke-linejoin="round" stroke-linecap="round" />
+            <path d={seg.d} stroke="var(--station-d)" stroke-width="1.1" stroke-opacity="0.92" fill="none" stroke-linejoin="round" stroke-linecap="round" />
+          {/each}
+
+          <!-- Sample dots + gap markers -->
+          {#each timeline.dots as dot, i (i)}
+            {#if dot.missed}
+              <line x1={(dot.cx - 2.5).toFixed(2)} y1={(dot.cy - 2.5).toFixed(2)} x2={(dot.cx + 2.5).toFixed(2)} y2={(dot.cy + 2.5).toFixed(2)} stroke="var(--sev-crit)" stroke-width="1" stroke-opacity="0.85" />
+              <line x1={(dot.cx + 2.5).toFixed(2)} y1={(dot.cy - 2.5).toFixed(2)} x2={(dot.cx - 2.5).toFixed(2)} y2={(dot.cy + 2.5).toFixed(2)} stroke="var(--sev-crit)" stroke-width="1" stroke-opacity="0.85" />
+            {:else}
+              <circle cx={dot.cx.toFixed(2)} cy={dot.cy.toFixed(2)} r="2.2" fill="var(--station-d)" fill-opacity="0.32" />
+              <circle cx={dot.cx.toFixed(2)} cy={dot.cy.toFixed(2)} r="1" fill="var(--station-d)" />
+            {/if}
+          {/each}
+
+          <!-- LAST GOOD marker -->
+          {#if timeline.lastGoodX !== null}
+            <line
+              x1={timeline.lastGoodX.toFixed(2)}
+              y1={timeline.padY}
+              x2={timeline.lastGoodX.toFixed(2)}
+              y2={(timeline.padY + timeline.innerH).toFixed(2)}
+              stroke="var(--station-b)"
+              stroke-width="1"
+              stroke-opacity="0.7"
+            />
+            <text
+              x={(timeline.lastGoodX - 4).toFixed(2)}
+              y={(timeline.padY + timeline.innerH - 8).toFixed(2)}
+              class="timeline-lastgood-text"
+              text-anchor="end"
+            >LAST GOOD ↓</text>
+          {/if}
+        </svg>
+      </div>
+      <div class="timeline-axis">
+        <span>T−60 s</span>
+        <span>T−45 s</span>
+        <span>T−30 s</span>
+        <span class="crit">T−15 s ↓ carrier lost</span>
+        <span>NOW · T+00</span>
+      </div>
+    </div>
 
     <!-- PATTERN CLASSIFICATION -->
     <div class="classification">
@@ -996,6 +1237,60 @@
     color: var(--fg);
     margin-left: 6px;
   }
+
+  /* ── OUTAGE TIMELINE ──────────────────────────────────────────────────────── */
+  .timeline-section { margin-bottom: 56px; }
+  .timeline-chart {
+    position: relative;
+    height: 200px;
+    border: 1px solid var(--rule-strong);
+    background: var(--bg-2);
+    padding: 14px;
+  }
+  .timeline-chart svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+  }
+  .timeline-ref-text {
+    font-family: var(--mono);
+    font-size: 8px;
+    fill: var(--fg-3);
+    letter-spacing: 0.05em;
+  }
+  .timeline-trigger-text {
+    font-family: var(--mono);
+    font-size: 9px;
+    fill: var(--sev-bad);
+    letter-spacing: 0.05em;
+  }
+  .timeline-band-text {
+    font-family: var(--mono);
+    font-size: 9px;
+    fill: var(--sev-crit);
+    letter-spacing: 0.12em;
+    font-weight: 700;
+  }
+  .timeline-lastgood-text {
+    font-family: var(--mono);
+    font-size: 9px;
+    fill: var(--station-b);
+    letter-spacing: 0.05em;
+    font-weight: 700;
+  }
+  .timeline-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--fg-3);
+    letter-spacing: 0.12em;
+    font-weight: 700;
+  }
+  .timeline-axis > span { white-space: nowrap; }
+  .timeline-axis .crit { color: var(--sev-crit); }
 
   /* ── PATTERN CLASSIFICATION ───────────────────────────────────────────────── */
   .classification { margin-bottom: 56px; }
