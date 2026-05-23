@@ -99,10 +99,9 @@
               Fallback: overview renders here as the default. Legacy route IDs
               may still exist in ActiveView or persisted payloads for backwards
               compatibility, but the primary ViewSwitcher exposes Overview,
-              Live, Investigate, and Report. onStart is forwarded so the
-              ColdVisit gate (idle + no rounds) can drive engine.start().
+              Live, Investigate, and Report.
             -->
-            <OverviewView {onStart} />
+            <OverviewView />
           {/if}
         </main>
       </div>
