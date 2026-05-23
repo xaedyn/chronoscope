@@ -11,6 +11,7 @@
   import { endpointStore } from '$lib/stores/endpoints';
   import { settingsStore } from '$lib/stores/settings';
   import { tokens } from '$lib/tokens';
+  import { navigateTo } from '$lib/router';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
 
   let { onStart }: { onStart?: () => void } = $props();
@@ -84,6 +85,14 @@
   function handleBegin(): void {
     onStart?.();
   }
+
+  function openLive(): void {
+    navigateTo({ name: 'live', endpointId: null });
+  }
+
+  function openOverview(): void {
+    navigateTo({ name: 'overview', endpointId: null });
+  }
 </script>
 
 <div class="cold-visit" data-phase="cold">
@@ -128,6 +137,11 @@
           <span>Begin session</span>
           <span class="arrow" aria-hidden="true">→</span>
         </button>
+
+        <div class="ghost-links">
+          <button type="button" class="ghost" onclick={openLive}>Open the observatory →</button>
+          <button type="button" class="ghost" onclick={openOverview}>View mission status</button>
+        </div>
 
         <div class="meta">
           Default set<span class="v">{enabledCount} station{enabledCount === 1 ? '' : 's'}</span>
@@ -347,6 +361,33 @@
     transition: transform 200ms;
   }
   .begin-btn:hover .arrow { transform: translateX(6px); }
+
+  /* Ghost links — secondary nav below the Begin button */
+  .ghost-links {
+    display: inline-flex;
+    align-items: center;
+    gap: 22px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .ghost {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--fg-2);
+    background: none;
+    border: 0;
+    padding: 6px 4px;
+    cursor: pointer;
+    transition: color 120ms;
+  }
+  .ghost:hover { color: var(--fg); }
+  .ghost:focus-visible {
+    outline: 2px solid var(--station-b);
+    outline-offset: 4px;
+  }
 
   .meta {
     font-family: var(--mono);

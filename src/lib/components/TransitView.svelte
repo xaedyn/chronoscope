@@ -456,7 +456,8 @@
       </p>
       <div class="row">
         <button type="button" class="primary" onclick={rerunTransit}>Re-run transit →</button>
-        <button type="button" class="ghost" onclick={backToInvestigate}>Back to Investigate</button>
+        <button type="button" class="ghost" onclick={() => {}}>Schedule monitor</button>
+        <button type="button" class="ghost" onclick={() => {}}>Share this verdict</button>
       </div>
     </div>
   </div>

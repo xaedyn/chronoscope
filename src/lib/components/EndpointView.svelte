@@ -154,6 +154,7 @@
     readonly p50: number | null;
     readonly fieldDelta: number | null;
     readonly rank: number;
+    readonly rankAnnotation: string;
     readonly isFocused: boolean;
   }
   const fieldP50 = $derived<number | null>((() => {
@@ -186,15 +187,23 @@
     });
     const idToRank: Record<string, number> = {};
     ranked.forEach((r, idx) => { idToRank[r.endpointId] = idx + 1; });
-    return rows.map((r) => ({
-      endpointId: r.endpointId,
-      stationId: r.stationId,
-      label: r.label,
-      p50: r.p50,
-      fieldDelta: (r.p50 !== null && fieldP50 !== null) ? r.p50 - fieldP50 : null,
-      rank: idToRank[r.endpointId] ?? 0,
-      isFocused: r.endpointId === focusedId,
-    }));
+    const totalRanked = ranked.length;
+    return rows.map((r) => {
+      const rank = idToRank[r.endpointId] ?? 0;
+      let annotation = `#${rank}`;
+      if (rank === 1) annotation = '#1 fastest';
+      else if (rank === totalRanked && totalRanked > 1) annotation = `#${rank} slowest`;
+      return {
+        endpointId: r.endpointId,
+        stationId: r.stationId,
+        label: r.label,
+        p50: r.p50,
+        fieldDelta: (r.p50 !== null && fieldP50 !== null) ? r.p50 - fieldP50 : null,
+        rank,
+        rankAnnotation: annotation,
+        isFocused: r.endpointId === focusedId,
+      };
+    });
   })());
 
   // ── Percentile ladder ──────────────────────────────────────────────────────
@@ -428,6 +437,7 @@
     readonly spikes: number;
     readonly carrierLoss: number;
     readonly worst: { readonly v: number; readonly round: number } | null;
+    readonly stableSinceLabel: string;
   }
   const stationRecord = $derived<StationRecord>((() => {
     const samplesArr = focusedMeas?.samples.toArray() ?? [];
@@ -444,6 +454,18 @@
         worst = { v: Math.round(s.latency), round: s.round };
       }
     }
+    // "Stable since": walk samples in reverse to find the last over-threshold
+    // sample. If found, stable-since is the elapsed time since that sample,
+    // formatted as T+MM:SS. If never crossed (or no samples), show the
+    // "— never this session —" placeholder used by the v4 prototype.
+    let stableSinceLabel = '— never this session —';
+    for (let i = samplesArr.length - 1; i >= 0; i--) {
+      const s = samplesArr[i];
+      if (s.status === 'ok' && s.latency > threshold) {
+        stableSinceLabel = relTime(s.timestamp);
+        break;
+      }
+    }
     return {
       host: focusedHost,
       method: settings.corsMode === 'cors' ? 'HEAD · CORS' : 'HEAD · no-cors',
@@ -451,6 +473,7 @@
       spikes,
       carrierLoss,
       worst,
+      stableSinceLabel,
     };
   })());
 
@@ -514,6 +537,15 @@
   }
   function openInvestigate(): void {
     navigateTo({ name: 'investigate', endpointId: null });
+  }
+  function runGlobalTransit(): void {
+    navigateTo({ name: 'transit', endpointId: null });
+  }
+  function compareAgainstHistory(): void {
+    // Placeholder — historic comparison view is a future surface.
+  }
+  function muteStation(): void {
+    // Placeholder — mute-this-station UX is not yet implemented.
   }
 
   // ── Station tab data ───────────────────────────────────────────────────────
@@ -652,8 +684,8 @@
       </div>
       <div class="field-sub">
         Trigger<span class="v">{threshold} ms</span>
-        {#if heroLast !== null && heroP50 !== null}
-          · {heroLast - heroP50 >= 0 ? '+' : ''}{Math.round(heroLast - heroP50)} ms vs baseline
+        {#if heroLast !== null && heroLast > threshold}
+          · {Math.round(heroLast - threshold)} ms over baseline
         {/if}
       </div>
     </div>
@@ -678,7 +710,7 @@
               <span class="mk"></span>
               <span class="nm">{card.label}</span>
               <span class="rank-tag">
-                #{card.rank}{card.isFocused ? ' · focused' : ''}
+                {card.rankAnnotation}{card.isFocused ? ' · focused' : ''}
               </span>
             </div>
             <div class="val" class:bad={card.p50 !== null && card.p50 > threshold}>
@@ -783,7 +815,9 @@
           <div class="ic">◌</div>
           <div class="copy">
             <strong>Carrier opaque</strong>
-            Most stations don't return <em>Timing-Allow-Origin</em>. We hear the total latency but cannot tell whether the drift sits in DNS, the TLS handshake, or TTFB.
+            {focusedEndpoint?.label ?? focusedHost ?? 'This station'} does not return <em>Timing-Allow-Origin</em>. We hear total
+            {#if heroLast !== null}<em>{Math.round(heroLast)} ms</em>{:else}<em>—</em>{/if}
+            but cannot tell whether the drift sits in DNS, the TLS handshake, or TTFB.
             <button type="button" class="link" onclick={openInvestigate}>Run the outside transit →</button>
           </div>
         </div>
@@ -801,6 +835,8 @@
           <span class="rv" class:crit={stationRecord.worst !== null && stationRecord.worst.v > threshold}>
             {#if stationRecord.worst === null}—{:else}{stationRecord.worst.v} ms · round {stationRecord.worst.round}{/if}
           </span>
+          <span class="rk">Stable since</span>
+          <span class="rv">{stationRecord.stableSinceLabel}</span>
         </div>
       </div>
     </div>
@@ -880,8 +916,9 @@
         {/if}
       </p>
       <div class="row">
-        <button type="button" class="primary" onclick={openInvestigate}>Open Investigate →</button>
-        <button type="button" class="ghost" onclick={backToLive}>Back to Live tracker</button>
+        <button type="button" class="primary" onclick={runGlobalTransit}>Run global transit →</button>
+        <button type="button" class="ghost" onclick={compareAgainstHistory}>Compare against history</button>
+        <button type="button" class="ghost" onclick={muteStation}>Mute this station</button>
       </div>
     </div>
 

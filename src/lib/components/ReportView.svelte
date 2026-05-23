@@ -10,7 +10,7 @@
 <script lang="ts">
   import { get } from 'svelte/store';
   import { onMount } from 'svelte';
-  import { endpointStore } from '$lib/stores/endpoints';
+  import { endpointStore, buildDefaultEndpoints } from '$lib/stores/endpoints';
   import { measurementStore } from '$lib/stores/measurements';
   import { settingsStore } from '$lib/stores/settings';
   import { statisticsStore } from '$lib/stores/statistics';
@@ -26,6 +26,7 @@
   } from '$lib/share/share-payload-builder';
   import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
   import { buildRunStoryline } from '$lib/utils/run-storyline';
+  import { deriveEndpointTone, type EndpointTone } from '$lib/utils/endpoint-tone';
   import { tokens } from '$lib/tokens';
   import type { MeasurementSample } from '$lib/types';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
@@ -240,7 +241,127 @@
   // (already wired in OverviewView). Beats provide a per-event paragraph.
   const verdictHeadline = $derived(report.diagnosis.primaryAnswer.text);
   const verdictBody = $derived(report.diagnosis.supportingSummary);
-  const observerBeats = $derived(runStoryline.beats.slice(-3));
+
+  // Diagnostic interpretation — second-paragraph context. Mirrors the
+  // OverviewView interpretation copy so the two surfaces speak with one
+  // voice. Each diagnostic kind gets a sentence that says what the headline
+  // means *for the user*, not a restated version of it.
+  const interpretation = $derived.by<string>(() => {
+    switch (report.diagnosis.kind) {
+      case 'collecting':
+        return 'Chronoscope needs a few successful checks before it can compare endpoints responsibly.';
+      case 'healthy':
+        return 'Chronoscope has not seen a meaningful slowdown or failure in this window.';
+      case 'isolated-endpoint':
+        return "That points to either your browser's route to that one endpoint, or the endpoint itself. An outside check can confirm whether the slowness follows the endpoint from other networks.";
+      case 'shared-network':
+        return 'Multiple endpoints slowing in the same window typically points to a shared link between your browser and them — most often local network or upstream ISP.';
+      case 'multiple-slow':
+        return 'Several endpoints over the threshold without a shared slow phase — likely either a shared upstream issue or coincident endpoint-side slowness. An outside check helps separate the two.';
+      case 'packet-loss':
+        return 'Failed requests in the browser can come from the endpoint, the route to it, or a CORS block. An outside check separates these without changing your local network.';
+      case 'jitter':
+        return "Bouncing latency without a clear failure pattern usually points to congestion somewhere on the path. The path's not down — it's noisy.";
+    }
+  });
+
+  // Per-endpoint tone lookup so we can render endpoint names as coloured
+  // chips inside the narrative. The same logic OverviewView ships.
+  interface EndpointToneEntry {
+    readonly label: string;
+    readonly tone: EndpointTone;
+  }
+  const endpointToneEntries = $derived<readonly EndpointToneEntry[]>(
+    monitored.map((ep) => {
+      const state = measurements.endpoints[ep.id];
+      const lastStatus = state?.lastStatus ?? null;
+      return {
+        label: ep.label,
+        tone: deriveEndpointTone({
+          stats: stats[ep.id] ?? null,
+          lastStatus,
+          healthThreshold: settings.healthThreshold,
+        }),
+      };
+    }),
+  );
+
+  // v4-style inline endpoint highlight. Splits prose on monitored endpoint
+  // labels (longest-first to avoid partial-overlap matches) and emits
+  // segments the template renders as styled chips. Returns a single
+  // tone-null segment for empty or label-free text.
+  type LedeSegment = { readonly text: string; readonly tone: EndpointTone | null };
+  function highlightEndpoints(text: string): readonly LedeSegment[] {
+    if (text.length === 0) return [{ text: '', tone: null }];
+    const matchable = endpointToneEntries
+      .filter(({ label }) => label.length >= 2)
+      .slice()
+      .sort((a, b) => b.label.length - a.label.length);
+    if (matchable.length === 0) return [{ text, tone: null }];
+
+    const segments: LedeSegment[] = [];
+    let cursor = 0;
+    while (cursor < text.length) {
+      let best: { label: string; tone: EndpointTone; index: number } | null = null;
+      for (const candidate of matchable) {
+        const index = text.indexOf(candidate.label, cursor);
+        if (index < 0) continue;
+        if (best === null || index < best.index) {
+          best = { label: candidate.label, tone: candidate.tone, index };
+        }
+      }
+      if (best === null) {
+        segments.push({ text: text.slice(cursor), tone: null });
+        break;
+      }
+      if (best.index > cursor) segments.push({ text: text.slice(cursor, best.index), tone: null });
+      segments.push({ text: best.label, tone: best.tone });
+      cursor = best.index + best.label.length;
+    }
+    return segments;
+  }
+
+  // Compose the three observer's-notes paragraphs:
+  //   ¶1 around-when / what happened — strong opening + most-significant beat
+  //   ¶2 what other stations did — supporting context (interpretation)
+  //   ¶3 what it means / what to do next — close-out + next-step prompt
+  // Falls back to supportingSummary + interpretation + a generic close when
+  // beats are sparse (e.g. healthy run with nothing to highlight).
+  interface NotesParagraph {
+    readonly opening?: string;     // bold lead-in (¶1 only)
+    readonly text: string;          // remainder of paragraph (run through highlightEndpoints)
+  }
+  const observerParagraphs = $derived.by<readonly NotesParagraph[]>(() => {
+    // Pick the most-significant beat — prefer worst-severity, then most-recent.
+    const severityRank: Record<string, number> = { bad: 3, watch: 2, info: 1, good: 0 };
+    const sortedBeats = [...runStoryline.beats].sort((a, b) => {
+      const rankDiff = (severityRank[b.severity] ?? 0) - (severityRank[a.severity] ?? 0);
+      if (rankDiff !== 0) return rankDiff;
+      return b.t - a.t;
+    });
+    const topBeat = sortedBeats[0] ?? null;
+
+    const stationCount = monitored.length;
+    const acquiredText = stationCount === 1
+      ? 'Session ended with 1 station acquired.'
+      : `Session ended with ${stationCount} stations acquired.`;
+    const nextStepText = ' If issues recur, run an outside transit check to separate your network from the endpoint.';
+
+    // Rich path — we have a beat to lead with.
+    if (topBeat !== null && verdictHeadline.length > 0) {
+      return [
+        { opening: verdictHeadline, text: ` ${topBeat.label}${topBeat.evidence ? ` ${topBeat.evidence}` : ''}` },
+        { text: verdictBody },
+        { text: `${interpretation} ${acquiredText}${nextStepText}` },
+      ];
+    }
+    // Fallback path — no beats worth surfacing.
+    return [
+      { text: verdictBody.length > 0 ? verdictBody : verdictHeadline },
+      { text: interpretation },
+      { text: `${acquiredText}${nextStepText}` },
+    ];
+  });
 
   // ── Vantage + cadence (record column) ─────────────────────────────────────
   const cadenceLabel = $derived(`${(settings.monitorDelay / 1000).toFixed(0)} s · synchronized`);
@@ -248,14 +369,76 @@
   const triggerLabel = $derived(`${settings.healthThreshold} ms`);
   const carrierLosses = $derived(measurements.errorCount + measurements.timeoutCount);
 
+  // Stations annotation: "N (default set)" when the user hasn't customized
+  // the endpoint set for the current region, otherwise "N (N configured)".
+  // Comparison is set-based on URL + enabled flag — order doesn't matter
+  // because the user can rearrange defaults without "customizing" them.
+  const stationsAnnotation = $derived.by(() => {
+    const monitoredCount = monitored.length;
+    const defaults = buildDefaultEndpoints(settings.region);
+    if (defaults.length !== endpoints.length) {
+      return `${monitoredCount} (${endpoints.length} configured)`;
+    }
+    const defaultKeys = new Set(defaults.map((d) => `${d.url}|${d.enabled}`));
+    const currentKeys = new Set(endpoints.map((e) => `${e.url}|${e.enabled}`));
+    if (defaultKeys.size !== currentKeys.size) {
+      return `${monitoredCount} (${endpoints.length} configured)`;
+    }
+    for (const k of defaultKeys) {
+      if (!currentKeys.has(k)) return `${monitoredCount} (${endpoints.length} configured)`;
+    }
+    return `${monitoredCount} (default set)`;
+  });
+
+  // Region short-code lookup for the Vantage line. Mirrors the SettingsDrawer
+  // mapping so the report's "US-W"/"EU" suffix matches the drawer's About row.
+  const REGION_SHORT: Readonly<Record<string, string>> = {
+    'north-america': 'US-W',
+    'europe': 'EU',
+    'east-asia': 'E-AS',
+    'south-southeast-asia': 'S-AS',
+    'latam': 'LATAM',
+    'mea': 'MEA',
+    'oceania': 'OCE',
+  };
+
   const vantageLabel = $derived.by(() => {
     if (typeof navigator === 'undefined') return 'Browser · — · —';
     const ua = navigator.userAgent;
-    const ch = ua.includes('Chrome') ? 'Chrome' : ua.includes('Safari') ? 'Safari'
-      : ua.includes('Firefox') ? 'Firefox' : 'Browser';
-    const os = ua.includes('Mac') ? 'macOS' : ua.includes('Win') ? 'Windows'
-      : ua.includes('Linux') ? 'Linux' : 'OS';
-    return `${ch} · ${os}`;
+    // Browser name + version. Firefox precedes "Chrome"/"Safari" because its
+    // UA can include "like Gecko" but never the literal Chrome token; Edge
+    // (Chromium) reports both Chrome and Edg/ — we report it as Chrome to
+    // match the v4 prototype's labelling.
+    let browser = 'Browser';
+    if (/Firefox\/(\d+)/.test(ua)) {
+      const v = ua.match(/Firefox\/(\d+)/)?.[1];
+      browser = v ? `Firefox ${v}` : 'Firefox';
+    } else if (/Chrome\/(\d+)/.test(ua)) {
+      const v = ua.match(/Chrome\/(\d+)/)?.[1];
+      browser = v ? `Chrome ${v}` : 'Chrome';
+    } else if (/Version\/(\d+(?:\.\d+)?).*Safari/.test(ua)) {
+      const v = ua.match(/Version\/(\d+(?:\.\d+)?)/)?.[1];
+      browser = v ? `Safari ${v}` : 'Safari';
+    }
+    // OS + version. macOS reports as "Mac OS X 14_5_0" → "macOS 14.5";
+    // Windows reports "Windows NT 10.0" → "Windows 10"; Linux has no
+    // reliable version in the UA so we keep it bare.
+    let os = 'OS';
+    const macMatch = ua.match(/Mac OS X (\d+(?:[._]\d+)?)/);
+    if (macMatch) {
+      os = `macOS ${macMatch[1].replace(/_/g, '.')}`;
+    } else {
+      const winMatch = ua.match(/Windows NT (\d+(?:\.\d+)?)/);
+      if (winMatch) {
+        // Translate NT version to marketing name where unambiguous.
+        const nt = winMatch[1];
+        os = nt === '10.0' ? 'Windows 10' : `Windows NT ${nt}`;
+      } else if (ua.includes('Linux')) {
+        os = 'Linux';
+      }
+    }
+    const region = settings.region ? (REGION_SHORT[settings.region] ?? settings.region.toUpperCase()) : 'US-W';
+    return `${browser} · ${os} · ${region}`;
   });
 
   // ── Scrub rail (purely visual progress indicator for the saved signature) ─
@@ -464,7 +647,6 @@
           {copyError === 'link' ? 'Copy failed' : copiedLink ? 'Link copied' : 'Copy link'}
         </button>
         <button type="button" class="ctl-btn" onclick={saveImage}>Save as image</button>
-        <button type="button" class="ctl-btn" onclick={saveCsv}>Export CSV</button>
       </div>
     </div>
 
@@ -560,7 +742,7 @@
         <div class="row"><span class="k">Rounds</span><span class="v">{roundsLabel}</span></div>
         <div class="row"><span class="k">Cadence</span><span class="v">{cadenceLabel}</span></div>
         <div class="row"><span class="k">Vantage</span><span class="v">{vantageLabel}</span></div>
-        <div class="row"><span class="k">Stations</span><span class="v">{monitored.length} ({endpoints.length} configured)</span></div>
+        <div class="row"><span class="k">Stations</span><span class="v">{stationsAnnotation}</span></div>
         <div class="row"><span class="k">Trigger</span><span class="v">{triggerLabel}</span></div>
         <div class="row"><span class="k">Carrier losses</span><span class="v">{carrierLosses}</span></div>
         <div class="row"><span class="k">Recorded by</span><span class="v">Chronoscope · browser-resident</span></div>
@@ -568,13 +750,12 @@
 
       <div>
         <h3>Observer's notes</h3>
-        <p class="narrative"><strong>{verdictHeadline}</strong></p>
-        <p class="narrative">{verdictBody}</p>
-        {#if observerBeats.length > 0}
-          {#each observerBeats as beat (beat.id)}
-            <p class="narrative">{beat.label}<span class="evidence"> {beat.evidence}</span></p>
-          {/each}
-        {/if}
+        {#each observerParagraphs as para, i (i)}
+          <p class="narrative">
+            {#if para.opening}<strong>{para.opening}</strong>{/if}
+            {#each highlightEndpoints(para.text) as segment, j (j)}{#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}{/each}
+          </p>
+        {/each}
       </div>
     </div>
   </section>
@@ -1043,12 +1224,28 @@
     color: var(--fg);
     font-weight: 500;
   }
-  .record-row .narrative .evidence {
-    color: var(--fg-3);
+  /* Inline endpoint chip — mono pill carrying the endpoint's tone colour.
+     Same shape OverviewView uses so the two surfaces feel like one
+     instrument. Per-tone colour is set via [data-tone]. */
+  .record-row .narrative .ep-chip {
+    display: inline-block;
     font-family: var(--mono);
-    font-size: 12px;
-    margin-left: 4px;
+    font-size: 0.85em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 1px 6px;
+    margin: 0 1px;
+    border: 1px solid var(--rule-strong);
+    border-radius: 2px;
+    color: var(--fg);
+    vertical-align: baseline;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
   }
+  .record-row .narrative .ep-chip[data-tone="good"]       { border-color: var(--station-b); color: var(--station-b); }
+  .record-row .narrative .ep-chip[data-tone="watch"]      { border-color: var(--sev-warn);  color: var(--sev-warn); }
+  .record-row .narrative .ep-chip[data-tone="bad"]        { border-color: var(--sev-bad);   color: var(--sev-bad); }
+  .record-row .narrative .ep-chip[data-tone="collecting"] { border-color: var(--rule-strong); color: var(--fg-3); }
 
   /* Footer */
   .foot {
@@ -1208,7 +1405,10 @@
     .record-row .narrative strong {
       color: black;
     }
-    .record-row .narrative .evidence { color: #444; }
+    .record-row .narrative .ep-chip {
+      color: black;
+      border-color: #999;
+    }
     .foot {
       color: #444;
       border-color: #ccc;

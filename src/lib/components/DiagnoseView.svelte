@@ -15,6 +15,7 @@
   import { uiStore } from '$lib/stores/ui';
   import { navigateTo } from '$lib/router';
   import { fmt } from '$lib/utils/format';
+  import { tokens } from '$lib/tokens';
   import type { Endpoint, MeasurementSample } from '$lib/types';
   import EndpointView from './EndpointView.svelte';
 
@@ -22,7 +23,6 @@
   const measurements = $derived($measurementStore);
   const stats = $derived($statisticsStore);
   const threshold = $derived($settingsStore.healthThreshold);
-  const monitorDelay = $derived($settingsStore.monitorDelay);
   const focusedId = $derived($uiStore.focusedEndpointId);
 
   // ── Endpoint → station mapping (A/B/C/D) ────────────────────────────────
@@ -119,10 +119,12 @@
     };
     const p50 = pickQ(0.5);
     const p95 = pickQ(0.95);
-    const maxV = sorted[sorted.length - 1] ?? 0;
+    const p99 = pickQ(0.99);
 
-    // Ceiling: bimodal/wide tails get 200ms scale; otherwise 100ms.
-    const ceiling = maxV > 120 ? 200 : 100;
+    // Ceiling computed from p99 (rounded up to nearest 100, floored at 100).
+    // This drives axis labels + bin sizing. Replaces the prior hard-coded
+    // "bimodal tail" copy with data-driven range.
+    const ceiling = Math.max(100, Math.ceil(p99 / 100) * 100);
     const binSize = ceiling > 150 ? 10 : 5;
     const nBins = Math.ceil(ceiling / binSize);
     const bins = new Array<number>(nBins).fill(0);
@@ -148,8 +150,9 @@
       };
     });
 
-    // Tick marks + numerals.
-    const tickValues = ceiling > 150 ? [0, 50, 100, 150, 200] : [0, 25, 50, 75, 100];
+    // Tick marks + numerals — 5 evenly-spaced values from 0 to ceiling.
+    const tickStep = ceiling / 4;
+    const tickValues = [0, tickStep, tickStep * 2, tickStep * 3, ceiling].map((t) => Math.round(t));
     const ticks: PolarTick[] = tickValues.map((t) => {
       const ang = angleFor(t);
       return {
@@ -235,18 +238,11 @@
           markerFor(p95, 'var(--sev-bad)', 'p95', RO + 14),
         ];
 
-    // Distribution label.
-    const spread = p95 - p50;
-    const skew = p50 > 0 ? spread / p50 : 0;
-    const distLabel =
-      ceiling > 150
-        ? `0 – 200 ms · bimodal tail`
-        : skew > 1
-          ? `0 – 100 ms · right-skewed`
-          : `0 – 100 ms`;
-    const axisLabels = ceiling > 150
-      ? ['0', '50', '100', '150', '200 ms']
-      : ['0', '25', '50', '75', '100 ms'];
+    // Distribution label — data-driven range, no shape descriptor.
+    const distLabel = `0 – ${ceiling} ms`;
+    const axisLabels = tickValues.map((t, i) =>
+      i === tickValues.length - 1 ? `${t} ms` : String(t),
+    );
 
     return { arcs, ticks, wedges, markers, ceiling, axisLabels, distLabel };
   }
@@ -397,7 +393,22 @@
     }
     return n;
   });
-  const windowSecondsLabel = $derived(`${(monitorDelay / 1000).toFixed(0)} s`);
+  const windowSecondsLabel = $derived(`${tokens.lane.chartWindow} s`);
+
+  // Pseudo-cert identifier — deterministic from session start. Matches the
+  // CHR–YYMMDD–HHMM–Axx pattern used by OverviewView so artifacts cross-
+  // reference cleanly. v4 footer renders this on the left.
+  const flightCert = $derived.by(() => {
+    if (!measurements.startedAt) return 'CHR–pending';
+    const d = new Date(measurements.startedAt);
+    const yy = d.getUTCFullYear().toString().slice(-2);
+    const mm = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+    const dd = d.getUTCDate().toString().padStart(2, '0');
+    const HH = d.getUTCHours().toString().padStart(2, '0');
+    const MM = d.getUTCMinutes().toString().padStart(2, '0');
+    const seedStr = (d.getTime() % 4096).toString(16).toUpperCase().padStart(3, '0');
+    return `CHR–${yy}${mm}${dd}–${HH}${MM}–${seedStr}`;
+  });
 
   // ── Actions ─────────────────────────────────────────────────────────────
   function openTransit(): void {
@@ -406,9 +417,6 @@
     // view currently renders placeholder probe results. Wiring real probes
     // is Phase D.
     navigateTo({ name: 'transit', endpointId: null });
-  }
-  function openLive(): void {
-    navigateTo({ name: 'live', endpointId: null });
   }
   function focusEndpoint(endpointId: string): void {
     navigateTo({ name: 'endpoint', endpointId });
@@ -582,7 +590,7 @@
                       <div class="ic" aria-hidden="true">◌</div>
                       <div class="copy">
                         <strong>Carrier opaque</strong>
-                        {row.host} does not return <em>Timing-Allow-Origin</em>; only the total request time is visible. DNS, TCP, TLS, and TTFB are opaque to this browser.
+                        {row.name} does not return <em>Timing-Allow-Origin</em>; only the total request time is visible. DNS, TCP, TLS, and TTFB are opaque to this browser.
                       </div>
                     </div>
                   {/if}
@@ -650,11 +658,9 @@
     </main>
 
     <footer class="foot">
-      <div>Trigger<span class="v">{threshold} ms</span></div>
+      <div>Cert<span class="v">{flightCert}</span></div>
       <div class="center">Browser-resident observatory · evidence report · no telemetry leaves this device</div>
-      <div class="right">
-        <button type="button" class="link" onclick={openLive}>← Back to Live</button>
-      </div>
+      <div class="right">Sampling window<span class="v">{tokens.lane.chartWindow} s</span> · <span class="v">{totalSamples}</span> samples</div>
     </footer>
   </div>
 {/if}
@@ -1178,22 +1184,6 @@
   }
   .foot .center { text-align: center; }
   .foot .right { text-align: right; }
-  .foot .link {
-    background: none;
-    border: 0;
-    color: var(--fg-3);
-    font: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
-    cursor: pointer;
-    padding: 0;
-    transition: color 120ms;
-  }
-  .foot .link:hover { color: var(--fg); }
-  .foot .link:focus-visible {
-    outline: 2px solid var(--station-b);
-    outline-offset: 2px;
-  }
 
   /* ── Responsive ─────────────────────────────────────────────────────────── */
   @media (max-width: 1100px) {
