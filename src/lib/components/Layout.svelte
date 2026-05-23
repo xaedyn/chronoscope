@@ -10,11 +10,14 @@
   import { measurementStore } from '$lib/stores/measurements';
   import { endpointStore } from '$lib/stores/endpoints';
   import { uiStore } from '$lib/stores/ui';
+  import { currentRoute, subscribeRoute, type RouteState } from '$lib/router';
   import Masthead from './Masthead.svelte';
   import OverviewView from './OverviewView.svelte';
   import LiveView from './LiveView.svelte';
   import DiagnoseView from './DiagnoseView.svelte';
+  import EndpointView from './EndpointView.svelte';
   import ReportView from './ReportView.svelte';
+  import TransitView from './TransitView.svelte';
 
   let { onStart, onStop }: {
     onStart?: () => void;
@@ -32,6 +35,20 @@
 
   const activeView = $derived($uiStore.activeView);
   const sharedReportMode = $derived($uiStore.isSharedView && $uiStore.sharedReportMode);
+  const focusedEndpointId = $derived($uiStore.focusedEndpointId);
+
+  // Track router state so we can render the v4 EndpointView surface for the
+  // /endpoint/:id route — distinct from the /investigate landing surface that
+  // DiagnoseView serves. Both routes resolve activeView === 'diagnose'.
+  let route = $state<RouteState>(currentRoute());
+  $effect(() => {
+    const off = subscribeRoute((next) => { route = next; });
+    return off;
+  });
+  const isEndpointRoute = $derived(route.name === 'endpoint');
+  const showEndpointSurface = $derived(
+    activeView === 'diagnose' && focusedEndpointId !== null && isEndpointRoute,
+  );
 
   onMount(() => {
     unsubLifecycle = measurementStore.subscribe((state) => {
@@ -69,18 +86,23 @@
         <main id="main-content" class="shell-main" tabindex="-1">
           {#if activeView === 'live'}
             <LiveView />
+          {:else if showEndpointSurface}
+            <EndpointView />
           {:else if activeView === 'diagnose'}
             <DiagnoseView />
           {:else if activeView === 'report'}
             <ReportView />
+          {:else if activeView === 'transit'}
+            <TransitView />
           {:else}
             <!--
               Fallback: overview renders here as the default. Legacy route IDs
               may still exist in ActiveView or persisted payloads for backwards
               compatibility, but the primary ViewSwitcher exposes Overview,
-              Live, Investigate, and Report.
+              Live, Investigate, and Report. onStart is forwarded so the
+              ColdVisit gate (idle + no rounds) can drive engine.start().
             -->
-            <OverviewView />
+            <OverviewView {onStart} />
           {/if}
         </main>
       </div>

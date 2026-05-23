@@ -219,6 +219,7 @@ export type ActiveView =
   | 'live'
   | 'diagnose'
   | 'report'
+  | 'transit'
   | 'strata'
   | 'terminal';
 

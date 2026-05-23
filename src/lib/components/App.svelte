@@ -21,6 +21,7 @@
   import { autoStartDecision } from '$lib/utils/status-intent';
   import type { PersistedSettings } from '$lib/types';
   import Layout from './Layout.svelte';
+  import LandingView from './LandingView.svelte';
   import SettingsDrawer from './SettingsDrawer.svelte';
   import SharePopover from './SharePopover.svelte';
   import SharedResultsBanner from './SharedResultsBanner.svelte';
@@ -29,6 +30,48 @@
   import KeyboardOverlay from './KeyboardOverlay.svelte';
 
   let engine: MeasurementEngine | null = null;
+
+  // ── Landing gate ────────────────────────────────────────────────────────────
+  // Show the marketing/onboarding LandingView on true first visit only. The
+  // gate clears once the user clicks Begin (which writes the localStorage flag
+  // and starts the engine) or Explore (which writes the flag and navigates).
+  // After that, Layout takes over forever on this device. Cold-visit / empty
+  // states are handled inside OverviewView by a separate agent.
+  //
+  // We read the flag synchronously at $state declaration so the FIRST render
+  // already mounts the right surface (no Landing → Layout swap on mount, which
+  // would create + destroy a WebGL context unnecessarily for returning
+  // visitors, and would break tests that don't expect LandingView to mount).
+  function readOnboardedFlag(): boolean {
+    if (typeof localStorage === 'undefined') return true;
+    try {
+      return localStorage.getItem('chronoscope-onboarded') === 'true';
+    } catch {
+      return true;
+    }
+  }
+
+  let onboardedFlag = $state(readOnboardedFlag());
+
+  const showLanding = $derived(
+    !onboardedFlag
+      && !$uiStore.isSharedView
+      && $uiStore.pendingShare === null
+      && $measurementStore.lifecycle === 'idle'
+      && $measurementStore.roundCounter === 0,
+  );
+
+  function handleLandingStart(): void {
+    // Mirror handleStart but also clear the gate so Layout takes over.
+    onboardedFlag = true;
+    handleStart();
+  }
+
+  function handleLandingExplore(): void {
+    // Explore path: localStorage already written by LandingView. Flip the
+    // in-memory gate so showLanding becomes false this tick.
+    onboardedFlag = true;
+  }
 
   // ── Bridge tokens to CSS custom properties (Vessel v4) ─────────────────────
   // Emits v4 canonical CSS variable names only. No bridge aliases — every var
@@ -305,6 +348,15 @@
       sharedReportMode: ui.sharedReportMode,
       hasPendingShare: ui.pendingShare !== null,
     });
+    // Landing surface takes precedence over auto-start: a first-time visitor
+    // sees the cinematic intro; the engine only starts once they click Begin.
+    // We don't claim a typed suppression reason here — the Masthead's Start
+    // button is hidden behind LandingView, so no UI needs to render an
+    // explanation. clear the reason instead.
+    if (!onboardedFlag) {
+      uiStore.setAutoStartSuppressionReason(null);
+      return;
+    }
     uiStore.setAutoStartSuppressionReason(decision.reason);
     if (decision.shouldStart) {
       engine.start();
@@ -329,23 +381,30 @@
 </script>
 
 <div id="chronoscope-root">
-  {#if $uiStore.pendingShare}
-    <ConfigStagingBanner />
-  {:else if $uiStore.isSharedView && !$uiStore.sharedReportMode}
-    <SharedResultsBanner />
-  {/if}
-  <Layout onStart={handleStart} onStop={handleStop} />
-  {#if $uiStore.showSettings}
-    <SettingsDrawer />
-  {/if}
-  {#if $uiStore.showEndpoints}
-    <EndpointDrawer />
-  {/if}
-  {#if $uiStore.showShare}
-    <SharePopover />
-  {/if}
-  {#if $uiStore.showKeyboardHelp}
-    <KeyboardOverlay />
+  {#if showLanding}
+    <!-- First-visit marketing/onboarding surface. Replaces the app shell
+         entirely (no banner / drawer / popover mounts) until the user clicks
+         Begin or Explore. -->
+    <LandingView onStart={handleLandingStart} onExplore={handleLandingExplore} />
+  {:else}
+    {#if $uiStore.pendingShare}
+      <ConfigStagingBanner />
+    {:else if $uiStore.isSharedView && !$uiStore.sharedReportMode}
+      <SharedResultsBanner />
+    {/if}
+    <Layout onStart={handleStart} onStop={handleStop} />
+    {#if $uiStore.showSettings}
+      <SettingsDrawer />
+    {/if}
+    {#if $uiStore.showEndpoints}
+      <EndpointDrawer />
+    {/if}
+    {#if $uiStore.showShare}
+      <SharePopover />
+    {/if}
+    {#if $uiStore.showKeyboardHelp}
+      <KeyboardOverlay />
+    {/if}
   {/if}
 </div>
 
