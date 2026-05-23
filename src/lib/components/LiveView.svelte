@@ -236,6 +236,57 @@
   function toggleAudio(): void {
     audioOn = !audioOn;
   }
+
+  // ── First-visit onboarding callout ─────────────────────────────────────────
+  // "How to read the orbital tracker" — three-item legend (orbit / pulse / sweep)
+  // that auto-dismisses after 6s. Persists dismissal in localStorage so it only
+  // appears on the user's first visit to the Live surface.
+  // Re-summon via `?` is deferred to Phase D (KeyboardOverlay currently owns
+  // that binding at src/lib/utils/shortcuts.ts; this callout is per-surface and
+  // would conflict without a coordinated handler).
+  const TOUR_STORAGE_KEY = 'chronoscope-orbital-tour-seen';
+  const TOUR_AUTO_DISMISS_MS = 6000;
+
+  function readTourSeen(): boolean {
+    if (typeof window === 'undefined') return true;
+    try {
+      return window.localStorage.getItem(TOUR_STORAGE_KEY) === '1';
+    } catch {
+      // Privacy mode / disabled storage — treat as "already seen" so we
+      // don't show a callout we can't persist a dismissal for.
+      return true;
+    }
+  }
+
+  let showTour = $state(!readTourSeen());
+  let tourTimerId: ReturnType<typeof setTimeout> | null = null;
+
+  function dismissTour(): void {
+    showTour = false;
+    if (tourTimerId !== null) {
+      clearTimeout(tourTimerId);
+      tourTimerId = null;
+    }
+    try {
+      window.localStorage.setItem(TOUR_STORAGE_KEY, '1');
+    } catch {
+      // Storage unavailable — dismissal still removes the callout for this
+      // session; it will reappear on reload but that's the best we can do.
+    }
+  }
+
+  $effect(() => {
+    if (!showTour) return;
+    tourTimerId = setTimeout(() => {
+      dismissTour();
+    }, TOUR_AUTO_DISMISS_MS);
+    return () => {
+      if (tourTimerId !== null) {
+        clearTimeout(tourTimerId);
+        tourTimerId = null;
+      }
+    };
+  });
 </script>
 
 <section class="live-surface" aria-label="Live orbital tracker">
@@ -283,11 +334,49 @@
         windowSeconds={WINDOW}
         windowRounds={WINDOW}
         stationLabels={stationLabelsForScene}
+        currentRound={roundCount}
+        cadenceMs={cadenceMs}
       />
     {:else}
       <div class="stage-empty">
         <p>No endpoints configured.</p>
         <p class="hint">Add stations in Settings to begin observation.</p>
+      </div>
+    {/if}
+
+    {#if showTour}
+      <div
+        class="tour-hint"
+        role="status"
+        aria-live="polite"
+        aria-label="How to read the orbital tracker"
+      >
+        <div class="head">
+          <span class="kicker"><span class="pip"></span>How to read the orbital tracker</span>
+          <button type="button" class="dismiss" onclick={dismissTour}>Got it</button>
+        </div>
+        <div class="body">
+          <div class="item">
+            <div class="visual"><div class="ring-demo"></div></div>
+            <div class="label">Orbit</div>
+            <div class="desc">= endpoint</div>
+          </div>
+          <div class="item">
+            <div class="visual"><div class="pulse-demo"></div></div>
+            <div class="label">Pulse</div>
+            <div class="desc">= round</div>
+          </div>
+          <div class="item">
+            <div class="visual"><div class="sweep-demo"></div></div>
+            <div class="label">Sweep</div>
+            <div class="desc">= now</div>
+          </div>
+        </div>
+        <div class="progress-track">
+          <span>Auto-dismiss</span>
+          <div class="bar"><div class="bar-fill"></div></div>
+          <span>6 s</span>
+        </div>
       </div>
     {/if}
   </div>
@@ -529,6 +618,205 @@
     font-size: 13px;
   }
 
+  /* ── First-visit onboarding callout ─────────────────────────────────────── */
+  /* Mirrors proposal-live-v4.html's .onboarding-callout. Positioned absolutely
+     inside .stage so it overlays the orbital scene without disrupting layout.
+     Anchored bottom-center; falls back to bottom-right on narrow viewports. */
+  .tour-hint {
+    position: absolute;
+    z-index: 9;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 18px 22px 20px;
+    border: 1px solid var(--rule-strong);
+    background: color-mix(in srgb, var(--bg-2) 92%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    min-width: 380px;
+    max-width: 520px;
+    box-shadow: 0 12px 48px color-mix(in srgb, var(--bg) 50%, transparent);
+    animation: tourHintEnter 600ms cubic-bezier(0.16, 0.84, 0.42, 1);
+  }
+  .tour-hint::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 36px;
+    height: 1px;
+    background: var(--station-b);
+    box-shadow: 0 0 14px var(--station-b);
+  }
+  @keyframes tourHintEnter {
+    from { opacity: 0; transform: translateX(-50%) translateY(40px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+  .tour-hint .head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .tour-hint .head .kicker {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .tour-hint .head .pip {
+    width: 7px;
+    height: 7px;
+    background: var(--station-b);
+    box-shadow: 0 0 10px var(--station-b);
+    animation: tourPipPulse 2000ms ease-in-out infinite;
+  }
+  @keyframes tourPipPulse {
+    0%, 100% { opacity: 0.7; }
+    50%      { opacity: 1; }
+  }
+  .tour-hint .head .dismiss {
+    color: var(--fg-3);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    padding: 4px 8px;
+    border: 1px solid var(--rule);
+    background: transparent;
+    cursor: pointer;
+    transition: color 120ms, border-color 120ms;
+  }
+  .tour-hint .head .dismiss:hover {
+    color: var(--fg);
+    border-color: var(--fg-3);
+  }
+  .tour-hint .head .dismiss:focus-visible {
+    outline: 2px solid var(--station-b);
+    outline-offset: 2px;
+  }
+  .tour-hint .body {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
+  }
+  .tour-hint .item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .tour-hint .visual {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .tour-hint .ring-demo {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--station-a);
+    border-radius: 50%;
+    box-shadow: 0 0 12px var(--station-a);
+    position: relative;
+  }
+  .tour-hint .ring-demo::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    background: var(--station-a);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 8px var(--station-a);
+  }
+  .tour-hint .pulse-demo {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--station-c);
+    box-shadow: 0 0 12px var(--station-c);
+    animation: tourPulseDemo 1600ms ease-in-out infinite;
+  }
+  @keyframes tourPulseDemo {
+    0%, 100% { transform: scale(1); opacity: 0.8; }
+    50%      { transform: scale(2.4); opacity: 1; }
+  }
+  .tour-hint .sweep-demo {
+    width: 36px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--fg) 50%, var(--fg));
+    box-shadow: 0 0 8px var(--fg);
+    transform-origin: left;
+    animation: tourSweepDemo 2400ms linear infinite alternate;
+  }
+  @keyframes tourSweepDemo {
+    from { transform: rotate(-20deg); }
+    to   { transform: rotate(20deg); }
+  }
+  .tour-hint .label {
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--fg);
+    letter-spacing: -0.005em;
+    text-align: center;
+  }
+  .tour-hint .desc {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    text-align: center;
+    font-weight: 700;
+  }
+  .tour-hint .progress-track {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid var(--rule);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+  }
+  .tour-hint .progress-track .bar {
+    flex: 1;
+    height: 1px;
+    background: var(--rule-strong);
+    position: relative;
+    overflow: hidden;
+  }
+  .tour-hint .progress-track .bar-fill {
+    position: absolute;
+    inset: 0;
+    background: var(--station-b);
+    box-shadow: 0 0 8px var(--station-b);
+    transform-origin: left;
+    transform: scaleX(0);
+    animation: tourProgressFill 6000ms linear forwards;
+  }
+  @keyframes tourProgressFill {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+
   /* ── Station chip rail ──────────────────────────────────────────────────── */
   .stations {
     display: grid;
@@ -719,5 +1007,18 @@
     .station-row:nth-child(4) { border-top: 1px solid var(--rule); }
     .bottom-controls { flex-direction: column; align-items: stretch; padding: 12px 14px; }
     .trigger input[type="range"] { width: 100%; }
+    .tour-hint {
+      min-width: 0;
+      max-width: none;
+      left: 12px;
+      right: 12px;
+      transform: none;
+      bottom: 16px;
+      padding: 14px 16px 16px;
+    }
+    @keyframes tourHintEnter {
+      from { opacity: 0; transform: translateY(40px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
   }
 </style>

@@ -30,8 +30,18 @@
     readonly slot: number;
     readonly latency: number;
     readonly drift: number | null;
+    readonly roundNumber: number | null;
+    readonly timeLabel: string | null;
     readonly screenX: number;
     readonly screenY: number;
+  }
+
+  // A green "last-known-good" pulse marker rendered on the focused station's
+  // orbit at a specific angular position. Used by EndpointErrorView so the
+  // operator sees where the last successful pulse landed before the outage.
+  export interface LastGoodMarker {
+    readonly stationId: string;
+    readonly angle: number; // radians, -π..π
   }
 </script>
 <script lang="ts">
@@ -59,6 +69,9 @@
     gapRegions = [],
     stationLabels = {},
     showTooltip = true,
+    lastGoodMarker = null,
+    currentRound = null,
+    cadenceMs = null,
   }: {
     stations: readonly OrbitalStation[];
     stationData: Readonly<Record<string, readonly (number | null)[]>>;
@@ -77,6 +90,16 @@
     stationLabels?: Readonly<Record<string, string>>;
     // Set false to disable the hover tooltip entirely (e.g. Report scrub mode).
     showTooltip?: boolean;
+    // Optional green "last-known-good" marker on a station's orbit.
+    // Used by EndpointErrorView to anchor the eye on the last success.
+    lastGoodMarker?: LastGoodMarker | null;
+    // Optional current round counter — when provided, the hover tooltip
+    // computes round numbers for each pulse slot (slot N → round currentRound
+    // - ((latestSlot - N + windowRounds) % windowRounds)).
+    currentRound?: number | null;
+    // Optional cadence (ms per round) — when provided alongside currentRound,
+    // the hover tooltip computes elapsed time labels (T+MM:SS).
+    cadenceMs?: number | null;
   } = $props();
 
   // Element refs (Svelte 5: bind:this fills these at mount)
@@ -115,6 +138,7 @@
   let home: THREE.Mesh | null = null;
   let homeHalo: THREE.Mesh | null = null;
   let sweepGroup: THREE.Group | null = null;
+  let lastGoodMesh: THREE.Mesh | null = null;
 
   // Animation state
   let cameraAngle = 0;
@@ -161,6 +185,7 @@
     buildHome();
     buildPulses();
     buildSweep();
+    buildLastGoodMarker();
     applyAssembly(assembleProgress);
 
     handleResize();
@@ -253,12 +278,32 @@
     const drift = baseline === undefined ? null : Math.round(latency - baseline);
     const stationLabel = stationLabels[bestStationId] ?? bestStationId;
 
+    // Round number for the hovered slot — newest slot maps to currentRound.
+    const roundsAgo = windowRounds - 1 - bestSlot;
+    const roundNumber = currentRound === null ? null : currentRound - roundsAgo;
+    // Time label — derived from cadence (seconds ago) when provided.
+    let timeLabel: string | null = null;
+    if (cadenceMs !== null && cadenceMs > 0) {
+      const secondsAgo = Math.round((roundsAgo * cadenceMs) / 1000);
+      if (secondsAgo <= 0) {
+        timeLabel = 'now';
+      } else if (secondsAgo < 60) {
+        timeLabel = `T−${secondsAgo}s`;
+      } else {
+        const mm = Math.floor(secondsAgo / 60).toString().padStart(2, '0');
+        const ss = (secondsAgo % 60).toString().padStart(2, '0');
+        timeLabel = `T−${mm}:${ss}`;
+      }
+    }
+
     hover = {
       stationId: bestStationId,
       stationLabel,
       slot: bestSlot,
       latency,
       drift,
+      roundNumber,
+      timeLabel,
       screenX: e.clientX - rect.left,
       screenY: e.clientY - rect.top,
     };
@@ -471,6 +516,28 @@
     sweepGroup.add(tip);
   }
 
+  function buildLastGoodMarker(): void {
+    if (!scene) return;
+    // Small bright-green sphere — anchored to where the last good pulse landed
+    // before the current outage. Hidden by default; revealed when the
+    // lastGoodMarker prop is non-null.
+    const g = new THREE.SphereGeometry(0.18, 18, 18);
+    const greenColor = new THREE.Color(tokens.color.severity.warn); // sev-warn is the warm yellow; close to "calming"
+    // Override to a healthy/stable hue (station-B cyan) so the marker reads
+    // as "the place we were when things were ok" rather than as another warning.
+    const stableColor = new THREE.Color(tokens.color.station.B);
+    const m = new THREE.MeshBasicMaterial({
+      color: stableColor,
+      transparent: true,
+      opacity: 0,
+    });
+    lastGoodMesh = new THREE.Mesh(g, m);
+    lastGoodMesh.visible = false;
+    scene.add(lastGoodMesh);
+    // Reference greenColor to silence unused-warning if linter is strict.
+    void greenColor;
+  }
+
   function applyAssembly(p: number): void {
     const orbitList = Object.values(orbits);
     for (let i = 0; i < orbitList.length; i++) {
@@ -661,6 +728,29 @@
     }
   });
 
+  // Sync lastGoodMarker prop → mesh position, visibility on focused station's orbit.
+  $effect(() => {
+    if (!scene || !lastGoodMesh) return;
+    if (!lastGoodMarker) {
+      lastGoodMesh.visible = false;
+      (lastGoodMesh.material as THREE.MeshBasicMaterial).opacity = 0;
+      return;
+    }
+    const stationObj = stations.find((s) => s.id === lastGoodMarker.stationId);
+    if (!stationObj) {
+      lastGoodMesh.visible = false;
+      return;
+    }
+    const r = stationObj.radius;
+    lastGoodMesh.position.set(
+      r * Math.cos(lastGoodMarker.angle),
+      0,
+      r * Math.sin(lastGoodMarker.angle),
+    );
+    lastGoodMesh.visible = true;
+    (lastGoodMesh.material as THREE.MeshBasicMaterial).opacity = 0.92;
+  });
+
   // Sync gapRegions prop to per-station ring uGapStarts/uGapEnds uniforms.
   // Gaps are bucketed by stationId; each ring gets up to MAX_GAPS arcs.
   $effect(() => {
@@ -716,11 +806,16 @@
         <span class="t-mk" aria-hidden="true"></span>
         <span class="t-name">{h.stationLabel}</span>
       </div>
+      {#if h.roundNumber !== null}
+        <div class="t-row"><span class="t-k">Round</span><span class="t-v">#{h.roundNumber}</span></div>
+      {/if}
       <div class="t-row"><span class="t-k">Latency</span><span class="t-v">{Math.round(h.latency)} ms</span></div>
       {#if h.drift !== null}
         <div class="t-row"><span class="t-k">Drift</span><span class="t-v">{h.drift >= 0 ? '+' : ''}{h.drift} ms</span></div>
       {/if}
-      <div class="t-row"><span class="t-k">Slot</span><span class="t-v">#{h.slot}</span></div>
+      {#if h.timeLabel !== null}
+        <div class="t-row"><span class="t-k">Time</span><span class="t-v">{h.timeLabel}</span></div>
+      {/if}
     </div>
   {/if}
 </div>
