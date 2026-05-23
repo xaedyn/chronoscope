@@ -4,10 +4,15 @@
 //   - faint Airy-disk outer ring
 //   - 4-spike diffraction cross (h/v) + diagonal spikes, only on fresh pulses
 // Fresh pulses hot-shift toward white before settling to station color.
+// vReveal is 0 when the pulse is gated out by the reveal uniform — discard
+// early so scrubbed-out pulses don't render.
 varying vec3 vColor;
 varying float vAge;
+varying float vReveal;
 
 void main() {
+  if (vReveal < 0.5) discard;
+
   vec2 c = gl_PointCoord - 0.5;
   float d = length(c);
   if (d > 0.5) discard;

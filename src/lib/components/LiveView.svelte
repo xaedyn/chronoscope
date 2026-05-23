@@ -52,6 +52,12 @@
       monitored.slice(0, 4).map((ep, i) => [ep.id, STATION_IDS[i]]),
     ),
   );
+  // Map station letter → friendly endpoint label (for OrbitalScene tooltip).
+  const stationLabelsForScene = $derived<Record<string, string>>(
+    Object.fromEntries(
+      monitored.slice(0, 4).map((ep, i) => [STATION_IDS[i], ep.label]),
+    ),
+  );
 
   // ── Sample → ring buffer per station ───────────────────────────────────────
   // OrbitalScene wants stationData[stationId] = (number | null)[60].
@@ -276,6 +282,7 @@
         triggerMs={threshold}
         windowSeconds={WINDOW}
         windowRounds={WINDOW}
+        stationLabels={stationLabelsForScene}
       />
     {:else}
       <div class="stage-empty">
