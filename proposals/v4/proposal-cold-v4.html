@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronoscope — Begin session</title>
+<meta name="description" content="The cold-visit surface. A first-time visitor lands in the empty observatory and clicks Begin to acquire carrier — the orbits assemble outward, pulses begin arriving, and the live tracker materializes.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#03050A; --bg-2:#080C14; --bg-3:#11171F;
+    --fg:#F2EBDB; --fg-2:#A39A87; --fg-3:#5F594D; --fg-4:#36322B;
+    --rule:rgba(242,235,219,0.06); --rule-strong:rgba(242,235,219,0.14); --rule-faint:rgba(242,235,219,0.03);
+    --station-A:#B7D3EC; --station-B:#8CD4C9; --station-C:#E8D597; --station-D:#D78E68;
+    --sev-bad:#D27258;
+    --font:'Hanken Grotesk',system-ui,sans-serif;
+    --font-mono:'Space Mono',ui-monospace,SFMono-Regular,monospace;
+    --pad-x:clamp(20px,3vw,48px);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--fg);min-height:100%}
+  body{font-family:var(--font);font-size:13px;font-weight:400;line-height:1.55;overflow:hidden;min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+  /* HERO STAGE — full viewport */
+  .stage{position:fixed;inset:0;background:var(--bg);overflow:hidden;z-index:0}
+  .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .stage::after{content:'';position:absolute;inset:0;pointer-events:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.96 0 0 0 0 0.92 0 0 0 0 0.85 0 0 0 0.06 0'/></filter><rect width='800' height='800' filter='url(%23n)'/></svg>");
+    background-size:400px 400px;opacity:0.55;mix-blend-mode:screen}
+  .vignette{position:fixed;inset:0;z-index:2;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 30%,rgba(3,5,10,0.55) 70%,rgba(3,5,10,0.96) 100%)}
+
+  /* MASTHEAD */
+  .masthead{
+    position:fixed;top:0;left:0;right:0;z-index:6;
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+    padding:14px var(--pad-x);
+    border-bottom:1px solid var(--rule);
+    background:rgba(3,5,10,0.4);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    opacity:0;
+    animation:fadeUp 700ms 600ms ease-out forwards;
+  }
+  .brand{display:flex;align-items:baseline;gap:12px;font-family:var(--font-mono);font-weight:700;font-size:12px;letter-spacing:0.16em;text-transform:uppercase}
+  .brand .crest{display:inline-block;width:12px;height:12px;border:1.2px solid var(--fg);border-radius:50%;position:relative;transform:translateY(1px);flex-shrink:0}
+  .brand .crest::after{content:'';position:absolute;width:1.2px;height:5px;background:var(--fg);top:1.5px;left:calc(50% - 0.6px);transform-origin:50% 100%;transform:rotate(42deg)}
+  .brand .tag{font-family:var(--font);font-size:11px;font-weight:400;letter-spacing:0.02em;text-transform:none;color:var(--fg-2);margin-left:14px;padding-left:14px;border-left:1px solid var(--rule)}
+  .nav{display:flex;gap:26px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700}
+  .nav a{color:var(--fg-3);padding:4px 0;border-bottom:1px solid transparent;transition:color 120ms}
+  .nav a:hover{color:var(--fg)}
+  .controls{display:flex;align-items:center;gap:14px;justify-self:end;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--fg-3);font-weight:700}
+  .controls .session-stub .v{color:var(--fg);margin-left:6px}
+
+  /* HERO COMPOSITION (centered) */
+  .hero{
+    position:fixed;inset:0;z-index:4;
+    display:grid;place-items:center;
+    pointer-events:none;
+  }
+  .hero .stack{text-align:center;pointer-events:none;user-select:none;max-width:90vw}
+
+  .hero .pre-state{
+    font-family:var(--font-mono);
+    font-size:11px;letter-spacing:0.42em;text-transform:uppercase;
+    color:var(--fg-3);font-weight:700;
+    margin-bottom:36px;
+    display:inline-flex;align-items:center;gap:14px;
+    opacity:0;animation:fadeUp 700ms 1100ms ease-out forwards;
+  }
+  .hero .pre-state .pip{
+    width:7px;height:7px;background:var(--fg-3);border-radius:50%;
+    transition:background 600ms,box-shadow 600ms;
+  }
+  body[data-phase="acquiring"] .pre-state .pip{background:var(--sev-bad);box-shadow:0 0 12px var(--sev-bad);animation:carrierpulse 1200ms ease-in-out infinite}
+  body[data-phase="live"] .pre-state .pip{background:var(--station-B);box-shadow:0 0 12px var(--station-B);animation:carrierpulse 2000ms ease-in-out infinite}
+  @keyframes carrierpulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+  .hero h1{
+    font-family:var(--font);
+    font-weight:200;
+    font-size:clamp(80px,15vw,240px);
+    letter-spacing:-0.05em;
+    line-height:0.85;
+    color:var(--fg);
+    text-shadow:0 0 80px rgba(242,235,219,0.10),0 0 160px rgba(140,212,201,0.04);
+    margin-bottom:36px;
+    opacity:0;
+    animation:nameRise 1600ms 1500ms cubic-bezier(0.16, 0.84, 0.42, 1) forwards;
+    transition:text-shadow 800ms;
+  }
+  body[data-phase="acquiring"] .hero h1{text-shadow:0 0 80px rgba(232,213,151,0.16),0 0 160px rgba(232,213,151,0.08)}
+  body[data-phase="live"] .hero h1{text-shadow:0 0 80px rgba(140,212,201,0.16),0 0 160px rgba(140,212,201,0.08)}
+  @keyframes nameRise{
+    from{opacity:0;transform:translateY(28px);letter-spacing:-0.025em;filter:blur(8px)}
+    to{opacity:1;transform:translateY(0);letter-spacing:-0.05em;filter:blur(0)}
+  }
+  @keyframes fadeUp{
+    from{opacity:0;transform:translateY(8px)}
+    to{opacity:1;transform:translateY(0)}
+  }
+
+  .hero .tagline{
+    font-family:var(--font);
+    font-weight:300;
+    font-size:clamp(17px,1.8vw,24px);
+    color:var(--fg-2);
+    letter-spacing:-0.01em;
+    line-height:1.4;
+    max-width:48ch;
+    margin:0 auto 44px;
+    opacity:0;
+    animation:fadeUp 700ms 2000ms ease-out forwards;
+  }
+  .hero .tagline em{font-style:normal;color:var(--fg)}
+
+  .hero .cta-stack{
+    display:flex;flex-direction:column;align-items:center;gap:14px;
+    pointer-events:auto;
+    opacity:0;
+    animation:fadeUp 700ms 2400ms ease-out forwards;
+  }
+  .hero .cta-stack .meta{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.28em;
+    text-transform:uppercase;color:var(--fg-3);font-weight:700;
+  }
+  .hero .cta-stack .meta .v{color:var(--fg);margin-left:8px}
+
+  /* BEGIN BUTTON — large, centered, hero-grade */
+  .begin-btn{
+    position:relative;
+    display:inline-flex;align-items:center;gap:24px;
+    padding:22px 36px;
+    background:var(--fg);color:var(--bg);
+    border:1px solid var(--fg);
+    font-family:var(--font-mono);
+    font-size:13px;letter-spacing:0.32em;text-transform:uppercase;
+    font-weight:700;cursor:pointer;
+    transition:background 200ms,border-color 200ms,padding 300ms,opacity 400ms;
+    box-shadow:0 0 60px rgba(242,235,219,0.18),0 0 120px rgba(140,212,201,0.08);
+  }
+  .begin-btn:hover{background:var(--station-B);border-color:var(--station-B)}
+  .begin-btn .arrow{
+    font-family:var(--font);font-weight:200;font-size:24px;letter-spacing:0;
+    line-height:0.5;display:inline-block;
+    transition:transform 200ms;
+  }
+  .begin-btn:hover .arrow{transform:translateX(6px)}
+  body[data-phase="acquiring"] .begin-btn,
+  body[data-phase="live"] .begin-btn{display:none}
+
+  /* Acquiring progress */
+  .acquiring-row{
+    display:none;align-items:center;gap:18px;
+    padding:18px 24px;
+    border:1px solid var(--rule-strong);background:rgba(3,5,10,0.5);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    font-family:var(--font-mono);font-size:11px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);font-weight:700;
+  }
+  body[data-phase="acquiring"] .acquiring-row{display:inline-flex}
+  .acquiring-row .lbl{min-width:140px}
+  .acquiring-row .track{width:200px;height:1px;background:var(--rule-strong);position:relative;overflow:hidden}
+  .acquiring-row .fill{position:absolute;left:0;top:0;bottom:0;width:var(--p,0%);background:var(--fg);box-shadow:0 0 10px var(--fg);transition:width 80ms linear}
+  .acquiring-row .count{min-width:80px;text-align:right;color:var(--fg);font-variant-numeric:tabular-nums}
+
+  /* Open-observatory CTA (live state) */
+  .open-cta{
+    display:none;
+    align-items:center;gap:14px;
+  }
+  body[data-phase="live"] .open-cta{display:inline-flex}
+  .open-cta a.primary{
+    background:var(--fg);color:var(--bg);border:1px solid var(--fg);
+    padding:14px 22px;font-family:var(--font-mono);font-size:11px;
+    letter-spacing:0.16em;text-transform:uppercase;font-weight:700;
+    transition:background 120ms,border-color 120ms;
+    cursor:pointer;
+  }
+  .open-cta a.primary:hover{background:var(--station-B);border-color:var(--station-B)}
+  .open-cta a.ghost{
+    color:var(--fg-2);padding:14px 22px;
+    border:1px solid var(--rule-strong);
+    font-family:var(--font-mono);font-size:11px;letter-spacing:0.16em;text-transform:uppercase;
+    font-weight:700;transition:color 120ms,border-color 120ms;cursor:pointer;
+  }
+  .open-cta a.ghost:hover{color:var(--fg);border-color:var(--fg-3)}
+
+  /* Bottom rail — coordinate strip */
+  .rail{
+    position:fixed;left:0;right:0;bottom:0;z-index:5;
+    padding:16px var(--pad-x);
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;
+    border-top:1px solid var(--rule);
+    background:rgba(3,5,10,0.45);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);font-weight:700;
+    opacity:0;
+    animation:fadeUp 700ms 2800ms ease-out forwards;
+  }
+  .rail .grp{display:inline-flex;gap:22px;flex-wrap:wrap}
+  .rail .grp>span{white-space:nowrap}
+  .rail .v{color:var(--fg);margin-left:6px;font-variant-numeric:tabular-nums}
+  .rail .station-set{display:inline-flex;align-items:center;gap:8px}
+  .rail .station-set .swatch{width:6px;height:6px}
+  .rail .station-set .swatch[data-ep="A"]{background:var(--station-A);box-shadow:0 0 6px var(--station-A)}
+  .rail .station-set .swatch[data-ep="B"]{background:var(--station-B);box-shadow:0 0 6px var(--station-B)}
+  .rail .station-set .swatch[data-ep="C"]{background:var(--station-C);box-shadow:0 0 6px var(--station-C)}
+  .rail .station-set .swatch[data-ep="D"]{background:var(--station-D);box-shadow:0 0 6px var(--station-D)}
+
+  /* Small status indicator top-left of hero */
+  .status-stub{
+    position:fixed;top:78px;left:var(--pad-x);z-index:5;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.22em;text-transform:uppercase;
+    color:var(--fg-3);font-weight:700;
+    display:inline-flex;align-items:center;gap:10px;
+    padding:8px 14px;border:1px solid var(--rule);
+    background:rgba(3,5,10,0.4);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    opacity:0;
+    animation:fadeUp 700ms 1000ms ease-out forwards;
+  }
+  .status-stub .label{color:var(--fg-3)}
+  .status-stub .v{color:var(--fg)}
+  body[data-phase="acquiring"] .status-stub .v{color:var(--sev-bad)}
+  body[data-phase="live"] .status-stub .v{color:var(--station-B)}
+
+  /* Footnote — bottom right */
+  .footnote{
+    position:fixed;bottom:90px;right:var(--pad-x);z-index:5;
+    text-align:right;max-width:34ch;
+    opacity:0;
+    animation:fadeUp 700ms 2600ms ease-out forwards;
+  }
+  .footnote .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:var(--fg-3);font-weight:700;margin-bottom:10px}
+  .footnote p{font-size:13px;color:var(--fg-2);line-height:1.5}
+  .footnote p em{font-style:normal;font-family:var(--font-mono);color:var(--fg)}
+
+  @media (prefers-reduced-motion: reduce){
+    .masthead,.hero h1,.hero .pre-state,.hero .tagline,.hero .cta-stack,.rail,.status-stub,.footnote{animation:none;opacity:1}
+  }
+
+  @media (max-width:1100px){
+    .footnote{position:static;text-align:left;padding:0 var(--pad-x);max-width:none}
+  }
+  @media (max-width:720px){
+    .nav,.brand .tag{display:none}
+    .controls .session-stub{display:none}
+    .hero h1{font-size:clamp(56px,18vw,140px)}
+    .hero .pre-state{font-size:9px}
+    .footnote{display:none}
+    .rail{flex-direction:column;align-items:flex-start;gap:8px;font-size:9px}
+    .status-stub{font-size:9px;top:70px}
+  }
+
+
+  /* ===== MOBILE FLOOR (375–480 px) ===== */
+  @media (max-width: 480px) {
+    :root { --pad-x: 14px; }
+    .masthead { padding: 10px var(--pad-x); }
+    .brand { font-size: 11px; gap: 8px; }
+    .controls { gap: 8px; }
+    .controls .ctl-btn { padding: 6px 8px; font-size: 9px; letter-spacing: 0.12em; }
+    .controls .ctl-btn.ctl-icon { padding: 6px 7px; }
+    .breadcrumb { padding: 10px var(--pad-x); font-size: 9px; letter-spacing: 0.14em; gap: 8px; }
+    .breadcrumb .meta { gap: 12px; }
+    .titlestrip { padding: 16px var(--pad-x) 14px; gap: 12px; }
+    .titlestrip h2 { font-size: 22px; }
+    .titlestrip h2 .sub { font-size: 12px; margin-left: 0; display: block; margin-top: 3px; }
+    .titlestrip .coords, .titlestrip .meta { font-size: 9px; letter-spacing: 0.12em; gap: 12px; }
+    .hero-meta, .hero-left, .hero-num { padding-left: var(--pad-x); padding-right: var(--pad-x); }
+    .hero-meta h1, .hud-title h1 { font-size: clamp(28px, 9vw, 48px); }
+    .hero-num .number, .hero-comp h1, .hero h1 { font-size: clamp(56px, 18vw, 120px); letter-spacing: -0.04em; }
+    .hero-num .number .u, .hero-comp .number .u { font-size: 14px; vertical-align: 0.65em; }
+    .stage { min-height: 600px; }
+    .scrub { padding: 10px var(--pad-x) 12px; gap: 10px; }
+    .scrub .lbl, .scrub .scrub-read { font-size: 9px; min-width: auto; }
+    .scrub .lbl { display: none; }
+    .below { padding: 48px var(--pad-x) 56px; }
+    .section-head, section .head { font-size: 9px; letter-spacing: 0.16em; }
+    .section-head .l, section .head .l { font-size: 24px; }
+    .foot { padding: 14px var(--pad-x); font-size: 9px; letter-spacing: 0.12em; }
+    .ladder .cell { padding: 8px 6px; }
+    .ladder .cell .v { font-size: 14px; }
+    .ladder .cell .k { font-size: 9px; letter-spacing: 0.16em; }
+    .phase-legend { grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 8px; }
+    .phase-legend .it .l { letter-spacing: 0.08em; }
+    .rank-row { grid-template-columns: 1fr; }
+    .station-tabs { padding: 130px var(--pad-x) 8px; gap: 6px; }
+    .station-tabs .tab { width: auto; min-width: 0; padding: 6px 10px; flex: 1; }
+    .station-tabs .tab .nm { font-size: 11px; }
+    .station-tabs .tab .v { font-size: 9px; }
+    .hud-stats .num { font-size: clamp(32px, 11vw, 56px); }
+    .hud-stats .num .u { font-size: 12px; }
+    /* Surface previews stack on small */
+    .surface-grid, .secondary-row .sec-grid { grid-template-columns: 1fr; }
+    .secondary-row .sec-card { padding: 18px 20px 22px; }
+    .secondary-row .sec-card .nm { font-size: 19px; }
+    /* Footer columns */
+    footer.foot, .foot-bar { grid-template-columns: 1fr; gap: 4px; }
+    .foot-bar .center, .foot-bar .right { text-align: left; }
+  }
+
+
+  /* Keyboard help overlay */
+  .keyboard-help{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;background:rgba(3,5,10,0.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:0;transition:opacity 240ms ease-out}
+  .keyboard-help.visible{display:flex;opacity:1}
+  .keyboard-help .panel{background:var(--bg-2);border:1px solid var(--rule-strong);max-width:520px;width:90vw;padding:32px 36px;position:relative;box-shadow:0 24px 72px rgba(0,0,0,0.6)}
+  .keyboard-help .panel::before{content:'';position:absolute;top:0;left:0;width:36px;height:1px;background:var(--station-B);box-shadow:0 0 12px var(--station-B)}
+  .keyboard-help .head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--rule)}
+  .keyboard-help .head h3{font-family:var(--font);font-weight:300;font-size:24px;letter-spacing:-0.015em;color:var(--fg)}
+  .keyboard-help .head .esc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);font-weight:700;padding:4px 8px;border:1px solid var(--rule-strong)}
+  .keyboard-help .grid{display:grid;grid-template-columns:auto 1fr;gap:14px 22px}
+  .keyboard-help .key{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--fg);background:var(--bg-3);border:1px solid var(--rule-strong);padding:4px 10px;min-width:36px;text-align:center;letter-spacing:0.04em;white-space:nowrap}
+  .keyboard-help .label{font-size:13px;color:var(--fg-2);align-self:center;line-height:1.4}
+  .keyboard-help .label em{font-style:normal;font-family:var(--font-mono);color:var(--fg)}
+
+</style>
+</head>
+<body data-phase="cold">
+
+<!-- HERO STAGE -->
+<div class="stage" id="stage">
+  <canvas id="scene"></canvas>
+</div>
+<div class="vignette" aria-hidden="true"></div>
+
+<!-- MASTHEAD -->
+<header class="masthead">
+  <div class="brand">
+    <span class="crest" aria-hidden="true"></span>
+    <span>Chronoscope</span>
+    <span class="tag">Synchronized HTTP latency observation</span>
+  </div>
+  <nav class="nav" aria-label="Primary">
+    <a href="proposal-overview-v4.html">Overview</a>
+    <a href="proposal-live-v4.html">Live</a>
+    <a href="proposal-investigate-v4.html">Investigate</a>
+    <a href="proposal-report-v4.html">Report</a>
+  </nav>
+  <div class="controls">
+    <span class="session-stub">Session<span class="v" id="sessionStub">— not yet acquired —</span></span>
+  </div>
+</header>
+
+<!-- STATUS STUB top-left -->
+<div class="status-stub">
+  <span class="label">Status</span>
+  <span class="v" id="statusV">Idle · awaiting begin</span>
+</div>
+
+<!-- HERO COMPOSITION -->
+<div class="hero">
+  <div class="stack">
+    <div class="pre-state">
+      <span class="pip"></span>
+      <span id="preStateText">The observatory is ready</span>
+      <span style="color:var(--fg-4)">·</span>
+      <span>v4.0 · Vessel</span>
+    </div>
+    <h1 id="heroTitle">Open the sky.</h1>
+    <p class="tagline" id="tagline">
+      Your browser is a small observatory. Press <em>Begin</em> and Chronoscope will acquire carrier on four endpoints, plotting the network as a synchronized orbital trace.
+    </p>
+    <div class="cta-stack">
+
+      <button class="begin-btn" id="beginBtn">
+        <span>Begin session</span>
+        <span class="arrow">→</span>
+      </button>
+
+      <div class="acquiring-row" id="acqRow">
+        <span class="lbl">Acquiring carrier</span>
+        <div class="track"><div class="fill" id="acqFill"></div></div>
+        <span class="count" id="acqCount">000 / 247</span>
+      </div>
+
+      <div class="open-cta" id="openCta">
+        <a class="primary" href="proposal-live-v4.html">Open the observatory →</a>
+        <a class="ghost" href="proposal-overview-v4.html">View mission status</a>
+      </div>
+
+      <div class="meta">
+        Default set<span class="v">4 stations</span> · Cadence<span class="v">1 s</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTNOTE -->
+<aside class="footnote">
+  <div class="k">No account · no install</div>
+  <p>Chronoscope runs entirely in this browser. Nothing leaves your device unless you choose to <em>Share</em> a session.</p>
+</aside>
+
+<!-- BOTTOM RAIL -->
+<footer class="rail">
+  <div class="grp">
+    <span class="station-set">
+      <span class="swatch" data-ep="A"></span>
+      <span class="swatch" data-ep="B"></span>
+      <span class="swatch" data-ep="C"></span>
+      <span class="swatch" data-ep="D"></span>
+      <span style="margin-left:8px;color:var(--fg-3)">Default set<span class="v">4</span></span>
+    </span>
+    <span>Trigger<span class="v">120 ms</span></span>
+    <span>Window<span class="v">60 s</span></span>
+  </div>
+  <div class="grp">
+    <span>R.A.<span class="v" id="ra">06h 12m</span></span>
+    <span>Dec<span class="v" id="dec">+04°09′</span></span>
+    <span>Vantage<span class="v">Chrome · macOS · US-W</span></span>
+  </div>
+</footer>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+const STATION_COLORS = ['#B7D3EC','#8CD4C9','#E8D597','#D78E68'];
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// =================== SCENE ===================
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 200);
+camera.position.set(0, 18, 30);
+camera.lookAt(0, 0, 0);
+
+function resize() {
+  const stage = document.getElementById('stage');
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Star field — visible from the start
+function buildStars() {
+  const N = 3000;
+  const positions = new Float32Array(N * 3);
+  const colors = new Float32Array(N * 3);
+  const sizes = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const r = 60 + Math.random() * 80;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    positions[i*3] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta) - 10;
+    positions[i*3+2] = r * Math.cos(phi);
+    const w = 0.7 + Math.random() * 0.3;
+    colors[i*3] = w * 0.95; colors[i*3+1] = w * 0.92; colors[i*3+2] = w * 0.85;
+    sizes[i] = Math.random() < 0.04 ? 2.0 + Math.random() * 1.4 : 0.3 + Math.random() * 0.5;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  g.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
+    vertexShader: `attribute float size; varying vec3 vColor;
+      void main(){ vColor=color; vec4 mv=modelViewMatrix*vec4(position,1.0);
+        gl_Position=projectionMatrix*mv; gl_PointSize=size*240.0/-mv.z; }`,
+    fragmentShader: `varying vec3 vColor;
+      void main(){ vec2 c=gl_PointCoord-0.5; float d=length(c);
+        float a=smoothstep(0.5,0.0,d); float h=smoothstep(0.5,0.15,d)*0.35;
+        gl_FragColor=vec4(vColor,a*0.95+h); }`,
+  });
+  return new THREE.Points(g, m);
+}
+scene.add(buildStars());
+
+// Home station — visible from the start, gently glowing
+const homeG = new THREE.SphereGeometry(0.22, 24, 24);
+const homeM = new THREE.MeshBasicMaterial({ color: 0xF2EBDB });
+scene.add(new THREE.Mesh(homeG, homeM));
+const homeHaloG = new THREE.SphereGeometry(0.9, 24, 24);
+const homeHaloM = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uTime: { value: 0 }, uIntensity: { value: 0.6 } },
+  vertexShader: `varying vec3 vN; varying vec3 vEye;
+    void main(){ vN=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vEye=normalize(-mv.xyz);
+      gl_Position=projectionMatrix*mv; }`,
+  fragmentShader: `varying vec3 vN; varying vec3 vEye; uniform float uTime; uniform float uIntensity;
+    void main(){ float rim=1.0-max(dot(vN,vEye),0.0); rim=pow(rim,1.8);
+      float p=0.85+0.15*sin(uTime*0.0015);
+      gl_FragColor=vec4(0.95,0.92,0.85,rim*uIntensity*p); }`,
+});
+const homeHalo = new THREE.Mesh(homeHaloG, homeHaloM);
+scene.add(homeHalo);
+
+// Ghost orbits — VERY faint in cold state, brighten when acquiring
+const radii = [7, 9.5, 12, 14.5];
+const orbitRings = [];
+radii.forEach((r, idx) => {
+  const ringG = new THREE.RingGeometry(r - 0.04, r + 0.04, 256);
+  const ringM = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    uniforms: {
+      uReveal: { value: 0 }, // 0..1 trace progress
+      uOpacity: { value: 0.025 }, // ghost opacity in cold state
+      uColor: { value: new THREE.Color(0xF2EBDB) },
+    },
+    vertexShader: `varying vec2 vPos;
+      void main(){ vPos=position.xy; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+    fragmentShader: `varying vec2 vPos; uniform float uReveal; uniform float uOpacity; uniform vec3 uColor;
+      void main(){
+        float a = atan(vPos.y, vPos.x);
+        float ang = mod((-a + 3.14159265*0.5) / 6.2831853 + 1.0, 1.0);
+        float traced = step(ang, uReveal);
+        float head = smoothstep(uReveal - 0.03, uReveal, ang);
+        float baseA = uOpacity + traced * 0.22 + head * 1.4 * step(uReveal, 1.0) * step(0.0, 1.0 - uReveal);
+        gl_FragColor = vec4(uColor, baseA);
+      }`,
+  });
+  const ring = new THREE.Mesh(ringG, ringM);
+  ring.rotation.x = -Math.PI / 2;
+  scene.add(ring);
+  orbitRings.push(ringM);
+});
+
+// Pulses — built once but invisible in cold state; visible during/after acquiring
+const PULSES_PER_STATION = 24;
+const pulseGroups = [];
+radii.forEach((r, idx) => {
+  const positions = new Float32Array(PULSES_PER_STATION * 3);
+  const colors = new Float32Array(PULSES_PER_STATION * 3);
+  const sizes = new Float32Array(PULSES_PER_STATION);
+  const phases = new Float32Array(PULSES_PER_STATION);
+  const c = new THREE.Color(STATION_COLORS[idx]);
+  for (let i = 0; i < PULSES_PER_STATION; i++) {
+    phases[i] = (i / PULSES_PER_STATION) * Math.PI * 2;
+    colors[i*3] = c.r; colors[i*3+1] = c.g; colors[i*3+2] = c.b;
+    sizes[i] = 0.085;
+    positions[i*3] = 9999;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  g.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
+    uniforms: { uTime: { value: 0 }, uReveal: { value: 0 } },
+    vertexShader: `
+      attribute float aSize; varying vec3 vColor; uniform float uTime; uniform float uReveal;
+      void main(){ vColor = color;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = aSize * 3400.0 / max(0.1, -mv.z) * uReveal;
+      }`,
+    fragmentShader: `varying vec3 vColor;
+      void main(){ vec2 c = gl_PointCoord - 0.5; float d = length(c);
+        if (d > 0.5) discard;
+        float core = smoothstep(0.10, 0.0, d) * 1.6;
+        float halo = exp(-d * 5.0) * 1.05;
+        float ring = smoothstep(0.34, 0.28, d) * smoothstep(0.44, 0.36, d) * 0.45;
+        gl_FragColor = vec4(vColor, core + halo + ring); }`,
+  });
+  const points = new THREE.Points(g, m);
+  points.frustumCulled = false;
+  scene.add(points);
+  pulseGroups.push({ points, positions, phases, r, speed: 0.00015 * (1 + idx * 0.08), mat: m });
+});
+
+// Sweep — only visible during acquiring/live
+const sweepGroup = new THREE.Group();
+const sweepBeamG = new THREE.PlaneGeometry(15, 0.04);
+const sweepBeamM = new THREE.MeshBasicMaterial({
+  color: 0xF2EBDB, transparent: true, opacity: 0,
+  side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending,
+});
+const sweepBeam = new THREE.Mesh(sweepBeamG, sweepBeamM);
+sweepBeam.position.set(7.5, 0, 0);
+sweepBeam.rotation.x = -Math.PI / 2;
+sweepGroup.add(sweepBeam);
+const sweepTipG = new THREE.SphereGeometry(0.14, 12, 12);
+const sweepTipM = new THREE.MeshBasicMaterial({ color: 0xF2EBDB, transparent: true, opacity: 0 });
+const sweepTip = new THREE.Mesh(sweepTipG, sweepTipM);
+sweepTip.position.set(15, 0, 0);
+sweepGroup.add(sweepTip);
+scene.add(sweepGroup);
+
+// =================== STATE MACHINE ===================
+let phase = 'cold'; // cold → acquiring → live
+let phaseStart = 0;
+const ACQUIRE_MS = 2400;
+
+function setPhase(p) {
+  phase = p;
+  phaseStart = performance.now();
+  document.body.setAttribute('data-phase', p);
+  if (p === 'cold') {
+    document.getElementById('statusV').textContent = 'Idle · awaiting begin';
+    document.getElementById('preStateText').textContent = 'The observatory is ready';
+    document.getElementById('heroTitle').textContent = 'Open the sky.';
+  } else if (p === 'acquiring') {
+    document.getElementById('statusV').textContent = 'Acquiring carrier...';
+    document.getElementById('preStateText').textContent = 'Acquiring · plotting orbits';
+    document.getElementById('heroTitle').textContent = 'The sky is opening.';
+  } else if (p === 'live') {
+    document.getElementById('statusV').textContent = 'Carrier acquired · 4 stations on transit';
+    document.getElementById('preStateText').textContent = 'Live · 4 stations on transit';
+    document.getElementById('heroTitle').textContent = 'The sky is open.';
+    // Generate session ID
+    const now = new Date();
+    const yy = String(now.getUTCFullYear()).slice(-2);
+    const mo = String(now.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(now.getUTCDate()).padStart(2, '0');
+    const hh = String(now.getUTCHours()).padStart(2, '0');
+    const mm = String(now.getUTCMinutes()).padStart(2, '0');
+    const tail = Math.random().toString(36).slice(2, 5).toUpperCase();
+    document.getElementById('sessionStub').textContent = `CHR–${yy}${mo}${dd}–${hh}${mm}–${tail}`;
+  }
+}
+
+document.getElementById('beginBtn').addEventListener('click', () => {
+  setPhase('acquiring');
+});
+
+// =================== FRAME LOOP ===================
+let cameraAngle = 0;
+let mTX = 0, mTY = 0, mX = 0, mY = 0;
+window.addEventListener('mousemove', (e) => {
+  mTX = ((e.clientX / window.innerWidth) - 0.5) * 2;
+  mTY = ((e.clientY / window.innerHeight) - 0.5) * 2;
+});
+
+function frame(now) {
+  const t = now - phaseStart;
+
+  // Phase progress
+  let reveal = 0, sweepVis = 0, pulseVis = 0, haloIntensity = 0.6, ringOpacity = 0.025;
+  if (phase === 'cold') {
+    reveal = 0;
+    sweepVis = 0;
+    pulseVis = 0;
+    haloIntensity = 0.6 + 0.2 * Math.sin(now * 0.0009); // gentle breathing while idle
+    ringOpacity = 0.025;
+  } else if (phase === 'acquiring') {
+    const p = Math.min(1, t / ACQUIRE_MS);
+    const eased = 1 - Math.pow(1 - p, 3);
+    reveal = eased;
+    sweepVis = Math.max(0, (p - 0.7) / 0.3);
+    pulseVis = Math.max(0, (p - 0.5) / 0.5);
+    haloIntensity = 0.6 + 0.3 * eased;
+    ringOpacity = 0.025 + 0.2 * eased;
+
+    // Update acquiring count
+    const count = Math.floor(p * 247);
+    document.getElementById('acqCount').textContent = String(count).padStart(3, '0') + ' / 247';
+    document.getElementById('acqFill').style.setProperty('--p', Math.round(p * 100) + '%');
+
+    // Transition to live when complete
+    if (p >= 1 && phase === 'acquiring') {
+      setTimeout(() => setPhase('live'), 200);
+    }
+  } else if (phase === 'live') {
+    reveal = 1;
+    sweepVis = 1;
+    pulseVis = 1;
+    haloIntensity = 0.9;
+    ringOpacity = 0.22;
+  }
+
+  // Update orbital ring shaders
+  orbitRings.forEach((ringM, idx) => {
+    // Stagger ring reveals during acquiring
+    const stagger = idx * 0.12;
+    const local = Math.max(0, Math.min(1, (reveal - stagger) / 0.25));
+    if (phase === 'acquiring') {
+      ringM.uniforms.uReveal.value = local;
+      ringM.uniforms.uOpacity.value = ringOpacity;
+    } else if (phase === 'cold') {
+      ringM.uniforms.uReveal.value = 0;
+      ringM.uniforms.uOpacity.value = ringOpacity;
+    } else {
+      // live — full opacity, no reveal tracing
+      ringM.uniforms.uReveal.value = 2; // > 1 means fully drawn, no head
+      ringM.uniforms.uOpacity.value = ringOpacity;
+    }
+  });
+
+  // Update pulse positions and visibility
+  pulseGroups.forEach((g, idx) => {
+    const stagger = idx * 0.12;
+    const local = Math.max(0, Math.min(1, (pulseVis - stagger) / 0.25));
+    g.mat.uniforms.uReveal.value = local;
+    g.mat.uniforms.uTime.value = now;
+    const p = g.positions;
+    for (let i = 0; i < PULSES_PER_STATION; i++) {
+      const angle = g.phases[i] + now * g.speed;
+      p[i*3] = g.r * Math.cos(angle);
+      p[i*3+1] = 0;
+      p[i*3+2] = g.r * Math.sin(angle);
+    }
+    g.points.geometry.attributes.position.needsUpdate = true;
+  });
+
+  // Sweep — rotates clockwise, visibility tied to sweepVis
+  sweepBeam.material.opacity = 0.12 * sweepVis;
+  sweepTip.material.opacity = 1.0 * sweepVis;
+  if (sweepVis > 0) {
+    const sweepAngle = (now / 60000) * Math.PI * 2;
+    sweepGroup.rotation.y = -sweepAngle;
+  }
+
+  // Home halo
+  homeHalo.material.uniforms.uTime.value = now;
+  homeHalo.material.uniforms.uIntensity.value = haloIntensity;
+
+  // Camera drift + parallax
+  if (!reducedMotion) {
+    cameraAngle += 0.00004;
+    mX += (mTX - mX) * 0.045;
+    mY += (mTY - mY) * 0.045;
+    camera.position.x = Math.sin(cameraAngle) * 4 + mX * 2.5;
+    camera.position.y = 18 - mY * 1.2;
+    camera.position.z = 30 + Math.cos(cameraAngle) * 3;
+    camera.lookAt(0, 0, 0);
+  }
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+// =================== KICKOFF ===================
+phaseStart = performance.now();
+requestAnimationFrame(frame);
+</script>
+
+
+  <div class="keyboard-help" id="keyboardHelp" role="dialog" aria-label="Keyboard shortcuts">
+    <div class="panel">
+      <div class="head"><h3>Keyboard shortcuts</h3><span class="esc">Esc to close</span></div>
+      <div class="grid">
+        <span class="key">?</span><span class="label">Toggle this help</span>
+        <span class="key">L</span><span class="label">Open Live tracker</span>
+        <span class="key">O</span><span class="label">Open Overview</span>
+        <span class="key">I</span><span class="label">Open Investigate</span>
+        <span class="key">R</span><span class="label">Open Report</span>
+        <span class="key">T</span><span class="label">Open Outside transit</span>
+        <span class="key">S</span><span class="label">Open Settings</span>
+        <span class="key">H</span><span class="label">Back to home (Index)</span>
+        <span class="key">Esc</span><span class="label">Close any overlay</span>
+      </div>
+    </div>
+  </div>
+
+<script>
+  (function(){
+    const _kbHelp = document.getElementById('keyboardHelp');
+    if (!_kbHelp) return;
+    function toggleHelp(force){const w=force!==undefined?force:!_kbHelp.classList.contains('visible');_kbHelp.classList.toggle('visible',w);}
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const k = e.key;
+      if (k === '?' || (e.shiftKey && k === '/')) { e.preventDefault(); toggleHelp(); }
+      else if (k === 'Escape') { if (_kbHelp.classList.contains('visible')) toggleHelp(false); }
+      else if (k === 'l' || k === 'L') window.location.href = 'proposal-live-v4.html';
+      else if (k === 'o' || k === 'O') window.location.href = 'proposal-overview-v4.html';
+      else if (k === 'i' || k === 'I') window.location.href = 'proposal-investigate-v4.html';
+      else if (k === 'r' || k === 'R') window.location.href = 'proposal-report-v4.html';
+      else if (k === 't' || k === 'T') window.location.href = 'proposal-transit-v4.html';
+      else if (k === 's' || k === 'S') window.location.href = 'proposal-settings-v4.html';
+      else if (k === 'h' || k === 'H') window.location.href = 'index.html';
+    });
+  })();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,1370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronoscope — Report · CHR–260518–1442–A7K</title>
+<meta name="description" content="The session signature — 247 synchronized rounds across 4 stations frozen into a 3D orbital plot. Downloadable as a star-catalog page; unique to this recording.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #03050A;
+    --bg-2: #080C14;
+    --bg-3: #11171F;
+    --fg: #F2EBDB;
+    --fg-2: #A39A87;
+    --fg-3: #5F594D;
+    --fg-4: #36322B;
+    --rule: rgba(242, 235, 219, 0.06);
+    --rule-strong: rgba(242, 235, 219, 0.14);
+    --rule-faint: rgba(242, 235, 219, 0.03);
+
+    --station-A: #B7D3EC;
+    --station-B: #8CD4C9;
+    --station-C: #E8D597;
+    --station-D: #D78E68;
+
+    --sev-warn: #E8C36F;
+    --sev-bad:  #D27258;
+    --sev-crit: #B14238;
+
+    --font: 'Hanken Grotesk', system-ui, sans-serif;
+    --font-mono: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
+    --pad-x: clamp(20px, 3vw, 48px);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--fg); }
+  body {
+    font-family: var(--font); font-size: 13px; font-weight: 400; line-height: 1.55;
+    overflow-x: hidden; min-height: 100vh;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+  /* WebGL stage occupies the hero viewport */
+  .stage {
+    position: relative;
+    height: 100vh;
+    min-height: 720px;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .stage canvas {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    display: block;
+  }
+  .stage::after {
+    content: ''; position: absolute; inset: 0;
+    pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.96 0 0 0 0 0.92 0 0 0 0 0.85 0 0 0 0.06 0'/></filter><rect width='800' height='800' filter='url(%23n)'/></svg>");
+    background-size: 400px 400px;
+    opacity: 0.55;
+    mix-blend-mode: screen;
+  }
+  .vignette {
+    position: absolute; inset: 0; z-index: 2;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 30%, rgba(3,5,10,0.55) 70%, rgba(3,5,10,0.95) 100%);
+  }
+
+  /* MASTHEAD — overlaid on stage */
+  .masthead {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 14px var(--pad-x);
+    border-bottom: 1px solid var(--rule);
+    background: rgba(3, 5, 10, 0.55);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  }
+  .brand { display: flex; align-items: baseline; gap: 12px;
+    font-family: var(--font-mono); font-weight: 700; font-size: 12px;
+    letter-spacing: 0.16em; text-transform: uppercase; }
+  .brand .crest {
+    display: inline-block; width: 12px; height: 12px;
+    border: 1.2px solid var(--fg); border-radius: 50%;
+    position: relative; transform: translateY(1px); flex-shrink: 0;
+  }
+  .brand .crest::after {
+    content: ''; position: absolute;
+    width: 1.2px; height: 5px; background: var(--fg);
+    top: 1.5px; left: calc(50% - 0.6px);
+    transform-origin: 50% 100%; transform: rotate(42deg);
+  }
+  .brand .tag {
+    font-family: var(--font); font-size: 11px; font-weight: 400; letter-spacing: 0.02em;
+    text-transform: none; color: var(--fg-2);
+    margin-left: 14px; padding-left: 14px;
+    border-left: 1px solid var(--rule);
+  }
+  .nav { display: flex; gap: 26px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; font-weight: 700; }
+  .nav a { color: var(--fg-3); padding: 4px 0;
+    border-bottom: 1px solid transparent; transition: color 120ms, border-color 120ms; }
+  .nav a:hover { color: var(--fg); }
+  .nav a.active { color: var(--fg); border-bottom-color: var(--fg); }
+  .controls { display: flex; align-items: center; gap: 14px; justify-self: end;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .stopped-tag { color: var(--fg-3); display: flex; align-items: center; gap: 8px; font-weight: 700; }
+  .stopped-tag .sq { width: 7px; height: 7px; background: var(--fg-3); }
+  .ctl-btn { border: 1px solid var(--rule-strong); padding: 7px 12px;
+    color: var(--fg); font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    transition: background 120ms, border-color 120ms; cursor: pointer;
+  }
+  .ctl-btn:hover { background: var(--bg-2); border-color: var(--fg-3); }
+  .ctl-btn--primary { color: var(--bg); background: var(--fg); border-color: var(--fg); }
+  .ctl-btn--primary:hover { background: var(--station-A); border-color: var(--station-A); }
+
+  /* HUD inside the stage */
+  .hud-top {
+    position: absolute; top: 78px; left: 0; right: 0; z-index: 4;
+    display: flex; justify-content: center;
+    pointer-events: none;
+  }
+  .hud-top .coords {
+    display: inline-flex; gap: 26px;
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--fg-3);
+    padding: 8px 18px;
+    border: 1px solid var(--rule);
+    background: rgba(3,5,10,0.55);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    opacity: 0;
+    animation: hudFade 700ms 2200ms ease-out forwards;
+  }
+  .hud-top .coords > span { white-space: nowrap; }
+  .hud-top .coords .v { color: var(--fg); font-weight: 700; margin-left: 8px;
+    font-variant-numeric: tabular-nums; }
+
+  /* Hero title — left side */
+  .hud-title {
+    position: absolute; left: var(--pad-x); top: 50%;
+    transform: translateY(-50%);
+    z-index: 4;
+    max-width: min(720px, 50vw);
+    pointer-events: none;
+  }
+  .hud-title .kicker {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.32em; text-transform: uppercase;
+    color: var(--fg-3); margin-bottom: 20px;
+    opacity: 0;
+    animation: hudFade 700ms 1800ms ease-out forwards;
+  }
+  .hud-title .kicker .v { color: var(--fg); font-weight: 700; }
+  .hud-title h1 {
+    font-family: var(--font);
+    font-weight: 200;
+    font-size: clamp(40px, 4.8vw, 72px);
+    letter-spacing: -0.025em;
+    line-height: 1;
+    color: var(--fg);
+    margin-bottom: 22px;
+    text-shadow: 0 0 50px rgba(242,235,219,0.10);
+    opacity: 0;
+    animation: titleRise 1200ms 2000ms cubic-bezier(0.16, 0.84, 0.42, 1) forwards;
+  }
+  .hud-title .body {
+    font-size: 15px; color: var(--fg-2); line-height: 1.5;
+    margin-bottom: 28px; max-width: 42ch;
+    opacity: 0;
+    animation: hudFade 700ms 2400ms ease-out forwards;
+  }
+  .hud-title .body em {
+    font-style: normal; font-family: var(--font-mono); color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .hud-title .actions {
+    display: flex; gap: 12px;
+    pointer-events: auto;
+    opacity: 0;
+    animation: hudFade 700ms 2700ms ease-out forwards;
+  }
+
+  /* Hero readout — right side, anchored to bottom-right */
+  .hud-stats {
+    position: absolute; right: var(--pad-x); bottom: 88px; z-index: 4;
+    text-align: right;
+    pointer-events: none;
+    opacity: 0;
+    animation: hudFade 700ms 2500ms ease-out forwards;
+  }
+  .hud-stats .label {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--fg-3); margin-bottom: 6px;
+  }
+  .hud-stats .num {
+    font-family: var(--font);
+    font-weight: 200;
+    font-size: clamp(48px, 6vw, 84px);
+    letter-spacing: -0.04em;
+    color: var(--fg);
+    line-height: 0.85;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 30px rgba(242,235,219,0.10);
+  }
+  .hud-stats .num .u {
+    font-family: var(--font-mono);
+    font-size: 0.32em;
+    color: var(--fg-3);
+    margin-left: 6px;
+    letter-spacing: 0.05em;
+    vertical-align: 0.8em;
+    display: inline-block;
+    text-shadow: none;
+  }
+  .hud-stats .row {
+    margin-top: 14px;
+    display: flex; gap: 24px; justify-content: flex-end;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--fg-3);
+  }
+  .hud-stats .row .v { color: var(--fg); font-weight: 700;
+    font-variant-numeric: tabular-nums; margin-left: 6px; }
+
+  /* Cinematic scrub bar at the bottom edge */
+  .scrub {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
+    padding: 14px var(--pad-x) 16px;
+    display: flex; align-items: center; gap: 18px;
+    border-top: 1px solid var(--rule);
+    background: rgba(3,5,10,0.55);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    pointer-events: auto;
+    opacity: 0;
+    animation: hudFade 700ms 2900ms ease-out forwards;
+  }
+  .scrub .lbl {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--fg-3); font-weight: 700;
+    min-width: 90px;
+  }
+  .scrub .rail {
+    flex: 1; position: relative;
+    height: 28px;
+    cursor: ew-resize;
+  }
+  .scrub .rail-bg {
+    position: absolute; left: 0; right: 0; top: 50%; height: 1px;
+    background: var(--rule-strong);
+    transform: translateY(-0.5px);
+  }
+  .scrub .rail-fill {
+    position: absolute; left: 0; top: 50%; height: 1px;
+    background: var(--fg);
+    box-shadow: 0 0 10px var(--fg);
+    transform: translateY(-0.5px);
+    width: 100%;
+  }
+  .scrub .marks {
+    position: absolute; inset: 0;
+    display: flex; align-items: center;
+    pointer-events: none;
+  }
+  .scrub .marks .m {
+    width: 1px; height: 6px; background: var(--rule-strong);
+    margin: 0;
+  }
+  .scrub .marks .m:nth-child(8n + 1) { height: 10px; background: var(--fg-3); }
+  .scrub .handle {
+    position: absolute; top: 50%; transform: translate(-50%, -50%);
+    width: 2px; height: 18px; background: var(--fg);
+    box-shadow: 0 0 12px var(--fg);
+    left: 100%;
+    pointer-events: none;
+  }
+  .scrub .scrub-read {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--fg-3); min-width: 90px; text-align: right;
+  }
+  .scrub .scrub-read .v { color: var(--fg); font-weight: 700;
+    font-variant-numeric: tabular-nums; margin-left: 4px; }
+
+  @keyframes hudFade {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes titleRise {
+    from { opacity: 0; transform: translateY(20px); letter-spacing: -0.015em; }
+    to   { opacity: 1; transform: translateY(0); letter-spacing: -0.025em; }
+  }
+  .hud-title h1 { /* keep transform stable post-animation */ }
+
+  /* Loader */
+  .loader {
+    position: fixed; inset: 0; z-index: 100;
+    background: var(--bg);
+    display: grid; place-items: center;
+    transition: opacity 800ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .loader.fade { opacity: 0; pointer-events: none; }
+  .loader .stack {
+    display: flex; flex-direction: column; align-items: center; gap: 24px;
+  }
+  .loader .crest-big {
+    width: 36px; height: 36px;
+    border: 1.5px solid var(--fg); border-radius: 50%;
+    position: relative;
+    animation: crestSpin 3600ms cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+  .loader .crest-big::after {
+    content: ''; position: absolute;
+    width: 1.5px; height: 15px; background: var(--fg);
+    top: 2px; left: calc(50% - 0.75px);
+    transform-origin: 50% 100%;
+  }
+  @keyframes crestSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .loader .progress {
+    width: 220px; height: 1px; background: var(--rule);
+    position: relative; overflow: hidden;
+  }
+  .loader .progress::before {
+    content: ''; position: absolute;
+    left: 0; top: 0; bottom: 0; width: var(--p, 0%);
+    background: var(--fg);
+    transition: width 80ms linear;
+    box-shadow: 0 0 12px var(--fg);
+  }
+  .loader .label {
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.36em; text-transform: uppercase;
+    color: var(--fg-3);
+    display: flex; gap: 12px;
+  }
+  .loader .label .v { color: var(--fg); font-weight: 700;
+    font-variant-numeric: tabular-nums; }
+
+  /* PAGE CONTENT BELOW HERO */
+  .below {
+    padding: 80px var(--pad-x) 96px;
+    border-top: 1px solid var(--rule);
+    background: linear-gradient(180deg, rgba(3,5,10,0.92) 0%, var(--bg) 24%);
+    position: relative;
+  }
+
+  /* Per-station summary */
+  .summary-head {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 18px; margin-bottom: 24px;
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--fg-3);
+  }
+  .summary-head .l { color: var(--fg); font-weight: 700; }
+  .summary-head .r { display: inline-flex; gap: 22px; }
+  .summary-head .r .v { color: var(--fg); margin-left: 6px; font-weight: 700; }
+
+  .stations-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+  .station-card { background: var(--bg); padding: 22px 24px 24px; }
+  .station-card .vh { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .station-card .mk { width: 8px; height: 8px; }
+  .station-card[data-ep="A"] .mk { background: var(--station-A); box-shadow: 0 0 10px var(--station-A); }
+  .station-card[data-ep="B"] .mk { background: var(--station-B); box-shadow: 0 0 10px var(--station-B); }
+  .station-card[data-ep="C"] .mk { background: var(--station-C); box-shadow: 0 0 10px var(--station-C); }
+  .station-card[data-ep="D"] .mk { background: var(--station-D); box-shadow: 0 0 10px var(--station-D); }
+  .station-card .name {
+    font-family: var(--font);
+    font-size: 17px; font-weight: 500;
+    color: var(--fg); letter-spacing: -0.005em;
+  }
+  .station-card .state {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 700;
+  }
+  .station-card .state[data-s="stable"] { color: var(--station-B); }
+  .station-card .state[data-s="warn"]   { color: var(--sev-warn); }
+  .station-card .state[data-s="bad"]    { color: var(--sev-bad); }
+  .station-card .stats {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+  }
+  .station-card .stat + .stat { border-left: 1px solid var(--rule); padding-left: 14px; margin-left: 14px; }
+  .station-card .stat .k {
+    font-family: var(--font-mono);
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--fg-3); margin-bottom: 6px;
+  }
+  .station-card .stat .v {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 20px; font-weight: 400;
+    color: var(--fg); letter-spacing: -0.01em;
+  }
+  .station-card .stat .v .u { font-size: 11px; color: var(--fg-3); margin-left: 2px; }
+
+  /* Record + narrative */
+  .record-row {
+    margin-top: 64px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 64px;
+  }
+  .record-row h3 {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--fg-3); font-weight: 700;
+    margin-bottom: 18px; padding-bottom: 14px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .record-row .row {
+    display: grid; grid-template-columns: 150px 1fr;
+    gap: 6px 18px; padding: 9px 0;
+    border-bottom: 1px solid var(--rule-faint);
+    font-family: var(--font-mono); font-size: 11px;
+  }
+  .record-row .row:last-child { border-bottom: 0; }
+  .record-row .row .k {
+    color: var(--fg-3); text-transform: uppercase;
+    letter-spacing: 0.18em; font-size: 10px;
+    white-space: nowrap; font-weight: 700;
+  }
+  .record-row .row .v { color: var(--fg); font-variant-numeric: tabular-nums; }
+  .record-row .narrative {
+    font-family: var(--font);
+    font-size: 16px; color: var(--fg-2); line-height: 1.55;
+  }
+  .record-row .narrative + .narrative { margin-top: 16px; }
+  .record-row .narrative strong { color: var(--fg); font-weight: 500; }
+  .record-row .narrative em {
+    font-style: normal; font-family: var(--font-mono); color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Footer */
+  .foot {
+    border-top: 1px solid var(--rule);
+    padding: 22px var(--pad-x);
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--fg-3);
+  }
+  .foot .v { color: var(--fg); margin-left: 6px; font-weight: 700; }
+  .foot .center { text-align: center; }
+  .foot .right { text-align: right; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hud-top .coords, .hud-title .kicker, .hud-title h1, .hud-title .body, .hud-title .actions,
+    .hud-stats, .scrub { animation: none; opacity: 1; transform: none; }
+    .loader .crest-big { animation: none; }
+  }
+
+  @media (max-width: 1100px) {
+    .hud-title { max-width: min(420px, 60vw); }
+    .stations-grid { grid-template-columns: repeat(2, 1fr); }
+    .record-row { grid-template-columns: 1fr; gap: 40px; }
+  }
+  @media (max-width: 720px) {
+    .nav, .brand .tag { display: none; }
+    .hud-title { left: 16px; right: 16px; max-width: none; }
+    .hud-stats { left: 16px; right: 16px; bottom: 100px; text-align: left; }
+    .hud-stats .row { justify-content: flex-start; }
+    .scrub { padding: 12px 12px 14px; }
+    .scrub .lbl { display: none; }
+    .stations-grid { grid-template-columns: 1fr; }
+    .foot { grid-template-columns: 1fr; gap: 4px; text-align: left; }
+    .foot .center, .foot .right { text-align: left; }
+  }
+
+
+  /* ===== MOBILE FLOOR (375–480 px) ===== */
+  @media (max-width: 480px) {
+    :root { --pad-x: 14px; }
+    .masthead { padding: 10px var(--pad-x); }
+    .brand { font-size: 11px; gap: 8px; }
+    .controls { gap: 8px; }
+    .controls .ctl-btn { padding: 6px 8px; font-size: 9px; letter-spacing: 0.12em; }
+    .controls .ctl-btn.ctl-icon { padding: 6px 7px; }
+    .breadcrumb { padding: 10px var(--pad-x); font-size: 9px; letter-spacing: 0.14em; gap: 8px; }
+    .breadcrumb .meta { gap: 12px; }
+    .titlestrip { padding: 16px var(--pad-x) 14px; gap: 12px; }
+    .titlestrip h2 { font-size: 22px; }
+    .titlestrip h2 .sub { font-size: 12px; margin-left: 0; display: block; margin-top: 3px; }
+    .titlestrip .coords, .titlestrip .meta { font-size: 9px; letter-spacing: 0.12em; gap: 12px; }
+    .hero-meta, .hero-left, .hero-num { padding-left: var(--pad-x); padding-right: var(--pad-x); }
+    .hero-meta h1, .hud-title h1 { font-size: clamp(28px, 9vw, 48px); }
+    .hero-num .number, .hero-comp h1, .hero h1 { font-size: clamp(56px, 18vw, 120px); letter-spacing: -0.04em; }
+    .hero-num .number .u, .hero-comp .number .u { font-size: 14px; vertical-align: 0.65em; }
+    .stage { min-height: 600px; }
+    .scrub { padding: 10px var(--pad-x) 12px; gap: 10px; }
+    .scrub .lbl, .scrub .scrub-read { font-size: 9px; min-width: auto; }
+    .scrub .lbl { display: none; }
+    .below { padding: 48px var(--pad-x) 56px; }
+    .section-head, section .head { font-size: 9px; letter-spacing: 0.16em; }
+    .section-head .l, section .head .l { font-size: 24px; }
+    .foot { padding: 14px var(--pad-x); font-size: 9px; letter-spacing: 0.12em; }
+    .ladder .cell { padding: 8px 6px; }
+    .ladder .cell .v { font-size: 14px; }
+    .ladder .cell .k { font-size: 9px; letter-spacing: 0.16em; }
+    .phase-legend { grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 8px; }
+    .phase-legend .it .l { letter-spacing: 0.08em; }
+    .rank-row { grid-template-columns: 1fr; }
+    .station-tabs { padding: 130px var(--pad-x) 8px; gap: 6px; }
+    .station-tabs .tab { width: auto; min-width: 0; padding: 6px 10px; flex: 1; }
+    .station-tabs .tab .nm { font-size: 11px; }
+    .station-tabs .tab .v { font-size: 9px; }
+    .hud-stats .num { font-size: clamp(32px, 11vw, 56px); }
+    .hud-stats .num .u { font-size: 12px; }
+    /* Surface previews stack on small */
+    .surface-grid, .secondary-row .sec-grid { grid-template-columns: 1fr; }
+    .secondary-row .sec-card { padding: 18px 20px 22px; }
+    .secondary-row .sec-card .nm { font-size: 19px; }
+    /* Footer columns */
+    footer.foot, .foot-bar { grid-template-columns: 1fr; gap: 4px; }
+    .foot-bar .center, .foot-bar .right { text-align: left; }
+  }
+
+
+  /* ===== KEYBOARD HELP OVERLAY ===== */
+  .keyboard-help{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:rgba(3,5,10,0.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:0;transition:opacity 240ms ease-out}
+  .keyboard-help.visible{display:flex;opacity:1}
+  .keyboard-help .panel{background:var(--bg-2);border:1px solid var(--rule-strong);max-width:520px;width:90vw;padding:32px 36px;position:relative;box-shadow:0 24px 72px rgba(0,0,0,0.6)}
+  .keyboard-help .panel::before{content:'';position:absolute;top:0;left:0;width:36px;height:1px;background:var(--station-B);box-shadow:0 0 12px var(--station-B)}
+  .keyboard-help .head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--rule)}
+  .keyboard-help .head h3{font-family:var(--font);font-weight:300;font-size:24px;letter-spacing:-0.015em;color:var(--fg)}
+  .keyboard-help .head .esc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);font-weight:700;padding:4px 8px;border:1px solid var(--rule-strong)}
+  .keyboard-help .grid{display:grid;grid-template-columns:auto 1fr;gap:14px 22px}
+  .keyboard-help .key{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--fg);background:var(--bg-3);border:1px solid var(--rule-strong);padding:4px 10px;min-width:36px;text-align:center;letter-spacing:0.04em;white-space:nowrap}
+  .keyboard-help .label{font-size:13px;color:var(--fg-2);align-self:center;line-height:1.4}
+  .keyboard-help .label em{font-style:normal;font-family:var(--font-mono);color:var(--fg)}
+
+  /* ===== PRINT STYLESHEET ===== */
+  @media print {
+    @page { size: A4 portrait; margin: 12mm; }
+    body { background: #fff !important; color: #000 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body::before, body::after, .vignette, .masthead, .breadcrumb, .scrub, footer.foot, .keyboard-help, body > script { display: none !important; }
+    .stage { position: static !important; height: 720px !important; background: #fff !important; }
+    .stage canvas { background: #fff !important; }
+    .stage::after { display: none !important; }
+    .hud-top, .hud-title, .hud-stats { color: #000 !important; }
+    .hud-top .coords { background: transparent !important; border: 1px solid #000 !important; color: #444 !important; backdrop-filter: none !important; }
+    .hud-top .coords .v { color: #000 !important; }
+    .hud-title h1, .hud-title .body { color: #000 !important; text-shadow: none !important; }
+    .hud-title .kicker, .hud-title .kicker .v { color: #555 !important; }
+    .hud-title .body em, .hud-title .body strong { color: #000 !important; }
+    .hud-stats .num { color: #000 !important; text-shadow: none !important; }
+    .hud-stats .label, .hud-stats .row { color: #444 !important; }
+    .hud-stats .row .v { color: #000 !important; }
+    .hud-title .actions { display: none !important; }
+    .below { padding: 16mm 0 0 !important; background: #fff !important; page-break-before: always; }
+    .summary-head, .record-row h3 { color: #000 !important; border-color: #ccc !important; }
+    .summary-head .l, .record-row h3 { color: #000 !important; }
+    .stations-grid, .station-card { background: #fff !important; border-color: #ccc !important; }
+    .station-card .name, .station-card .stat .v, .summary-head .r .v { color: #000 !important; }
+    .station-card .stat .k, .summary-head, .record-row .row .k { color: #555 !important; }
+    .record-row .row .v, .record-row .narrative, .record-row .narrative strong { color: #000 !important; }
+    .record-row .narrative em { color: #444 !important; }
+  }
+
+</style>
+</head>
+<body>
+
+  <!-- LOADER -->
+  <div class="loader" id="loader">
+    <div class="stack">
+      <div class="crest-big" aria-hidden="true"></div>
+      <div class="progress" id="loadProgress"></div>
+      <div class="label">
+        <span>Plotting signature</span>
+        <span class="v" id="loadCount">000 / 247</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- HERO STAGE -->
+  <section class="stage" id="stage">
+    <canvas id="scene"></canvas>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <header class="masthead">
+      <div class="brand">
+        <span class="crest" aria-hidden="true"></span>
+        <span>Chronoscope</span>
+        <span class="tag">Synchronized HTTP latency observation</span>
+      </div>
+      <nav class="nav" aria-label="Primary">
+        <a href="../v3/proposal-overview-v3.html">Overview</a>
+        <a href="proposal-live-v4.html">Live</a>
+        <a href="../v2/proposal-investigate-v2.html">Investigate</a>
+        <a href="#" class="active">Report</a>
+      </nav>
+      <div class="controls">
+        <span class="stopped-tag"><span class="sq"></span>Session ended</span>
+        <a class="ctl-btn ctl-icon" href="proposal-settings-v4.html" aria-label="Settings" title="Settings"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="7" cy="7" r="2"/><path d="M7 1.5 V3 M7 11 V12.5 M1.5 7 H3 M11 7 H12.5 M3.1 3.1 L4.1 4.1 M9.9 9.9 L10.9 10.9 M3.1 10.9 L4.1 9.9 M9.9 4.1 L10.9 3.1"/></svg></a>
+        <button class="ctl-btn" id="downloadCsvBtn">Export CSV</button>
+        <button class="ctl-btn" id="downloadBtn">Save image</button>
+        <button class="ctl-btn ctl-btn--primary">Copy link</button>
+      </div>
+    </header>
+
+    <div class="hud-top">
+      <div class="coords">
+        <span>Session<span class="v">CHR–260518–1442–A7K</span></span>
+        <span>Duration<span class="v">04:09</span></span>
+        <span>Rounds<span class="v">247</span></span>
+        <span>R.A.<span class="v">06h 12m</span></span>
+        <span>Dec<span class="v">+04°09′</span></span>
+      </div>
+    </div>
+
+    <div class="hud-title">
+      <div class="kicker">Field recording &nbsp;·&nbsp; <span class="v">CHR–260518–1442–A7K</span></div>
+      <h1>AWS was the drifting station for 4 minutes 9 seconds.</h1>
+      <p class="body">
+        <em>247</em> synchronized rounds across <em>4</em> stations. Three carriers held tempo; AWS averaged <em>+40 ms</em> past nominal. No carrier loss this window.
+      </p>
+      <div class="actions">
+        <button class="ctl-btn ctl-btn--primary">Copy link</button>
+        <button class="ctl-btn" id="downloadBtn2">Save as image</button>
+      </div>
+    </div>
+
+    <div class="hud-stats">
+      <div class="label">Field p50</div>
+      <div class="num">31<span class="u">ms</span></div>
+      <div class="row">
+        <span>p95<span class="v">82 ms</span></span>
+        <span>Trigger<span class="v">120 ms</span></span>
+      </div>
+    </div>
+
+    <div class="scrub" id="scrub" aria-label="Scrub through session">
+      <span class="lbl">Replay</span>
+      <div class="rail" id="rail">
+        <div class="rail-bg"></div>
+        <div class="rail-fill" id="railFill"></div>
+        <div class="marks" id="railMarks"></div>
+        <div class="handle" id="railHandle"></div>
+      </div>
+      <span class="scrub-read">Round<span class="v" id="scrubVal">247 / 247</span></span>
+    </div>
+  </section>
+
+  <!-- PAGE CONTENT BELOW HERO -->
+  <section class="below">
+    <div class="summary-head">
+      <span class="l">Per-station summary</span>
+      <span class="r">
+        <span>Window<span class="v">04:09</span></span>
+        <span>Cadence<span class="v">1 s</span></span>
+      </span>
+    </div>
+    <div class="stations-grid">
+      <div class="station-card" data-ep="A">
+        <div class="vh"><span class="mk"></span><span class="name">Google</span><span class="state" data-s="stable">In transit</span></div>
+        <div class="stats">
+          <div class="stat"><div class="k">p50</div><div class="v">20<span class="u">ms</span></div></div>
+          <div class="stat"><div class="k">p95</div><div class="v">28<span class="u">ms</span></div></div>
+          <div class="stat"><div class="k">drift</div><div class="v">±4<span class="u">ms</span></div></div>
+        </div>
+      </div>
+      <div class="station-card" data-ep="B">
+        <div class="vh"><span class="mk"></span><span class="name">Edge</span><span class="state" data-s="stable">In transit</span></div>
+        <div class="stats">
+          <div class="stat"><div class="k">p50</div><div class="v">40<span class="u">ms</span></div></div>
+          <div class="stat"><div class="k">p95</div><div class="v">51<span class="u">ms</span></div></div>
+          <div class="stat"><div class="k">drift</div><div class="v">±6<span class="u">ms</span></div></div>
+        </div>
+      </div>
+      <div class="station-card" data-ep="C">
+        <div class="vh"><span class="mk"></span><span class="name">AWS</span><span class="state" data-s="bad">Doppler</span></div>
+        <div class="stats">
+          <div class="stat"><div class="k">p50</div><div class="v">36<span class="u">ms</span></div></div>
+          <div class="stat"><div class="k">p95</div><div class="v">92<span class="u">ms</span></div></div>
+          <div class="stat"><div class="k">drift</div><div class="v">±18<span class="u">ms</span></div></div>
+        </div>
+      </div>
+      <div class="station-card" data-ep="D">
+        <div class="vh"><span class="mk"></span><span class="name">Fastly</span><span class="state" data-s="stable">In transit</span></div>
+        <div class="stats">
+          <div class="stat"><div class="k">p50</div><div class="v">24<span class="u">ms</span></div></div>
+          <div class="stat"><div class="k">p95</div><div class="v">48<span class="u">ms</span></div></div>
+          <div class="stat"><div class="k">drift</div><div class="v">±9<span class="u">ms</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="record-row">
+      <div>
+        <h3>Session record</h3>
+        <div class="row"><span class="k">Session ID</span><span class="v">CHR–260518–1442–A7K</span></div>
+        <div class="row"><span class="k">Started</span><span class="v">14:42:18 UTC · 18 May 2026</span></div>
+        <div class="row"><span class="k">Ended</span><span class="v">14:46:27 UTC</span></div>
+        <div class="row"><span class="k">Duration</span><span class="v">4 min 9 s</span></div>
+        <div class="row"><span class="k">Rounds</span><span class="v">247 / 3600 cap</span></div>
+        <div class="row"><span class="k">Cadence</span><span class="v">1 s · synchronized</span></div>
+        <div class="row"><span class="k">Vantage</span><span class="v">Chrome 126 · macOS 14.5 · US-W</span></div>
+        <div class="row"><span class="k">Stations</span><span class="v">4 (default set)</span></div>
+        <div class="row"><span class="k">Trigger</span><span class="v">120 ms</span></div>
+        <div class="row"><span class="k">Carrier losses</span><span class="v">0</span></div>
+        <div class="row"><span class="k">Recorded by</span><span class="v">Chronoscope · browser-resident</span></div>
+      </div>
+      <div>
+        <h3>Observer's notes</h3>
+        <p class="narrative">
+          <strong>AWS drifted for most of the session.</strong> Around round <em>34</em>, the station's tempo widened from a baseline near <em>30 ms</em> to a band of <em>50–100 ms</em>. Twelve carrier pulses spiked over <em>60 ms</em>; the worst, round <em>147</em>, landed at <em>142 ms</em>.
+        </p>
+        <p class="narrative">
+          Google, Edge, and Fastly held tempo throughout. None of the other three stations crossed <em>60 ms</em> the entire window. The drift was isolated to AWS's path — not a shared-upstream event.
+        </p>
+        <p class="narrative">
+          The session ended with all four carriers acquired. If the drift repeats from another vantage, it's AWS-side. If not, it's local to this network.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div>Cert<span class="v">CHR–260518–1442–A7K</span></div>
+    <div class="center">Browser-resident observatory · session ended · no telemetry leaves this device</div>
+    <div class="right">Recording paused at <span class="v">14:46:27 UTC</span></div>
+  </footer>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+  import * as THREE from 'three';
+
+  // =================== MODEL ===================
+  const STATION_LIST = ['A','B','C','D'];
+  const STATION_COLORS = {
+    A: new THREE.Color('#B7D3EC'),
+    B: new THREE.Color('#8CD4C9'),
+    C: new THREE.Color('#E8D597'),
+    D: new THREE.Color('#D78E68'),
+  };
+  const SEV_WARN = new THREE.Color('#E8C36F');
+  const SEV_BAD  = new THREE.Color('#D27258');
+  const SEV_CRIT = new THREE.Color('#B14238');
+  const STATION_PROFILE = {
+    A: { base: 21, jitter: 4,  spikeP: 0.01, spikeMag: 30, radius: 6.0 },
+    B: { base: 40, jitter: 6,  spikeP: 0.02, spikeMag: 20, radius: 8.0 },
+    C: { base: 34, jitter: 16, spikeP: 0.22, spikeMag: 70, radius: 10.0 },
+    D: { base: 26, jitter: 9,  spikeP: 0.08, spikeMag: 35, radius: 12.0 },
+  };
+  const ROUNDS = 247;
+  const TRIGGER_MS = 120;
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function rng(seed) { let s = seed >>> 0; return () => { s = (s*1664525+1013904223)>>>0; return s/4294967296; }; }
+  function sampleLatency(profile, r) {
+    let v = profile.base + (r() - 0.5) * 2 * profile.jitter;
+    if (r() < profile.spikeP) v = profile.base + profile.jitter + r() * profile.spikeMag;
+    return Math.max(2, v);
+  }
+  function severityColor(v, defC) {
+    if (v >= 4000) return SEV_CRIT;
+    if (v > TRIGGER_MS) return SEV_BAD;
+    if (v > TRIGGER_MS * 0.7) return SEV_WARN;
+    return defC;
+  }
+
+  // Deterministic per-station series of ROUNDS measurements
+  const SERIES = {};
+  STATION_LIST.forEach(ep => {
+    const r = rng(ep.charCodeAt(0) * 1009 + 17);
+    SERIES[ep] = [];
+    for (let i = 0; i < ROUNDS; i++) SERIES[ep].push(sampleLatency(STATION_PROFILE[ep], r));
+  });
+  function median(arr) { const s = [...arr].sort((a,b)=>a-b); return s[Math.floor(s.length*0.5)]; }
+  const BASELINES = {};
+  STATION_LIST.forEach(ep => BASELINES[ep] = median(SERIES[ep]));
+
+  // =================== SCENE ===================
+  const canvas = document.getElementById('scene');
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 200);
+  camera.position.set(0, 15, 24);
+  camera.lookAt(0, 0, 0);
+
+  function resize() {
+    const stage = document.getElementById('stage');
+    const w = stage.clientWidth, h = stage.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // =================== STAR FIELD ===================
+  function buildStars() {
+    const N = 2800;
+    const positions = new Float32Array(N * 3);
+    const colors = new Float32Array(N * 3);
+    const sizes = new Float32Array(N);
+    for (let i = 0; i < N; i++) {
+      const r = 60 + Math.random() * 70;
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      positions[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+      positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta) - 8;
+      positions[i*3+2] = r * Math.cos(phi);
+      const w = 0.7 + Math.random() * 0.3;
+      colors[i*3]   = w * (0.92 + Math.random() * 0.08);
+      colors[i*3+1] = w * (0.88 + Math.random() * 0.08);
+      colors[i*3+2] = w * (0.80 + Math.random() * 0.08);
+      sizes[i] = Math.random() < 0.04 ? 1.8 + Math.random() * 1.4 : 0.3 + Math.random() * 0.5;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    g.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+    const m = new THREE.ShaderMaterial({
+      uniforms: { uTime: { value: 0 } },
+      transparent: true, depthWrite: false,
+      blending: THREE.AdditiveBlending, vertexColors: true,
+      vertexShader: `
+        attribute float size; varying vec3 vColor; uniform float uTime;
+        void main() {
+          vColor = color;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_Position = projectionMatrix * mv;
+          gl_PointSize = size * 220.0 / -mv.z;
+        }
+      `,
+      fragmentShader: `
+        varying vec3 vColor;
+        void main() {
+          vec2 c = gl_PointCoord - 0.5;
+          float d = length(c);
+          float alpha = smoothstep(0.5, 0.0, d);
+          float halo = smoothstep(0.5, 0.15, d) * 0.35;
+          gl_FragColor = vec4(vColor, alpha * 0.95 + halo);
+        }
+      `,
+    });
+    return new THREE.Points(g, m);
+  }
+  scene.add(buildStars());
+
+  // =================== ORBITAL RINGS (shader, sweep-aware base) ===================
+  const ringMaterials = [];
+  STATION_LIST.forEach(ep => {
+    const r = STATION_PROFILE[ep].radius;
+    const ringG = new THREE.RingGeometry(r - 0.05, r + 0.05, 256);
+    const ringM = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, side: THREE.DoubleSide,
+      uniforms: {
+        uReveal: { value: 0 },   // 0..1 traces the orbit out
+        uOpacity: { value: 0 },
+      },
+      vertexShader: `
+        varying vec2 vPos;
+        void main() {
+          vPos = position.xy;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        varying vec2 vPos;
+        uniform float uReveal;
+        uniform float uOpacity;
+        void main() {
+          float a = atan(vPos.y, vPos.x); // -PI..PI
+          // angular position 0..1 (clockwise from top)
+          float ang = mod((-a + 3.14159265 * 0.5) / 6.2831853 + 1.0, 1.0);
+          float visible = step(ang, uReveal);
+          float edge = smoothstep(uReveal, uReveal - 0.02, ang);
+          float head = smoothstep(uReveal - 0.03, uReveal, ang);
+          gl_FragColor = vec4(0.95, 0.92, 0.85, (0.28 * visible + head * 1.2) * uOpacity);
+        }
+      `,
+    });
+    const ring = new THREE.Mesh(ringG, ringM);
+    ring.rotation.x = -Math.PI / 2;
+    scene.add(ring);
+    ringMaterials.push(ringM);
+
+    // Trigger ring — appears with the orbit
+    const triggerG = new THREE.RingGeometry(r + 0.55, r + 0.62, 128, 1, 0, Math.PI * 2);
+    const triggerM = new THREE.MeshBasicMaterial({
+      color: 0xD27258, transparent: true, opacity: 0, side: THREE.DoubleSide,
+    });
+    const triggerRing = new THREE.Mesh(triggerG, triggerM);
+    triggerRing.rotation.x = -Math.PI / 2;
+    scene.add(triggerRing);
+    STATION_PROFILE[ep]._triggerMat = triggerM;
+  });
+
+  // =================== HOME STATION ===================
+  const homeG = new THREE.SphereGeometry(0.18, 24, 24);
+  const homeM = new THREE.MeshBasicMaterial({ color: 0xF2EBDB, transparent: true, opacity: 0.95 });
+  scene.add(new THREE.Mesh(homeG, homeM));
+
+  const homeHaloG = new THREE.SphereGeometry(0.8, 24, 24);
+  const homeHaloM = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uTime: { value: 0 } },
+    vertexShader: `
+      varying vec3 vN; varying vec3 vEye;
+      void main() {
+        vN = normalize(normalMatrix * normal);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vEye = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: `
+      varying vec3 vN; varying vec3 vEye; uniform float uTime;
+      void main() {
+        float rim = 1.0 - max(dot(vN, vEye), 0.0);
+        rim = pow(rim, 2.0);
+        float pulse = 0.85 + 0.15 * sin(uTime * 0.0015);
+        gl_FragColor = vec4(0.95, 0.92, 0.85, rim * 0.7 * pulse);
+      }
+    `,
+  });
+  const homeHalo = new THREE.Mesh(homeHaloG, homeHaloM);
+  scene.add(homeHalo);
+
+  // Small chronograph crest at center — 12-hour ticks
+  const crestG = new THREE.BufferGeometry();
+  {
+    const verts = [];
+    for (let i = 0; i < 12; i++) {
+      const a = -Math.PI / 2 + (i / 12) * Math.PI * 2;
+      const r1 = 0.45, r2 = (i % 3 === 0) ? 0.62 : 0.55;
+      verts.push(r1 * Math.cos(a), 0.01, r1 * Math.sin(a));
+      verts.push(r2 * Math.cos(a), 0.01, r2 * Math.sin(a));
+    }
+    crestG.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  }
+  const crestM = new THREE.LineBasicMaterial({ color: 0xF2EBDB, transparent: true, opacity: 0.7 });
+  // Outer crest ring — a faint bezel circle around the crest
+  {
+    const segs = 128; const r = 0.7;
+    const verts = [];
+    for (let i = 0; i < segs; i++) {
+      const a1 = (i / segs) * Math.PI * 2;
+      const a2 = ((i + 1) / segs) * Math.PI * 2;
+      verts.push(r * Math.cos(a1), 0.01, r * Math.sin(a1));
+      verts.push(r * Math.cos(a2), 0.01, r * Math.sin(a2));
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    scene.add(new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: 0xF2EBDB, transparent: true, opacity: 0.45 })));
+  }
+  scene.add(new THREE.LineSegments(crestG, crestM));
+
+  // =================== PULSES (shader points) ===================
+  // 247 pulses per station — built once, all at age 1 (settled).
+  const pulseGroups = {};
+  const PULSE_VERT = `
+    attribute float aSize;
+    attribute float aAge;
+    attribute float aReveal;
+    varying vec3 vColor;
+    varying float vAge;
+    varying float vReveal;
+    uniform float uTime;
+    uniform float uRevealFront;
+    void main() {
+      vColor = color;
+      vAge = aAge;
+      vReveal = step(aReveal, uRevealFront);
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      float breath = 1.0 + sin(uTime * 0.0015 + position.x * 4.7 + position.z * 3.1) * 0.05;
+      float entrance = smoothstep(0.0, 0.05, uRevealFront - aReveal); // pop on arrival
+      float fresh = 1.0 - smoothstep(0.0, 0.06, uRevealFront - aReveal);
+      float sizeMul = (1.0 + fresh * 2.0) * breath;
+      gl_PointSize = aSize * sizeMul * 3400.0 / max(0.1, -mv.z) * vReveal;
+      gl_Position = projectionMatrix * mv;
+    }
+  `;
+  const PULSE_FRAG = `
+    varying vec3 vColor;
+    varying float vAge;
+    varying float vReveal;
+    void main() {
+      if (vReveal < 0.5) discard;
+      vec2 c = gl_PointCoord - 0.5;
+      float d = length(c);
+      if (d > 0.5) discard;
+      float core = smoothstep(0.10, 0.0, d) * 1.6;
+      float halo = exp(-d * 5.0) * 1.05;
+      float ring = smoothstep(0.34, 0.28, d) * smoothstep(0.44, 0.36, d) * 0.45;
+      float intensity = core + halo + ring;
+      gl_FragColor = vec4(vColor, intensity);
+    }
+  `;
+  STATION_LIST.forEach(ep => {
+    const positions = new Float32Array(ROUNDS * 3);
+    const colors = new Float32Array(ROUNDS * 3);
+    const sizes = new Float32Array(ROUNDS);
+    const ages = new Float32Array(ROUNDS);
+    const reveals = new Float32Array(ROUNDS);
+    const profile = STATION_PROFILE[ep];
+    const baseline = BASELINES[ep];
+    for (let i = 0; i < ROUNDS; i++) {
+      const v = SERIES[ep][i];
+      const angle = -Math.PI / 2 + (i / ROUNDS) * Math.PI * 2;
+      const ratio = (v - baseline) / Math.max(baseline, 10);
+      const offset = Math.max(-0.4, Math.min(0.8, ratio * 0.55));
+      const rr = profile.radius + offset;
+      positions[i*3]   = rr * Math.cos(angle);
+      positions[i*3+1] = 0;
+      positions[i*3+2] = rr * Math.sin(angle);
+      const c = severityColor(v, STATION_COLORS[ep]);
+      colors[i*3]   = c.r;
+      colors[i*3+1] = c.g;
+      colors[i*3+2] = c.b;
+      const isSev = v > TRIGGER_MS * 0.7;
+      const isCrit = v > TRIGGER_MS;
+      sizes[i] = isCrit ? 0.13 : isSev ? 0.1 : 0.075;
+      ages[i] = 1;
+      reveals[i] = i / ROUNDS; // 0..1 clockwise
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    g.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1));
+    g.setAttribute('aAge', new THREE.BufferAttribute(ages, 1));
+    g.setAttribute('aReveal', new THREE.BufferAttribute(reveals, 1));
+    const m = new THREE.ShaderMaterial({
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexColors: true,
+      uniforms: {
+        uTime: { value: 0 },
+        uRevealFront: { value: 0 }, // 0..1
+      },
+      vertexShader: PULSE_VERT,
+      fragmentShader: PULSE_FRAG,
+    });
+    const points = new THREE.Points(g, m);
+    points.frustumCulled = false;
+    scene.add(points);
+    pulseGroups[ep] = { points, material: m };
+  });
+
+  // =================== TIME MARKERS ===================
+  // Subtle hour ticks at the outer rim
+  const tickG = new THREE.BufferGeometry();
+  {
+    const verts = [];
+    const outerR = 14.5;
+    for (let i = 0; i < 60; i++) {
+      const a = -Math.PI / 2 + (i / 60) * Math.PI * 2;
+      const isMajor = i % 15 === 0;
+      const r1 = outerR;
+      const r2 = isMajor ? outerR - 0.4 : outerR - 0.18;
+      verts.push(r1 * Math.cos(a), 0.01, r1 * Math.sin(a));
+      verts.push(r2 * Math.cos(a), 0.01, r2 * Math.sin(a));
+    }
+    tickG.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  }
+  scene.add(new THREE.LineSegments(tickG,
+    new THREE.LineBasicMaterial({ color: 0xF2EBDB, transparent: true, opacity: 0.16 })));
+
+  // =================== FRAME LOOP ===================
+  let reveal = 0;           // 0..1 over IMPRINT_MS
+  const IMPRINT_MS = 2400;
+  let imprintStart = 0;
+  let lastNow = 0;
+  let userScrub = -1;       // -1 = autoplay; else clamp reveal to this 0..1
+
+  // Camera slow drift + mouse parallax
+  let cameraAngle = 0;
+  let mouseTargetX = 0, mouseTargetY = 0, mouseX = 0, mouseY = 0;
+  window.addEventListener('mousemove', (e) => {
+    mouseTargetX = ((e.clientX / window.innerWidth) - 0.5) * 2;
+    mouseTargetY = ((e.clientY / window.innerHeight) - 0.5) * 2;
+  });
+
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  function frame(now) {
+    if (!imprintStart) imprintStart = now;
+    lastNow = now;
+    const elapsed = now - imprintStart;
+
+    // Reveal — controlled by either auto-imprint or scrub
+    let revealTarget;
+    if (userScrub >= 0) {
+      revealTarget = userScrub;
+    } else {
+      const p = Math.min(1, elapsed / IMPRINT_MS);
+      revealTarget = easeOutCubic(p);
+    }
+    reveal += (revealTarget - reveal) * 0.18;
+
+    // Push reveal to all pulse and ring materials
+    STATION_LIST.forEach((ep, i) => {
+      const ring = ringMaterials[i];
+      ring.uniforms.uReveal.value = reveal;
+      // Stagger orbit opacity by station so they fade in sequentially
+      const stagger = i * 0.08;
+      const local = Math.max(0, Math.min(1, (reveal - stagger) / 0.15));
+      ring.uniforms.uOpacity.value = local;
+      STATION_PROFILE[ep]._triggerMat.opacity = 0.28 * local;
+      pulseGroups[ep].material.uniforms.uRevealFront.value = reveal;
+      pulseGroups[ep].material.uniforms.uTime.value = now;
+    });
+
+    // Camera slow orbit drift + mouse parallax
+    if (!reducedMotion) {
+      cameraAngle += 0.00006;
+      mouseX += (mouseTargetX - mouseX) * 0.045;
+      mouseY += (mouseTargetY - mouseY) * 0.045;
+      camera.position.x = Math.sin(cameraAngle) * 4 + mouseX * 2.0;
+      camera.position.y = 15 - mouseY * 1.0;
+      camera.position.z = 24 + Math.cos(cameraAngle) * 2;
+      camera.lookAt(0, 0, 0);
+    }
+
+    homeHalo.material.uniforms.uTime.value = now;
+
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+
+    // Sync scrub UI
+    const scrubVal = document.getElementById('scrubVal');
+    const railFill = document.getElementById('railFill');
+    const railHandle = document.getElementById('railHandle');
+    if (scrubVal && railFill && railHandle) {
+      const r = userScrub >= 0 ? userScrub : reveal;
+      const round = Math.round(r * ROUNDS);
+      scrubVal.innerHTML = `Round<span class="v" id="scrubVal">${round} / ${ROUNDS}</span>`;
+      railFill.style.width = (r * 100) + '%';
+      railHandle.style.left = (r * 100) + '%';
+    }
+  }
+
+  // =================== SCRUB ===================
+  const rail = document.getElementById('rail');
+  let scrubbing = false;
+  function setScrubFromX(clientX) {
+    const r = rail.getBoundingClientRect();
+    const t = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    userScrub = t;
+    // Snap to round positions for satisfying click
+    userScrub = Math.round(t * ROUNDS) / ROUNDS;
+  }
+  rail.addEventListener('mousedown', (e) => { scrubbing = true; setScrubFromX(e.clientX); });
+  window.addEventListener('mousemove', (e) => { if (scrubbing) setScrubFromX(e.clientX); });
+  window.addEventListener('mouseup', () => { scrubbing = false; });
+  rail.addEventListener('touchstart', (e) => { scrubbing = true; setScrubFromX(e.touches[0].clientX); });
+  window.addEventListener('touchmove', (e) => { if (scrubbing) setScrubFromX(e.touches[0].clientX); });
+  window.addEventListener('touchend', () => { scrubbing = false; });
+
+  // Build tick marks (60 of them)
+  const marksEl = document.getElementById('railMarks');
+  if (marksEl) {
+    for (let i = 0; i < 60; i++) {
+      const m = document.createElement('div');
+      m.className = 'm';
+      marksEl.appendChild(m);
+    }
+    marksEl.style.justifyContent = 'space-between';
+  }
+
+  // =================== SAVE AS IMAGE / CSV ===================
+  function saveImage() {
+    const dataUrl = renderer.domElement.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = 'chronoscope-signature-CHR-260518-1442-A7K.png';
+    a.click();
+  }
+
+  function saveCsv() {
+    // Build CSV of every measurement across the session.
+    // Header + (ROUNDS × STATION_LIST.length) data rows.
+    const STATION_NAMES = { A: 'Google', B: 'Edge', C: 'AWS', D: 'Fastly' };
+    const HOSTS = {
+      A: 'www.google.com',
+      B: 'edge.akamai.net',
+      C: 's3.us-west-2.amazonaws.com',
+      D: 'www.fastly.com',
+    };
+    const sevName = v => {
+      if (v >= 4000) return 'crit';
+      if (v > TRIGGER_MS) return 'bad';
+      if (v > TRIGGER_MS * 0.7) return 'warn';
+      return 'stable';
+    };
+    const sessionStartIso = '2026-05-18T14:42:18Z';
+    const startMs = Date.parse(sessionStartIso);
+
+    let csv = 'round,timestamp_utc,t_offset_s,station_id,station_name,host,latency_ms,severity\n';
+    for (let i = 0; i < ROUNDS; i++) {
+      const offsetS = i; // 1 second per round
+      const tIso = new Date(startMs + offsetS * 1000).toISOString();
+      STATION_LIST.forEach(ep => {
+        const v = SERIES[ep][i];
+        csv += `${i+1},${tIso},${offsetS}.0,${ep},${STATION_NAMES[ep]},${HOSTS[ep]},${v.toFixed(2)},${sevName(v)}\n`;
+      });
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'chronoscope-session-CHR-260518-1442-A7K.csv';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  document.getElementById('downloadBtn')?.addEventListener('click', saveImage);
+  document.getElementById('downloadBtn2')?.addEventListener('click', saveImage);
+  document.getElementById('downloadCsvBtn')?.addEventListener('click', saveCsv);
+
+  // =================== KICKOFF ===================
+  function start() {
+    resize();
+    const loader = document.getElementById('loader');
+    const loadCount = document.getElementById('loadCount');
+    const progressEl = document.getElementById('loadProgress');
+    let cnt = 0;
+    const acqInterval = setInterval(() => {
+      cnt += Math.floor(Math.random() * 80) + 30;
+      if (cnt > ROUNDS) cnt = ROUNDS;
+      loadCount.textContent = String(cnt).padStart(3, '0') + ' / ' + ROUNDS;
+      progressEl.style.setProperty('--p', Math.round((cnt / ROUNDS) * 100) + '%');
+      if (cnt >= ROUNDS) {
+        clearInterval(acqInterval);
+        setTimeout(() => {
+          loader.classList.add('fade');
+          setTimeout(() => loader.remove(), 900);
+          imprintStart = 0;
+          requestAnimationFrame(frame);
+        }, 320);
+      }
+    }, 60);
+  }
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(start);
+  else setTimeout(start, 100);
+  
+
+  // =================== ENHANCED PNG EXPORT (high-res) ===================
+  const _origSaveImage = saveImage;
+  saveImage = function() {
+    // Render at 2400×2400 by temporarily resizing the renderer + camera, then restoring.
+    const HI = 2400;
+    const stage = document.getElementById('stage');
+    const oldW = stage.clientWidth, oldH = stage.clientHeight;
+    const oldAspect = camera.aspect;
+    renderer.setPixelRatio(1);
+    renderer.setSize(HI, HI, false);
+    camera.aspect = 1;
+    camera.updateProjectionMatrix();
+    renderer.render(scene, camera);
+
+    const dataUrl = renderer.domElement.toDataURL('image/png');
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = 'chronoscope-signature-CHR-260518-1442-A7K-hires.png';
+    a.click();
+
+    // Restore
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.setSize(oldW, oldH, false);
+    camera.aspect = oldAspect;
+    camera.updateProjectionMatrix();
+  };
+  // Rebind buttons since we replaced the function
+  document.getElementById('downloadBtn')?.removeEventListener?.('click', _origSaveImage);
+  document.getElementById('downloadBtn2')?.removeEventListener?.('click', _origSaveImage);
+  document.getElementById('downloadBtn')?.addEventListener('click', saveImage);
+  document.getElementById('downloadBtn2')?.addEventListener('click', saveImage);
+
+  // =================== SMOOTH SCRUB ===================
+  // Override scrub: instead of snapping to rounds, lerp the userScrub value over time.
+  let _userScrubTarget = userScrub;
+  const _origSetScrubFromX = setScrubFromX;
+  setScrubFromX = function(clientX){
+    const r = rail.getBoundingClientRect();
+    const t = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+    _userScrubTarget = Math.round(t * ROUNDS) / ROUNDS;
+  };
+  // Smooth interpolation in the frame loop
+  const _smoothScrubInterval = setInterval(() => {
+    if (Math.abs(userScrub - _userScrubTarget) > 0.001) {
+      userScrub = userScrub + (_userScrubTarget - userScrub) * 0.22;
+    } else {
+      userScrub = _userScrubTarget;
+    }
+  }, 16);
+
+  // =================== KEYBOARD SHORTCUTS ===================
+  const _kbHelp = document.getElementById('keyboardHelp');
+  function toggleHelp(force) {
+    const willOpen = force !== undefined ? force : !_kbHelp.classList.contains('visible');
+    _kbHelp.classList.toggle('visible', willOpen);
+  }
+  function scrubBy(delta) {
+    const cur = userScrub >= 0 ? userScrub : 1;
+    const newRound = Math.max(0, Math.min(ROUNDS, Math.round(cur * ROUNDS) + delta));
+    _userScrubTarget = newRound / ROUNDS;
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const k = e.key;
+    if (k === '?' || (e.shiftKey && k === '/')) { e.preventDefault(); toggleHelp(); }
+    else if (k === 'Escape') { if (_kbHelp.classList.contains('visible')) toggleHelp(false); }
+    else if (k === 'ArrowLeft')  { e.preventDefault(); scrubBy(e.shiftKey ? -10 : -1); }
+    else if (k === 'ArrowRight') { e.preventDefault(); scrubBy(e.shiftKey ?  10 :  1); }
+    else if (k === 'Home') { e.preventDefault(); _userScrubTarget = 0; }
+    else if (k === 'End')  { e.preventDefault(); _userScrubTarget = 1; }
+    else if (k === 'e' || k === 'E') { saveCsv(); }
+    else if (k === 'p' || k === 'P') { if (!e.metaKey && !e.ctrlKey) { e.preventDefault(); saveImage(); } }
+    else if (k === 'l' || k === 'L') { window.location.href = 'proposal-live-v4.html'; }
+    else if (k === 's' || k === 'S') { window.location.href = 'proposal-settings-v4.html'; }
+  });
+
+  </script>
+
+
+  <div class="keyboard-help" id="keyboardHelp" role="dialog" aria-label="Keyboard shortcuts">
+    <div class="panel">
+      <div class="head">
+        <h3>Keyboard shortcuts</h3>
+        <span class="esc">Esc to close</span>
+      </div>
+      <div class="grid">
+        <span class="key">?</span><span class="label">Toggle this help</span>
+        <span class="key">←</span><span class="label">Scrub back one round</span>
+        <span class="key">→</span><span class="label">Scrub forward one round</span>
+        <span class="key">Shift+←</span><span class="label">Scrub back <em>10</em> rounds</span>
+        <span class="key">Shift+→</span><span class="label">Scrub forward <em>10</em> rounds</span>
+        <span class="key">Home</span><span class="label">Jump to first round</span>
+        <span class="key">End</span><span class="label">Jump to last round</span>
+        <span class="key">E</span><span class="label">Export CSV</span>
+        <span class="key">P</span><span class="label">Save image (high-res 2400×2400)</span>
+        <span class="key">⌘P</span><span class="label">Print / Save as PDF (publication layout)</span>
+        <span class="key">L</span><span class="label">Open Live tracker</span>
+        <span class="key">S</span><span class="label">Open Settings</span>
+        <span class="key">Esc</span><span class="label">Close any overlay</span>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
