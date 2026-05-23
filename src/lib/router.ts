@@ -14,11 +14,11 @@
 import { uiStore } from './stores/ui';
 import type { ActiveView } from './types';
 
-export type RouteName = 'overview' | 'live' | 'investigate' | 'endpoint' | 'report';
+export type RouteName = 'overview' | 'live' | 'investigate' | 'endpoint' | 'report' | 'transit';
 
 // Discriminated union so { name: 'endpoint', endpointId: null } cannot typecheck.
 export type RouteState =
-  | { readonly name: 'overview' | 'live' | 'investigate' | 'report'; readonly endpointId: null }
+  | { readonly name: 'overview' | 'live' | 'investigate' | 'report' | 'transit'; readonly endpointId: null }
   | { readonly name: 'endpoint'; readonly endpointId: string };
 
 const ENDPOINT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -32,6 +32,7 @@ function routeToActiveView(name: RouteName): ActiveView {
     case 'investigate': return 'diagnose';
     case 'endpoint':    return 'diagnose';
     case 'report':      return 'report';
+    case 'transit':     return 'transit';
   }
 }
 
@@ -43,6 +44,7 @@ function activeViewToRoute(active: ActiveView): RouteName {
     case 'live':     return 'live';
     case 'diagnose': return 'investigate';
     case 'report':   return 'report';
+    case 'transit':  return 'transit';
     case 'strata':   return 'overview';
     case 'terminal': return 'overview';
   }
@@ -57,6 +59,7 @@ function pathFor(state: RouteState): string {
     case 'investigate': return '/investigate';
     case 'endpoint':    return `/endpoint/${state.endpointId}`;
     case 'report':      return '/report';
+    case 'transit':     return '/transit';
   }
 }
 
@@ -72,6 +75,7 @@ function parsePath(pathname: string): RouteState | null {
   if (pathname === '/live') return { name: 'live', endpointId: null };
   if (pathname === '/investigate') return { name: 'investigate', endpointId: null };
   if (pathname === '/report') return { name: 'report', endpointId: null };
+  if (pathname === '/transit') return { name: 'transit', endpointId: null };
   if (pathname.startsWith('/endpoint/')) {
     const id = pathname.slice('/endpoint/'.length);
     // Empty id (/endpoint/), trailing slash, or anything that fails the

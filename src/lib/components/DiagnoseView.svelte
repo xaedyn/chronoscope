@@ -1,2018 +1,1236 @@
 <!-- src/lib/components/DiagnoseView.svelte -->
-<!-- Investigate view surface; internal diagnose route/component names remain. -->
-<!-- For the rail-focused endpoint: horizontal phase-bar waterfall (dns /     -->
-<!-- tcp / tls / ttfb / transfer) in P50 or P95 mode, a one-sentence phase    -->
-<!-- hypothesis, and the last 8 samples as mini phase bars. Direct entry       -->
-<!-- auto-selects an investigation target when focus is missing or stale.       -->
+<!-- Vessel v4 Investigate surface — per-station signal analysis. Translates
+     proposals/v4/proposal-investigate-v4.html into Svelte against existing
+     chronoscope stores. Two surfaces share this file: when
+     uiStore.focusedEndpointId is set, EndpointView renders the focused
+     deep-dive; otherwise the v4 Investigate markup renders (Part I — what the
+     carrier records — per-station rows with percentile ladder + polar
+     distribution + Resource Timing phase decomposition; Part II — outside
+     vantage + companion agent + epistemics). -->
 <script lang="ts">
-  import { monitoredEndpointsStore } from '$lib/stores/derived';
-  import { navigateTo, currentRoute, subscribeRoute, type RouteState } from '$lib/router';
-  import IntelligencePanel from '$lib/components/IntelligencePanel.svelte';
-  import InvestigateLandingView from '$lib/components/InvestigateLandingView.svelte';
-  import LocalProofPanel from '$lib/components/LocalProofPanel.svelte';
-  import { bufferbloatStore } from '$lib/stores/bufferbloat';
   import { measurementStore } from '$lib/stores/measurements';
-  import { networkContextStore } from '$lib/stores/network-context';
-  import { remoteVantageStore } from '$lib/stores/remote-vantage';
-  import { settingsStore } from '$lib/stores/settings';
   import { statisticsStore } from '$lib/stores/statistics';
+  import { settingsStore } from '$lib/stores/settings';
+  import { monitoredEndpointsStore } from '$lib/stores/derived';
   import { uiStore } from '$lib/stores/ui';
-  import { buildRemoteVantageInsight } from '$lib/remote-vantage/insight';
-  import { describeTimingVisibility, type DiagnosticConfidence } from '$lib/utils/diagnostic-narrative';
-  import { phaseHypothesis, PHASE_LABELS, type PhaseBreakdown, type Tier2Phase } from '$lib/utils/verdict';
-  import { buildDistributionEmptyMessage, buildHistogram, buildCorrelation } from '$lib/utils/diagnose-stats';
-  import { interpretDistribution } from '$lib/utils/distribution-interpretation';
-  import { fmt, compactUrlLabel, axisEdgeLabel, binLabel } from '$lib/utils/format';
-  import { selectInvestigationEndpointId } from '$lib/utils/status-intent';
-  import { tokens } from '$lib/tokens';
-  import type { MeasurementSample } from '$lib/types';
+  import { navigateTo } from '$lib/router';
+  import { fmt } from '$lib/utils/format';
+  import type { Endpoint, MeasurementSample } from '$lib/types';
+  import EndpointView from './EndpointView.svelte';
 
   const monitored = $derived($monitoredEndpointsStore);
-  const stats = $derived($statisticsStore);
   const measurements = $derived($measurementStore);
-  const settings = $derived($settingsStore);
-  const bufferbloat = $derived($bufferbloatStore);
-  const networkContext = $derived($networkContextStore);
-  const remoteVantage = $derived($remoteVantageStore);
+  const stats = $derived($statisticsStore);
+  const threshold = $derived($settingsStore.healthThreshold);
+  const monitorDelay = $derived($settingsStore.monitorDelay);
   const focusedId = $derived($uiStore.focusedEndpointId);
 
-  const focusedEndpoint = $derived(
-    focusedId === null ? null : monitored.find((ep) => ep.id === focusedId) ?? null,
-  );
-  const focusedEndpointUrlLabel = $derived(focusedEndpoint ? compactUrlLabel(focusedEndpoint.url) : '');
+  // ── Endpoint → station mapping (A/B/C/D) ────────────────────────────────
+  const STATION_IDS = ['A', 'B', 'C', 'D'] as const;
+  type StationId = typeof STATION_IDS[number];
 
-  // Track the router state so we can distinguish /investigate (landing) from
-  // /endpoint/:id (focused deep-dive). The router only writes
-  // focusedEndpointId when route is 'endpoint'; the landing surface lives
-  // when route is 'investigate'. Subscribing so popstate / back-forward
-  // updates re-render correctly.
-  let route = $state<RouteState>(currentRoute());
-  $effect(() => {
-    const off = subscribeRoute((next) => { route = next; });
-    return off;
-  });
-  const isEndpointRoute = $derived(route.name === 'endpoint');
-
-  $effect(() => {
-    // Auto-focus an endpoint only when the URL says /endpoint/* (PR 8 of
-    // synthesis arc). On /investigate landing, leave focusedEndpointId null
-    // so the two-column landing renders. The user explicitly opts into a
-    // focused detail by clicking an endpoint card → navigateTo({
-    //   name: 'endpoint', endpointId
-    // }).
-    if (!isEndpointRoute) return;
-    if ($uiStore.activeView !== 'diagnose') return;
-    const next = selectInvestigationEndpointId({
-      monitored,
-      stats,
-      measurements,
-      currentFocusedId: focusedId,
-    });
-    if (next !== null && next !== focusedId) {
-      uiStore.setFocusedEndpoint(next);
+  // ── Severity classification ─────────────────────────────────────────────
+  // Mirrors LiveView's status vocabulary: stable / warn / bad / crit.
+  type Severity = 'stable' | 'warn' | 'bad' | 'crit';
+  function severityForLast(last: number | null, baselineP95: number | null): Severity {
+    if (last === null) return 'stable';
+    if (last > threshold * 1.5) return 'crit';
+    if (last > threshold) return 'bad';
+    if (baselineP95 !== null && baselineP95 > threshold * 0.7) return 'warn';
+    return 'stable';
+  }
+  function severityCell(v: number): Severity | '' {
+    if (v >= threshold) return 'crit';
+    if (v > threshold * 0.75) return 'bad';
+    if (v > threshold * 0.5) return 'warn';
+    return '';
+  }
+  function statusText(sev: Severity): string {
+    switch (sev) {
+      case 'crit': return 'Carrier lost';
+      case 'bad': return 'Doppler drift';
+      case 'warn': return 'Carrier wobble';
+      case 'stable': return 'Carrier acquired';
     }
-  });
+  }
 
-  const focusedStats = $derived(focusedEndpoint ? stats[focusedEndpoint.id] : undefined);
-  const remoteInsight = $derived(buildRemoteVantageInsight({
-    endpoint: focusedEndpoint,
-    stats: focusedStats,
-    threshold: settings.healthThreshold,
-    probe: remoteVantage.lastProbe,
-  }));
-  const bufferbloatBusy = $derived(bufferbloat.status === 'running');
-  const networkContextBusy = $derived(networkContext.status === 'running');
-  const focusedHostname = $derived(focusedEndpoint ? hostnameFromUrl(focusedEndpoint.url) : null);
-  const networkContextMatchesFocus = $derived(Boolean(
-    focusedHostname && networkContext.hostname === focusedHostname,
-  ));
-  const networkContextDnsInsight = $derived(networkContextMatchesFocus ? networkContext.dnsInsight : null);
-  const networkContextTopologyInsight = $derived(networkContextMatchesFocus ? networkContext.topologyInsight : null);
-  const networkContextDnsError = $derived(networkContextMatchesFocus ? networkContext.dnsError : null);
-  const networkContextTopologyError = $derived(networkContextMatchesFocus ? networkContext.topologyError : null);
-  const networkContextError = $derived(networkContextMatchesFocus ? networkContext.error : null);
-  const bufferbloatStatusLabel = $derived.by(() => {
-    if (bufferbloat.status === 'running') return 'Running';
-    if (bufferbloat.status === 'stopped') return 'Stopped';
-    switch (bufferbloat.grade.grade) {
-      case 'clean':
-        return 'Clean';
-      case 'watch':
-        return 'Watch';
-      case 'loaded-latency-high':
-        return 'High';
-      case 'insufficient-data':
-        return bufferbloat.status === 'error' ? 'Needs data' : 'Not run';
+  // ── Host extractor ──────────────────────────────────────────────────────
+  function hostnameOf(url: string): string {
+    try {
+      return new URL(url).host;
+    } catch {
+      return url;
     }
-  });
-  const remoteBusy = $derived(remoteVantage.status === 'checking' || remoteVantage.status === 'probing');
+  }
 
-  // ── Mode toggle ──────────────────────────────────────────────────────────
-  let mode = $state<'p50' | 'p95'>('p50');
-  let localProofOpen = $state(false);
+  // ── Polar distribution geometry ─────────────────────────────────────────
+  // Half-circle (top arc) from left to right. Bins of samples; bar radius =
+  // count. Returns the SVG inner HTML as a string. Mirrors the prototype's
+  // polarDistribution() function so the geometry is identical.
+  const RI = 28; // inner radius
+  const RO = 88; // outer radius
 
-  // ── Phase breakdown (adapt EndpointStatistics field names → Diagnose phase
-  // vocabulary). P50 uses tier2Averages (means); P95 uses tier2P95.
-  const phases: PhaseBreakdown | null = $derived.by(() => {
-    if (!focusedStats) return null;
-    const src = mode === 'p50' ? focusedStats.tier2Averages : focusedStats.tier2P95;
-    if (!src) return null;
-    return {
-      dns:      src.dnsLookup,
-      tcp:      src.tcpConnect,
-      tls:      src.tlsHandshake,
-      ttfb:     src.ttfb,
-      transfer: src.contentTransfer,
-    };
-  });
-  const phaseTotal = $derived(
-    phases === null ? 0 : phases.dns + phases.tcp + phases.tls + phases.ttfb + phases.transfer,
-  );
-  const hasVisiblePhases = $derived(phases !== null && phaseTotal > 0);
-  const hypothesis = $derived(phases === null ? null : phaseHypothesis(phases));
+  interface PolarWedge {
+    readonly d: string;
+    readonly glowD: string;
+    readonly fill: string;
+    readonly opacity: number;
+  }
+  interface PolarTick {
+    readonly x1: number;
+    readonly y1: number;
+    readonly x2: number;
+    readonly y2: number;
+    readonly lx: number;
+    readonly ly: number;
+    readonly label: string;
+  }
+  interface PolarArc {
+    readonly d: string;
+    readonly stroke: string;
+  }
+  interface PolarMarker {
+    readonly x1: number;
+    readonly y1: number;
+    readonly x2: number;
+    readonly y2: number;
+    readonly lx: number;
+    readonly ly: number;
+    readonly stroke: string;
+    readonly label: string;
+  }
+  interface PolarPlot {
+    readonly arcs: readonly PolarArc[];
+    readonly ticks: readonly PolarTick[];
+    readonly wedges: readonly PolarWedge[];
+    readonly markers: readonly PolarMarker[];
+    readonly ceiling: number;
+    readonly axisLabels: readonly string[];
+    readonly distLabel: string;
+  }
 
-  // ── Segments with computed widths for the hero bar ───────────────────────
-  const PHASE_ORDER: readonly Tier2Phase[] = ['dns', 'tcp', 'tls', 'ttfb', 'transfer'];
-  const PHASE_COLORS: Record<Tier2Phase, string> = {
-    dns:      tokens.color.phase.dns,
-    tcp:      tokens.color.phase.tcp,
-    tls:      tokens.color.phase.tls,
-    ttfb:     tokens.color.phase.ttfb,
-    transfer: tokens.color.phase.xfer,
-  };
-  const SHORT_LABELS: Record<Tier2Phase, string> = {
-    dns:      'DNS',
-    tcp:      'TCP',
-    tls:      'TLS',
-    ttfb:     'SERVER',
-    transfer: 'TRANSFER',
-  };
+  function buildPolar(samples: readonly number[], color: string): PolarPlot | null {
+    if (samples.length === 0) return null;
 
-  interface Segment { phase: Tier2Phase; ms: number; pctWidth: number; color: string; short: string; pct: number; dominant: boolean; }
-  const segments: readonly Segment[] = $derived.by(() => {
-    if (phases === null || phaseTotal <= 0) return [];
-    return PHASE_ORDER.map((phase) => {
-      const ms = phases[phase];
-      return {
-        phase,
-        ms,
-        pctWidth: (ms / phaseTotal) * 100,
-        color: PHASE_COLORS[phase],
-        short: SHORT_LABELS[phase],
-        pct: ms / phaseTotal,
-        // Use dominantPhases set membership (not verdictPhase equality) so the
-        // pair-dominance branch — which reports verdictPhase === 'mixed' — still
-        // lights up both cited phases.
-        dominant: hypothesis !== null && hypothesis.dominantPhases.includes(phase),
-      };
-    });
-  });
-
-  // ── Sample strip — last 8 samples, each a mini stacked bar ───────────────
-  const recentSamples: readonly MeasurementSample[] = $derived.by(() => {
-    if (!focusedEndpoint) return [];
-    const m = measurements.endpoints[focusedEndpoint.id];
-    if (!m) return [];
-    return m.samples.toArray().slice(-8);
-  });
-
-  // ── Histogram of focused endpoint's recent latency distribution ───────────
-  // Last 50 samples — long enough to be statistically meaningful, short enough
-  // to reflect "current" behavior rather than the whole session.
-  const focusedAllSamples: readonly MeasurementSample[] = $derived.by(() => {
-    if (!focusedEndpoint) return [];
-    const m = measurements.endpoints[focusedEndpoint.id];
-    if (!m) return [];
-    return m.samples.toArray().slice(-50);
-  });
-  const histogram = $derived(buildHistogram(focusedAllSamples));
-  // Per Arc C C5 / synthesis design contract: the distribution panel now
-  // surfaces a five-template plain-English interpretation alongside the
-  // histogram. Helper lives in `distribution-interpretation.ts` and is
-  // fully covered by `distribution-interpretation.test.ts`.
-  const distributionInterpretation = $derived(interpretDistribution({
-    endpointLabel: focusedEndpoint?.label ?? 'This endpoint',
-    samples: focusedAllSamples,
-  }));
-  // Kept as a fallback for the rare 2-7 OK sample case where the histogram
-  // collapses to an empty bin set; the interpretation supersedes the prior
-  // empty-state copy for ≥ 8 OK samples.
-  const distributionEmptyMessage = $derived(buildDistributionEmptyMessage(
-    focusedAllSamples,
-    settings.healthThreshold,
-  ));
-
-  // p50 / p95 / spread — recompute locally so the histogram and the readout
-  // share a single source of truth (focusedStats may use a different window).
-  const distroStats = $derived.by(() => {
-    const oks: number[] = [];
-    for (const s of focusedAllSamples) if (s.status === 'ok' && typeof s.latency === 'number') oks.push(s.latency);
-    if (oks.length === 0) return null;
-    const sorted = [...oks].sort((a, b) => a - b);
+    const sorted = [...samples].sort((a, b) => a - b);
     const pickQ = (q: number): number => {
       const idx = Math.min(sorted.length - 1, Math.max(0, Math.floor(q * sorted.length)));
-      // sorted is non-empty (checked above), and idx is clamped, so a default of 0 is unreachable.
       return sorted[idx] ?? 0;
     };
     const p50 = pickQ(0.5);
     const p95 = pickQ(0.95);
-    return { p50, p95, spread: p50 > 0 ? p95 / p50 : 0, n: oks.length };
-  });
+    const maxV = sorted[sorted.length - 1] ?? 0;
 
-  // ── Cross-endpoint correlation grid ─────────────────────────────────────
-  // For each enabled endpoint, build a per-round comparison so the user can
-  // see whether focused-endpoint spikes are limited to this browser-visible
-  // row or occur at the same time as comparison endpoints.
-  const correlation = $derived.by(() => {
-    if (!focusedEndpoint) return null;
-    const others = monitored
-      .filter(ep => ep.id !== focusedEndpoint.id)
-      .map(ep => ({
-        id: ep.id,
-        label: ep.label,
-        samples: measurements.endpoints[ep.id]?.samples.toArray().slice(-16) ?? [],
-      }));
-    return buildCorrelation(
-      {
-        id: focusedEndpoint.id,
-        label: focusedEndpoint.label,
-        samples: measurements.endpoints[focusedEndpoint.id]?.samples.toArray().slice(-16) ?? [],
-      },
-      others,
-      16,
-      { slowThresholdMs: settings.healthThreshold },
-    );
-  });
-
-  const timingVisibility = $derived(describeTimingVisibility(focusedAllSamples, settings.corsMode));
-
-  // ── Browser Visibility ghost-rows panel (PR 3 of synthesis arc) ──────────
-  // Per the synthesis design contract, the Browser Visibility panel renders
-  // DNS / TCP / TLS / TTFB as visible rows even when the browser cannot give
-  // us per-phase values. This makes the limit structural — "here are the rows
-  // we would have shown, here is why each one is empty" — rather than only a
-  // paragraph of prose.
-  //
-  // Chip-label and per-row state are driven by TimingVisibility.level:
-  //   - 'none' (no successful samples yet) → COLLECTING chip, rows show
-  //     "Collecting" at full opacity. No ghost treatment — we don't yet know
-  //     whether visibility will land at hidden, partial, or full.
-  //   - 'total-only' (samples exist, none expose phase data) → HIDDEN BY
-  //     SERVER chip, rows show "Hidden" at 40% opacity (data-hidden="true").
-  //   - 'mixed' and 'phase' do NOT reach this branch in DiagnoseView because
-  //     hasVisiblePhases gates to the waterfall path above. The per-phase
-  //     ghost-row treatment for 'mixed' lands in PR 7's dedicated
-  //     EndpointDetail Browser Visibility panel.
-  const VISIBILITY_PHASES: readonly { key: Tier2Phase; label: string }[] = [
-    { key: 'dns', label: 'DNS Lookup' },
-    { key: 'tcp', label: 'TCP Handshake' },
-    { key: 'tls', label: 'TLS Negotiation' },
-    { key: 'ttfb', label: 'Time to First Byte' },
-  ];
-  const visibilityChipLabel = $derived.by(() => {
-    switch (timingVisibility.level) {
-      case 'none': return 'COLLECTING';
-      case 'total-only': return 'HIDDEN BY SERVER';
-      case 'mixed': return 'PARTIAL VISIBILITY';
-      case 'phase': return 'FULL VISIBILITY';
+    // Ceiling: bimodal/wide tails get 200ms scale; otherwise 100ms.
+    const ceiling = maxV > 120 ? 200 : 100;
+    const binSize = ceiling > 150 ? 10 : 5;
+    const nBins = Math.ceil(ceiling / binSize);
+    const bins = new Array<number>(nBins).fill(0);
+    for (const v of samples) {
+      let i = Math.floor(v / binSize);
+      if (i >= nBins) i = nBins - 1;
+      if (i < 0) i = 0;
+      bins[i]++;
     }
-  });
-  const ghostRowsHidden = $derived(
-    timingVisibility.level === 'total-only' || timingVisibility.level === 'mixed',
-  );
+    const maxCount = Math.max(...bins, 1);
 
-  const diagnoseConfidence: DiagnosticConfidence = $derived.by(() => {
-    if (!focusedEndpoint || !distroStats) return 'low';
-    if (distroStats.n < 8) return 'low';
-    if (monitored.length >= 3 && distroStats.n >= 16) return 'high';
-    return 'medium';
-  });
-  const diagnoseConfidenceReason = $derived.by(() => {
-    if (!focusedEndpoint || !distroStats) return 'Waiting for successful samples on the focused endpoint.';
-    const comparatorCount = Math.max(0, monitored.length - 1);
-    if (distroStats.n < 8) return `${distroStats.n} successful samples so far; spike comparison needs more history.`;
-    if (comparatorCount < 2) return `Only ${comparatorCount} comparison endpoint${comparatorCount === 1 ? '' : 's'} enabled.`;
-    return `${distroStats.n} focused samples with ${comparatorCount} comparison endpoints.`;
-  });
-  const browserFactSummary = $derived.by(() => {
-    if (!focusedEndpoint) return 'Select an endpoint to see browser-measured facts.';
-    if (!distroStats) return 'Chronoscope is waiting for successful browser samples on this endpoint.';
-    return `Browser median is ${fmt(distroStats.p50)} ms and p95 is ${fmt(distroStats.p95)} ms over ${distroStats.n} successful sample${distroStats.n === 1 ? '' : 's'}.`;
-  });
-  const browserInterpretation = $derived(
-    correlation?.verdict.headline ?? 'Collecting comparison data before interpreting this endpoint.',
-  );
+    const angleFor = (v: number): number => Math.PI * (1 - Math.min(v, ceiling) / ceiling);
 
-  interface SampleRow { round: number; total: number; segs: { phase: Tier2Phase; pctWidth: number; color: string; }[]; status: 'ok' | 'timeout' | 'error' | 'phase-unavailable'; }
-  const sampleRows: readonly SampleRow[] = $derived.by(() => {
-    return recentSamples.map((s) => {
-      if (s.status !== 'ok') {
-        return { round: s.round, total: s.latency ?? 0, segs: [], status: s.status };
-      }
-      const t2 = s.tier2;
-      if (!t2 || s.timingFallback) {
-        return { round: s.round, total: s.latency, segs: [], status: 'phase-unavailable' as const };
-      }
-      const total = t2.dnsLookup + t2.tcpConnect + t2.tlsHandshake + t2.ttfb + t2.contentTransfer;
-      if (total <= 0) {
-        return { round: s.round, total: s.latency, segs: [], status: 'phase-unavailable' as const };
-      }
-      const segs = PHASE_ORDER.map((phase) => {
-        const ms = phase === 'dns' ? t2.dnsLookup
-                 : phase === 'tcp' ? t2.tcpConnect
-                 : phase === 'tls' ? t2.tlsHandshake
-                 : phase === 'ttfb' ? t2.ttfb
-                 : t2.contentTransfer;
-        return { phase, pctWidth: (ms / total) * 100, color: PHASE_COLORS[phase] };
-      });
-      return { round: s.round, total, segs, status: 'ok' as const };
+    // Concentric guide arcs (rendered separately by template).
+    const arcs: PolarArc[] = [0.25, 0.5, 0.75, 1.0].map((f) => {
+      const r = RI + (RO - RI) * f;
+      // SVG stroke can resolve var(--…) at paint time; tokens drive the
+      // values so no raw alphas leak into the script.
+      const stroke = f === 1 ? 'var(--rule-strong)' : 'var(--rule)';
+      return {
+        d: `M ${(-r).toFixed(2)} 0 A ${r.toFixed(2)} ${r.toFixed(2)} 0 0 1 ${r.toFixed(2)} 0`,
+        stroke,
+      };
     });
-  });
 
-  function handleBack(): void {
-    // Back-to-live: keep the focused endpoint but flip the view.
+    // Tick marks + numerals.
+    const tickValues = ceiling > 150 ? [0, 50, 100, 150, 200] : [0, 25, 50, 75, 100];
+    const ticks: PolarTick[] = tickValues.map((t) => {
+      const ang = angleFor(t);
+      return {
+        x1: RI * Math.cos(ang),
+        y1: -RI * Math.sin(ang),
+        x2: (RI - 4) * Math.cos(ang),
+        y2: -(RI - 4) * Math.sin(ang),
+        lx: (RI - 10) * Math.cos(ang),
+        ly: -(RI - 10) * Math.sin(ang) + 3,
+        label: String(t),
+      };
+    });
+
+    // Bin wedges.
+    const wedges: PolarWedge[] = [];
+    for (let i = 0; i < nBins; i++) {
+      if (bins[i] === 0) continue;
+      const v0 = i * binSize;
+      const v1 = (i + 1) * binSize;
+      if (v0 >= ceiling) continue;
+      const ang0 = angleFor(v0);
+      const ang1 = angleFor(v1);
+      const h = (bins[i] / maxCount) * (RO - RI);
+      const rTop = RI + h;
+      const vCenter = (v0 + v1) / 2;
+      // Severity color override matches prototype.
+      let fill = color;
+      let opacity = 0.85;
+      if (vCenter > threshold) {
+        fill = 'var(--sev-bad)';
+        opacity = 0.95;
+      } else if (vCenter > threshold * 0.7) {
+        fill = 'var(--sev-warn)';
+        opacity = 0.9;
+      }
+      const sweep = ang0 > ang1 ? 1 : 0;
+      const x1i = RI * Math.cos(ang0), y1i = -RI * Math.sin(ang0);
+      const x2i = RI * Math.cos(ang1), y2i = -RI * Math.sin(ang1);
+      const x1o = rTop * Math.cos(ang0), y1o = -rTop * Math.sin(ang0);
+      const x2o = rTop * Math.cos(ang1), y2o = -rTop * Math.sin(ang1);
+      const rGlow = rTop + 1;
+      const x1og = rGlow * Math.cos(ang0), y1og = -rGlow * Math.sin(ang0);
+      const x2og = rGlow * Math.cos(ang1), y2og = -rGlow * Math.sin(ang1);
+      const d =
+        `M ${x1i.toFixed(2)} ${y1i.toFixed(2)} ` +
+        `L ${x1o.toFixed(2)} ${y1o.toFixed(2)} ` +
+        `A ${rTop.toFixed(2)} ${rTop.toFixed(2)} 0 0 ${sweep} ${x2o.toFixed(2)} ${y2o.toFixed(2)} ` +
+        `L ${x2i.toFixed(2)} ${y2i.toFixed(2)} ` +
+        `A ${RI.toFixed(2)} ${RI.toFixed(2)} 0 0 ${1 - sweep} ${x1i.toFixed(2)} ${y1i.toFixed(2)} Z`;
+      const glowD =
+        `M ${x1i.toFixed(2)} ${y1i.toFixed(2)} ` +
+        `L ${x1og.toFixed(2)} ${y1og.toFixed(2)} ` +
+        `A ${rGlow.toFixed(2)} ${rGlow.toFixed(2)} 0 0 ${sweep} ${x2og.toFixed(2)} ${y2og.toFixed(2)} ` +
+        `L ${x2i.toFixed(2)} ${y2i.toFixed(2)} ` +
+        `A ${RI.toFixed(2)} ${RI.toFixed(2)} 0 0 ${1 - sweep} ${x1i.toFixed(2)} ${y1i.toFixed(2)} Z`;
+      wedges.push({ d, glowD, fill, opacity });
+    }
+
+    // p50 / p95 markers — stack when their angular positions are close.
+    const p50ang = angleFor(p50);
+    const p95ang = angleFor(p95);
+    const close = Math.abs(p50ang - p95ang) < 0.32;
+    const markerFor = (v: number, stroke: string, label: string, labelR: number): PolarMarker => {
+      const ang = angleFor(v);
+      return {
+        x1: RI * Math.cos(ang),
+        y1: -RI * Math.sin(ang),
+        x2: (RO + 6) * Math.cos(ang),
+        y2: -(RO + 6) * Math.sin(ang),
+        lx: labelR * Math.cos(ang),
+        ly: -labelR * Math.sin(ang) + 3,
+        stroke,
+        label: `${label} ${Math.round(v)}`,
+      };
+    };
+    const markers: PolarMarker[] = close
+      ? [
+          markerFor(p50, 'var(--fg)', 'p50', RO + 14),
+          markerFor(p95, 'var(--sev-bad)', 'p95', RO + 26),
+        ]
+      : [
+          markerFor(p50, 'var(--fg)', 'p50', RO + 14),
+          markerFor(p95, 'var(--sev-bad)', 'p95', RO + 14),
+        ];
+
+    // Distribution label.
+    const spread = p95 - p50;
+    const skew = p50 > 0 ? spread / p50 : 0;
+    const distLabel =
+      ceiling > 150
+        ? `0 – 200 ms · bimodal tail`
+        : skew > 1
+          ? `0 – 100 ms · right-skewed`
+          : `0 – 100 ms`;
+    const axisLabels = ceiling > 150
+      ? ['0', '50', '100', '150', '200 ms']
+      : ['0', '25', '50', '75', '100 ms'];
+
+    return { arcs, ticks, wedges, markers, ceiling, axisLabels, distLabel };
+  }
+
+  // ── Phase breakdown from latest sample with .tier2 ──────────────────────
+  // The v4 prototype renders one phase bar per station; we mirror that by
+  // averaging .tier2 values across recent samples (the same logic used by
+  // statisticsStore[ep.id].tier2Averages, but we lean on that field directly).
+  interface PhaseValues {
+    readonly dns: number;
+    readonly tcp: number;
+    readonly tls: number;
+    readonly ttfb: number;
+    readonly xfer: number;
+  }
+
+  // ── Per-station row data ────────────────────────────────────────────────
+  interface StationRow {
+    readonly endpointId: string;
+    readonly stationId: StationId;
+    readonly name: string;
+    readonly host: string;
+    readonly sampleCount: number;
+    readonly status: Severity;
+    readonly statusText: string;
+    readonly p50: number | null;
+    readonly p75: number | null;
+    readonly p90: number | null;
+    readonly p95: number | null;
+    readonly p99: number | null;
+    readonly p50Sev: Severity | '';
+    readonly p75Sev: Severity | '';
+    readonly p90Sev: Severity | '';
+    readonly p95Sev: Severity | '';
+    readonly p99Sev: Severity | '';
+    readonly polar: PolarPlot | null;
+    readonly phases: PhaseValues | null;
+    readonly phaseTotal: number;
+    readonly visibility: 'full' | 'partial' | 'hidden';
+    readonly visibilityText: string;
+    readonly sampleMeta: string;
+    readonly carrierLoss: number;
+    readonly lastFailure: string;
+  }
+
+  function buildStationRow(ep: Endpoint, idx: number): StationRow {
+    const stationId = STATION_IDS[idx] ?? 'A';
+    const host = hostnameOf(ep.url);
+    const m = measurements.endpoints[ep.id];
+    const s = stats[ep.id];
+
+    const samplesArr: readonly MeasurementSample[] = m ? m.samples.toArray() : [];
+    const okSamples = samplesArr.filter((x) => x.status === 'ok');
+    const okLatencies = okSamples.map((x) => x.latency);
+    const sampleCount = samplesArr.length;
+
+    // Severity classification for the row badge.
+    const last = m?.lastLatency ?? null;
+    const sev = severityForLast(last, s?.p95 ?? null);
+
+    // Percentiles direct from statisticsStore (preferred — uses canonical
+    // method). Fall back to null when stats aren't ready.
+    const ready = s?.ready ?? false;
+    const p50 = ready ? s.p50 : null;
+    const p75 = ready ? s.p75 : null;
+    const p90 = ready ? s.p90 : null;
+    const p95 = ready ? s.p95 : null;
+    const p99 = ready ? s.p99 : null;
+
+    // Polar distribution — driven by raw ok-sample latencies.
+    const polar = okLatencies.length >= 4 ? buildPolar(okLatencies, `var(--station-${stationId.toLowerCase()})`) : null;
+
+    // Phase decomposition. The prototype shows either the resource-timing
+    // phase bar (when .tier2 data is available on recent samples) or the
+    // "Carrier opaque" caveat. We aggregate .tier2 from the recent ok
+    // samples that exposed phase data, then collapse to a single PhaseValues.
+    let phases: PhaseValues | null = null;
+    if (s?.tier2Averages) {
+      phases = {
+        dns: s.tier2Averages.dnsLookup,
+        tcp: s.tier2Averages.tcpConnect,
+        tls: s.tier2Averages.tlsHandshake,
+        ttfb: s.tier2Averages.ttfb,
+        xfer: s.tier2Averages.contentTransfer,
+      };
+    }
+    const phaseTotal = phases ? phases.dns + phases.tcp + phases.tls + phases.ttfb + phases.xfer : 0;
+
+    // Visibility — full when we have non-zero phase data on recent samples;
+    // hidden when every recent ok sample is total-only (no .tier2 or
+    // timingFallback === true).
+    let visibility: StationRow['visibility'] = 'hidden';
+    let visibilityText = 'Phase visibility · opaque';
+    if (phases && phaseTotal > 0) {
+      const anyTier2 = okSamples.slice(-20).some((x) => x.tier2 && !x.timingFallback);
+      const allTier2 = okSamples.slice(-20).every((x) => x.tier2 && !x.timingFallback);
+      if (allTier2) {
+        visibility = 'full';
+        visibilityText = 'Phase visibility · full';
+      } else if (anyTier2) {
+        visibility = 'partial';
+        visibilityText = 'Phase visibility · partial';
+      }
+    }
+
+    // Sample meta — "N carrier loss · M rounds · last failure …".
+    const failures = samplesArr.filter((x) => x.status !== 'ok');
+    const carrierLoss = failures.length;
+    const lastFail = failures[failures.length - 1];
+    const lastFailure = lastFail ? `R${lastFail.round}` : 'never';
+    const sampleMeta = `${carrierLoss} carrier loss · ${measurements.roundCounter} rounds · last failure ${lastFailure}`;
+
+    return {
+      endpointId: ep.id,
+      stationId,
+      name: ep.label,
+      host,
+      sampleCount,
+      status: sev,
+      statusText: statusText(sev),
+      p50, p75, p90, p95, p99,
+      p50Sev: p50 === null ? '' : severityCell(p50),
+      p75Sev: p75 === null ? '' : severityCell(p75),
+      p90Sev: p90 === null ? '' : severityCell(p90),
+      p95Sev: p95 === null ? '' : severityCell(p95),
+      p99Sev: p99 === null ? '' : severityCell(p99),
+      polar,
+      phases,
+      phaseTotal,
+      visibility,
+      visibilityText,
+      sampleMeta,
+      carrierLoss,
+      lastFailure,
+    };
+  }
+
+  const stationRows = $derived<readonly StationRow[]>(
+    monitored.slice(0, 4).map((ep, i) => buildStationRow(ep, i)),
+  );
+
+  // ── Titlestrip coords ───────────────────────────────────────────────────
+  const totalSamples = $derived.by<number>(() => {
+    let n = 0;
+    for (const ep of monitored) {
+      const m = measurements.endpoints[ep.id];
+      if (m) n += m.samples.length;
+    }
+    return n;
+  });
+  const windowSecondsLabel = $derived(`${(monitorDelay / 1000).toFixed(0)} s`);
+
+  // ── Actions ─────────────────────────────────────────────────────────────
+  function openTransit(): void {
+    // /transit is the outside-vantage probe surface (Phase C). The probe
+    // backend (Cloudflare Workers for IAD/LHR/NRT) is not yet wired, so the
+    // view currently renders placeholder probe results. Wiring real probes
+    // is Phase D.
+    navigateTo({ name: 'transit', endpointId: null });
+  }
+  function openLive(): void {
     navigateTo({ name: 'live', endpointId: null });
   }
-
-  function handleBackToInvestigate(): void {
-    // Back-to-Investigate-landing: leaves /endpoint/:id and lands on the
-    // two-column landing view. Router clearing rule: focusedEndpointId is
-    // NOT cleared by navigateTo when the new route isn't 'endpoint' — the
-    // landing view picks its display state from the URL/route, not from
-    // focusedEndpointId.
-    navigateTo({ name: 'investigate', endpointId: null });
+  function focusEndpoint(endpointId: string): void {
+    navigateTo({ name: 'endpoint', endpointId });
   }
 
-  function handleSelectMode(next: 'p50' | 'p95'): void {
-    mode = next;
+  // Phase-bar width helper.
+  function pctOf(value: number, total: number): string {
+    if (total <= 0) return '0%';
+    return `${((value / total) * 100).toFixed(2)}%`;
   }
-
-  async function handleRemoteCheck(): Promise<void> {
-    await remoteVantageStore.runProbe(focusedEndpoint ? [focusedEndpoint] : monitored);
-  }
-
-  async function handleLoadedLatencyCheck(): Promise<void> {
-    if (!focusedEndpoint) return;
-    await bufferbloatStore.run({
-      endpoint: focusedEndpoint,
-      idleSamples: focusedAllSamples,
-      settings: {
-        corsMode: settings.corsMode,
-        timeout: settings.timeout,
-      },
-    });
-  }
-
-  function handleLoadedLatencyStop(): void {
-    bufferbloatStore.stop();
-  }
-
-  async function handleNetworkContextCheck(): Promise<void> {
-    if (!focusedEndpoint) return;
-    await networkContextStore.run(focusedEndpoint);
-  }
-
-  function handleOpenLocalProof(): void {
-    localProofOpen = true;
-  }
-
-  function handleCloseLocalProof(): void {
-    localProofOpen = false;
-  }
-
-  function handleOpenSettings(): void {
-    uiStore.toggleSettings();
-  }
-
-  function hostnameFromUrl(url: string): string | null {
-    try {
-      return new URL(url).hostname;
-    } catch {
-      return null;
-    }
-  }
-
-  function loadedLatencyMetric(value: number | null): string {
-    return value === null ? '—' : `${fmt(value)} ms`;
-  }
-
-  // ── Accessibility summary for the hero bar ────────────────────────────────
-  const heroAria = $derived(
-    phases === null || !hasVisiblePhases
-      ? 'Request waterfall — no tier-2 data available.'
-      : `Request waterfall for ${focusedEndpoint?.label ?? 'focused endpoint'} at ${mode.toUpperCase()}: ${segments.map((s) => `${PHASE_LABELS[s.phase]} ${Math.round(s.ms)} ms`).join(', ')}. Total ${Math.round(phaseTotal)} ms.`
-  );
 </script>
 
-<section class="diagnose diagnose-surface" aria-label="Investigate">
-  <header class="diagnose-header diagnose-hero">
-    <div class="diagnose-title-block">
-      <div class="diagnose-kicker">Investigate · Distribution and correlation</div>
-      <h1 class="diagnose-title">
-        {#if focusedEndpoint}
-          <span class="diagnose-title-pip" style:background={focusedEndpoint.color || tokens.color.endpoint[0]} aria-hidden="true"></span>
-          <span class="diagnose-title-name">{focusedEndpoint.label}</span>
-          <span
-            class="diagnose-title-url"
-            title={focusedEndpoint.url}
-            aria-label={focusedEndpoint.url}
-          >{focusedEndpointUrlLabel}</span>
-        {:else}
-          <span class="diagnose-title-placeholder">—</span>
-        {/if}
-      </h1>
+{#if focusedId !== null}
+  <EndpointView />
+{:else}
+  <div class="investigate-surface">
+    <div class="titlestrip">
+      <h2>Investigate<span class="sub">Per-station signal analysis</span></h2>
+      <div class="coords">
+        <span>Round<span class="v">{measurements.roundCounter}</span></span>
+        <span>Window<span class="v">{windowSecondsLabel}</span></span>
+        <span>Stations<span class="v">{stationRows.length}</span></span>
+        <span>Samples<span class="v">{totalSamples}</span></span>
+      </div>
     </div>
 
-    {#if focusedEndpoint}
-      <div class="diagnose-actions">
-        <button
-          type="button" class="diagnose-chip diagnose-chip-action"
-          onclick={handleBackToInvestigate}
-          aria-label="Back to Investigate"
-        >← Back to Investigate</button>
-        <button
-          type="button" class="diagnose-chip diagnose-chip-action"
-          onclick={handleBack}
-          aria-label="Back to live"
-        >← Back to Live</button>
-      </div>
-    {/if}
-  </header>
+    <main class="investigate-main">
 
-  {#if monitored.length === 0}
-    <div class="diagnose-empty" role="note">
-      <p class="diagnose-empty-title">Enable an endpoint to investigate it closely.</p>
-      <p class="diagnose-empty-hint">Chronoscope needs at least one monitored endpoint before it can compare distribution and correlation evidence.</p>
-    </div>
-  {:else if !focusedEndpoint}
-    <!-- Investigate landing (PR 8 of synthesis arc).
-         Two-column composition: left = "what we can see from this browser"
-         per endpoint; right = "what needs outside validation". The user
-         clicks an endpoint card to drill into /endpoint/:id (the focused
-         detail surface owned by the existing focused-endpoint branch
-         below). Wire matches the spec's anatomy table in Section 4. -->
-    <!-- Arc C B3: Investigate landing extracted to its own component so the
-         landing surface and the focused-endpoint detail (below) stay
-         independently auditable. DiagnoseView keeps ownership of the
-         detail branch; the landing pulls every store it needs directly. -->
-    <InvestigateLandingView />
-  {:else}
-    <section class="diagnose-answer diagnose-brief" aria-label="Diagnostic answer">
-      <div class="diagnose-brief-score" aria-hidden="true">
-        <span class="diagnose-brief-score-value">{distroStats ? fmt(distroStats.p50) : '—'}</span>
-        <span class="diagnose-brief-score-label">ms p50</span>
-      </div>
-      <div class="diagnose-brief-copy">
-        <div class="diagnose-section-kicker">Diagnostic answer</div>
-        <div class="diagnose-answer-top">
-          <span
-            class="diagnose-confidence"
-            class:low={diagnoseConfidence === 'low'}
-            class:medium={diagnoseConfidence === 'medium'}
-            class:high={diagnoseConfidence === 'high'}
-            title={diagnoseConfidenceReason}
-          >{diagnoseConfidence} confidence</span>
-          <p class="diagnose-answer-headline">{browserInterpretation}</p>
-        </div>
-        <p class="diagnose-answer-fact"><strong>Measured fact:</strong> {browserFactSummary}</p>
-        <p class="diagnose-answer-interpretation"><strong>Interpretation:</strong> {browserInterpretation}</p>
-        <dl class="diagnose-answer-evidence">
-          <div>
-            <dt>Samples</dt>
-            <dd>{distroStats?.n ?? 0}</dd>
-          </div>
-          <div>
-            <dt>Comparators</dt>
-            <dd>{Math.max(0, monitored.length - 1)}</dd>
-          </div>
-          <div>
-            <dt>Visibility</dt>
-            <dd>{timingVisibility.headline}</dd>
-          </div>
-        </dl>
-      </div>
-    </section>
-
-    <div class="diagnose-evidence-layout diagnose-proof-grid">
-      <section class="diagnose-facts-stack" aria-label="Measured browser facts">
-        <div class="diagnose-column-head">
-          <div class="diagnose-section-kicker">Measured browser facts</div>
-          <p>Facts Chronoscope can directly measure in this browser session.</p>
+      <!-- ============ PART I — What the carrier records ============ -->
+      <section>
+        <div class="part-head">
+          <div class="kicker"><span class="roman">I</span><span>·</span><span>What the carrier records</span></div>
+          <h3>Evidence we measured from this browser.</h3>
+          <p class="lede">
+            Every value below was recorded by this browser, in this window, on this network. No interpretation, no averaging across sessions, no synthetic claims. <em>If it's printed here, we heard it.</em>
+          </p>
         </div>
 
-        <section class="diagnose-distro" aria-label="Latency distribution">
-          <div class="diagnose-section-kicker">Distribution</div>
-          {#if distroStats && histogram.bins.length > 0}
-            <div class="distro-stats">
-              <span class="distro-stat"><span class="distro-stat-label">p50</span> {fmt(distroStats.p50)} ms</span>
-              <span class="distro-stat"><span class="distro-stat-label">p95</span> {fmt(distroStats.p95)} ms</span>
-              <span class="distro-stat"><span class="distro-stat-label">spread</span> {distroStats.spread.toFixed(1)}×</span>
-              <span class="distro-stat-meta">over last {distroStats.n} samples</span>
-            </div>
-            <div
-              class="distro-chart"
-              role="img"
-              aria-label="Latency histogram (log scale) across last {distroStats.n} samples"
-            >
-              {#each histogram.bins as bin, i (i)}
-                <div
-                  class="distro-bin"
-                  title="{binLabel(bin)} · {bin.count} sample{bin.count === 1 ? '' : 's'}"
-                >
-                  <div
-                    class="distro-bar"
-                    style:height="{histogram.maxCount > 0 ? (bin.count / histogram.maxCount) * 100 : 0}%"
-                  ></div>
-                </div>
-              {/each}
-            </div>
-            <div class="distro-axis" aria-hidden="true">
-              {#if histogram.bins.length > 0}
-                {@const firstBin = histogram.bins[0]}
-                {@const lastBin = histogram.bins[histogram.bins.length - 1]}
-                <span>
-                  {#if firstBin && firstBin.fromMs <= 0}
-                    &lt;{axisEdgeLabel(firstBin.toMs)}
-                  {:else if firstBin}
-                    {axisEdgeLabel(firstBin.fromMs)}
-                  {/if}
-                </span>
-                <span>
-                  {#if lastBin && !Number.isFinite(lastBin.toMs)}
-                    ≥{axisEdgeLabel(lastBin.fromMs)}
-                  {:else if lastBin}
-                    {axisEdgeLabel(lastBin.toMs)}
-                  {/if}
-                </span>
-              {/if}
+        <div class="stations">
+          {#if stationRows.length === 0}
+            <div class="stations-empty">
+              <p>No monitored stations. Enable an endpoint in Settings to begin.</p>
             </div>
           {:else}
-            <p class="distro-empty">{distributionEmptyMessage}</p>
-          {/if}
+            {#each stationRows as row (row.endpointId)}
+              <div class="station-row">
+                <button
+                  type="button"
+                  class="sr-head"
+                  data-ep={row.stationId}
+                  onclick={() => focusEndpoint(row.endpointId)}
+                  aria-label="Open focused view for {row.name}"
+                >
+                  <span class="mk" aria-hidden="true"></span>
+                  <div class="info">
+                    <div class="nm">{row.name}</div>
+                    <div class="host">{row.host} · {row.sampleCount} samples</div>
+                  </div>
+                  <span class="status" data-s={row.status}>{row.statusText}</span>
+                </button>
 
-          <!-- Distribution interpretation (Arc C C5): plain-English shape
-               read-out attached to the chart so users don't need to infer
-               distribution character from histogram bars. Always renders so
-               the headline + detail are present even when the chart isn't. -->
-          <div
-            class="distro-interpretation"
-            data-kind={distributionInterpretation.kind}
-            role="note"
-          >
-            <p class="distro-interpretation-headline">{distributionInterpretation.headline}</p>
-            <p class="distro-interpretation-detail">{distributionInterpretation.detail}</p>
-          </div>
-        </section>
-
-        <section class="diagnose-visibility" aria-label="Browser visibility">
-          <div class="diagnose-section-kicker">Browser visibility</div>
-          <p class="visibility-headline">{timingVisibility.headline}</p>
-          <p class="visibility-detail">{timingVisibility.detail}</p>
-          {#if timingVisibility.action}
-            <p class="visibility-action">{timingVisibility.action}</p>
-          {/if}
-        </section>
-
-        {#if correlation}
-          <section class="diagnose-correlation" aria-label="Cross-endpoint comparison">
-            <div class="diagnose-section-kicker">Compare with other endpoints</div>
-            <p class="correlation-headline">{correlation.verdict.headline}</p>
-            {#if correlation.rows[0]?.cells.length > 0}
-              <div class="correlation-grid" role="table" aria-label="Per-round latency across endpoints">
-                {#each correlation.rows as row, rowIdx (row.endpointId)}
-                  <div class="correlation-row" class:focused={rowIdx === 0} role="row">
-                    <span class="correlation-label" role="rowheader">{row.label}</span>
-                    <div class="correlation-cells">
-                      {#each row.cells as cell (cell.round)}
-                        <span
-                          class="correlation-cell"
-                          class:spike={cell.isSpike}
-                          class:missing={cell.latencyMs === null}
-                          title="R{cell.round}{cell.latencyMs !== null ? ` · ${fmt(cell.latencyMs)} ms${cell.isSpike ? ' (spike)' : ''}` : ' · no data'}"
-                          role="cell"
-                        ></span>
-                      {/each}
+                <div class="ladder">
+                  <div class="cell">
+                    <div class="k">p50</div>
+                    <div class="v" data-sev={row.p50Sev}>
+                      {#if row.p50 === null}—{:else}{fmt(row.p50)}<span class="u">ms</span>{/if}
                     </div>
                   </div>
-                {/each}
-              </div>
-              <p class="correlation-legend" aria-hidden="true">
-                <span class="correlation-legend-swatch correlation-legend-normal"></span> normal
-                <span class="correlation-legend-swatch correlation-legend-spike"></span> spike (>1.5× this endpoint's median)
-                <span class="correlation-legend-swatch correlation-legend-missing"></span> no data
-              </p>
-            {/if}
-          </section>
-        {/if}
-
-        {#if phases !== null}
-          <details class="diagnose-phases">
-            <summary>
-              <span class="diagnose-section-kicker">Phase breakdown (advanced)</span>
-              <span class="phases-summary-hint">DNS · TCP · TLS · Server · Transfer</span>
-            </summary>
-            <div class="diagnose-segment" role="group" aria-label="Percentile mode">
-              <button
-                type="button" class="diagnose-chip"
-                class:on={mode === 'p50'} aria-pressed={mode === 'p50'}
-                onclick={() => handleSelectMode('p50')}
-              >P50</button>
-              <button
-                type="button" class="diagnose-chip"
-                class:on={mode === 'p95'} aria-pressed={mode === 'p95'}
-                onclick={() => handleSelectMode('p95')}
-              >P95</button>
-            </div>
-            {#if hasVisiblePhases}
-              <div class="diagnose-waterfall" role="img" aria-label={heroAria}>
-                <div class="diagnose-bar">
-                  {#each segments as seg (seg.phase)}
-                    <div
-                      class="diagnose-bar-seg"
-                      class:dominant={seg.dominant}
-                      style:width="{seg.pctWidth}%"
-                      style:background={seg.color}
-                    >
-                      {#if seg.pctWidth >= 8}
-                        <span class="diagnose-bar-label" style:color={tokens.color.text.fg3}>
-                          {seg.short} · {fmt(seg.ms)}<span class="diagnose-bar-ms">ms</span>
-                        </span>
-                      {/if}
+                  <div class="cell">
+                    <div class="k">p75</div>
+                    <div class="v" data-sev={row.p75Sev}>
+                      {#if row.p75 === null}—{:else}{fmt(row.p75)}<span class="u">ms</span>{/if}
                     </div>
-                  {/each}
+                  </div>
+                  <div class="cell">
+                    <div class="k">p90</div>
+                    <div class="v" data-sev={row.p90Sev}>
+                      {#if row.p90 === null}—{:else}{fmt(row.p90)}<span class="u">ms</span>{/if}
+                    </div>
+                  </div>
+                  <div class="cell">
+                    <div class="k">p95</div>
+                    <div class="v" data-sev={row.p95Sev}>
+                      {#if row.p95 === null}—{:else}{fmt(row.p95)}<span class="u">ms</span>{/if}
+                    </div>
+                  </div>
+                  <div class="cell">
+                    <div class="k">p99</div>
+                    <div class="v" data-sev={row.p99Sev}>
+                      {#if row.p99 === null}—{:else}{fmt(row.p99)}<span class="u">ms</span>{/if}
+                    </div>
+                  </div>
                 </div>
-                <div class="diagnose-bar-scale">
-                  {#each segments as seg (seg.phase)}
-                    <span class="diagnose-bar-tick" style:flex="{seg.pctWidth}">
-                      <span class="diagnose-bar-tick-label">{seg.short}</span>
-                    </span>
-                  {/each}
-                </div>
-              </div>
-            {:else}
-              <!-- Browser Visibility ghost-rows panel (PR 3 of synthesis arc).
-                   Renders DNS / TCP / TLS / TTFB as visible rows even when the
-                   browser cannot give us per-phase values. This makes the
-                   limit structural — "here are the rows we would have shown,
-                   here is why each one is empty" — rather than a paragraph of
-                   prose. See synthesis design contract Section 5 and the PR 3
-                   scope for the canonical chip labels. -->
-              <div class="phase-unavailable-card" role="note" aria-label="Browser timing visibility">
-                <div class="visibility-chip" data-visibility-level={timingVisibility.level}>
-                  {visibilityChipLabel}
-                </div>
-                <p class="phase-unavailable-detail">{timingVisibility.detail}</p>
-                {#if timingVisibility.action}
-                  <p class="phase-unavailable-action">{timingVisibility.action}</p>
-                {/if}
-                <ul class="visibility-rows" aria-label="Per-phase timing visibility">
-                  {#each VISIBILITY_PHASES as phase (phase.key)}
-                    <li
-                      class="timing-row"
-                      data-phase={phase.key}
-                      data-hidden={ghostRowsHidden ? 'true' : 'false'}
-                    >
-                      <span class="timing-row-label">{phase.label}</span>
-                      <span class="timing-row-value">{ghostRowsHidden ? 'Hidden' : 'Collecting'}</span>
-                    </li>
-                  {/each}
-                </ul>
-              </div>
-            {/if}
-            {#if hypothesis && hasVisiblePhases}
-              <ul class="diagnose-evidence">
-                {#each segments as seg (seg.phase)}
-                  <li class="diagnose-evidence-row" class:dominant={seg.dominant}>
-                    <span class="diagnose-evidence-pip" style:background={seg.color} aria-hidden="true"></span>
-                    <span class="diagnose-evidence-name">{PHASE_LABELS[seg.phase]}</span>
-                    <span class="diagnose-evidence-ms">{fmt(seg.ms)} ms</span>
-                    <span class="diagnose-evidence-bar" aria-hidden="true">
-                      <span class="diagnose-evidence-fill" style:width="{seg.pctWidth}%" style:background={seg.color}></span>
-                    </span>
-                    <span class="diagnose-evidence-pct">{Math.round(seg.pct * 100)}%</span>
-                  </li>
-                {/each}
-              </ul>
-              <p class="phases-caveat">
-                On warm-connection samples the browser reports zero for DNS/TCP/TLS — only TTFB and Transfer reflect per-request work. Cross-origin endpoints without <code>Timing-Allow-Origin</code> headers report only the total.
-              </p>
-            {/if}
-          </details>
-        {/if}
 
-        {#if recentSamples.length > 0}
-          <section class="diagnose-samples" aria-label="Recent samples">
-            <div class="diagnose-hypothesis-kicker">Last {recentSamples.length} sample{recentSamples.length === 1 ? '' : 's'}</div>
-            <table class="diagnose-sample-table">
-              <thead class="sr-only">
-                <tr><th>Round</th><th>Phase breakdown</th><th>Total</th></tr>
-              </thead>
-              <tbody>
-                {#each sampleRows as row (row.round)}
-                  <tr class="diagnose-sample-row">
-                    <td class="diagnose-sample-round">R{row.round}</td>
-                    <td class="diagnose-sample-bar-cell">
-                      <div class="diagnose-sample-bar">
-                        {#if row.status === 'ok' && row.segs.length > 0}
-                          {#each row.segs as seg (seg.phase)}
-                            <span class="diagnose-sample-seg" style:width="{seg.pctWidth}%" style:background={seg.color} aria-hidden="true"></span>
-                          {/each}
-                        {:else if row.status === 'phase-unavailable'}
-                          <span class="diagnose-sample-neutral diagnose-sample-total-only" aria-label="Phase timing unavailable">TOTAL ONLY</span>
-                        {:else if row.status === 'timeout'}
-                          <span class="diagnose-sample-timeout" aria-label="Timeout">TIMEOUT</span>
-                        {:else}
-                          <span class="diagnose-sample-timeout" aria-label="Error">ERROR</span>
-                        {/if}
+                <div class="analysis">
+                  <div class="polar">
+                    <div class="panel-head">
+                      <span class="ti">Distribution</span>
+                      <span>{row.polar?.distLabel ?? 'Collecting samples'}</span>
+                    </div>
+                    {#if row.polar}
+                      <svg class="polar-svg" viewBox="-105 -110 210 125" preserveAspectRatio="xMidYMid meet" aria-label="Latency distribution for {row.name}">
+                        {#each row.polar.arcs as arc, i (i)}
+                          <path d={arc.d} fill="none" stroke={arc.stroke} stroke-width="0.6"></path>
+                        {/each}
+                        {#each row.polar.ticks as tick, i (i)}
+                          <line
+                            x1={tick.x1.toFixed(2)} y1={tick.y1.toFixed(2)}
+                            x2={tick.x2.toFixed(2)} y2={tick.y2.toFixed(2)}
+                            stroke="rgba(242,235,219,0.25)" stroke-width="0.7"
+                          ></line>
+                          <text
+                            x={tick.lx.toFixed(2)} y={tick.ly.toFixed(2)}
+                            font-family="Space Mono" font-size="6" fill="var(--fg-3)"
+                            text-anchor="middle" letter-spacing="0.5"
+                          >{tick.label}</text>
+                        {/each}
+                        {#each row.polar.wedges as wedge, i (i)}
+                          <path d={wedge.glowD} fill={wedge.fill} fill-opacity={(wedge.opacity * 0.22).toFixed(3)}></path>
+                          <path d={wedge.d} fill={wedge.fill} fill-opacity={wedge.opacity.toFixed(2)}></path>
+                        {/each}
+                        {#each row.polar.markers as marker, i (i)}
+                          <line
+                            x1={marker.x1.toFixed(2)} y1={marker.y1.toFixed(2)}
+                            x2={marker.x2.toFixed(2)} y2={marker.y2.toFixed(2)}
+                            stroke={marker.stroke} stroke-width="0.8" stroke-dasharray="1.5 2"
+                          ></line>
+                          <text
+                            x={marker.lx.toFixed(2)} y={marker.ly.toFixed(2)}
+                            font-family="Space Mono" font-size="7" fill={marker.stroke}
+                            text-anchor="middle" font-weight="700" letter-spacing="0.5"
+                          >{marker.label}</text>
+                        {/each}
+                        <circle cx="0" cy="0" r="1.8" fill="var(--fg)" fill-opacity="0.7"></circle>
+                      </svg>
+                      <div class="polar-axis">
+                        {#each row.polar.axisLabels as label, i (i)}
+                          <span>{label}</span>
+                        {/each}
                       </div>
-                    </td>
-                    <td class="diagnose-sample-total">{fmt(row.total)} ms</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </section>
-        {/if}
+                    {:else}
+                      <div class="polar-empty">
+                        <p>Collecting samples. The distribution diagram needs at least four successful samples.</p>
+                      </div>
+                    {/if}
+                  </div>
+
+                  {#if row.phases && row.phaseTotal > 0}
+                    <div class="phase">
+                      <div class="panel-head">
+                        <span class="ti">Resource timing</span>
+                        <span>p50 phases · {Math.round(row.phaseTotal)} ms total</span>
+                      </div>
+                      <div class="phase-stack" aria-label="Phase decomposition">
+                        <div style:width={pctOf(row.phases.dns, row.phaseTotal)} style:background="var(--phase-dns)"></div>
+                        <div style:width={pctOf(row.phases.tcp, row.phaseTotal)} style:background="var(--phase-tcp)"></div>
+                        <div style:width={pctOf(row.phases.tls, row.phaseTotal)} style:background="var(--phase-tls)"></div>
+                        <div style:width={pctOf(row.phases.ttfb, row.phaseTotal)} style:background="var(--phase-ttfb)"></div>
+                        <div style:width={pctOf(row.phases.xfer, row.phaseTotal)} style:background="var(--phase-xfer)"></div>
+                      </div>
+                      <div class="phase-legend">
+                        <div class="it"><div class="sw" style:background="var(--phase-dns)"></div><span class="l">DNS</span><span class="v">{fmt(row.phases.dns)}</span></div>
+                        <div class="it"><div class="sw" style:background="var(--phase-tcp)"></div><span class="l">TCP</span><span class="v">{fmt(row.phases.tcp)}</span></div>
+                        <div class="it"><div class="sw" style:background="var(--phase-tls)"></div><span class="l">TLS</span><span class="v">{fmt(row.phases.tls)}</span></div>
+                        <div class="it"><div class="sw" style:background="var(--phase-ttfb)"></div><span class="l">TTFB</span><span class="v">{fmt(row.phases.ttfb)}</span></div>
+                        <div class="it"><div class="sw" style:background="var(--phase-xfer)"></div><span class="l">Xfer</span><span class="v">{fmt(row.phases.xfer)}</span></div>
+                      </div>
+                    </div>
+                  {:else}
+                    <div class="opaque">
+                      <div class="ic" aria-hidden="true">◌</div>
+                      <div class="copy">
+                        <strong>Carrier opaque</strong>
+                        {row.host} does not return <em>Timing-Allow-Origin</em>; only the total request time is visible. DNS, TCP, TLS, and TTFB are opaque to this browser.
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+
+                <div class="sr-foot">
+                  <span class="vis" data-v={row.visibility}>{row.visibilityText}</span>
+                  <span class="samples">
+                    <span class="v">{row.carrierLoss}</span> carrier loss ·
+                    <span class="v">{measurements.roundCounter}</span> rounds ·
+                    last failure <span class="v">{row.lastFailure}</span>
+                  </span>
+                </div>
+              </div>
+            {/each}
+          {/if}
+        </div>
       </section>
 
-      <section class="diagnose-proof-stack" aria-label="Next proof actions">
-        <div class="diagnose-column-head">
-          <div class="diagnose-section-kicker">Next proof actions</div>
-          <p>Checks that reduce uncertainty without changing the browser facts.</p>
+      <!-- ============ PART II — What we can't hear from here ============ -->
+      <aside class="outside">
+        <div class="part-head">
+          <div class="kicker"><span class="roman">II</span><span>·</span><span>What we can't hear from here</span></div>
+          <h3>Evidence we can't gather alone.</h3>
+          <p class="lede">
+            Some questions can't be answered from one browser, one network. These probes ask a different vantage so the diagnosis can be <em>your network</em> or <em>their server</em> — not both.
+          </p>
         </div>
 
-        <section
-          class="diagnose-remote"
-          class:local-path={remoteInsight.status === 'local-path'}
-          class:remote-confirms={remoteInsight.status === 'remote-confirms' || remoteInsight.status === 'remote-error'}
-          aria-label="Remote vantage"
-        >
-          <div class="remote-head">
-            <div>
-              <div class="diagnose-section-kicker">Remote vantage</div>
-              <p class="remote-headline">{remoteInsight.headline}</p>
-            </div>
-            <button
-              type="button"
-              class="diagnose-chip diagnose-chip-action"
-              disabled={remoteBusy}
-              aria-disabled={remoteBusy}
-              onclick={handleRemoteCheck}
-            >
-              {remoteBusy ? 'Checking…' : 'Check from Cloudflare'}
-            </button>
+        <div class="card">
+          <div class="card-head">
+            <h4>Probe from outside vantages</h4>
+            <span class="tag" data-s="ready">Ready</span>
           </div>
-          <p class="remote-detail">{remoteInsight.detail}</p>
-          <dl class="remote-evidence">
-            <div>
-              <dt>Edge</dt>
-              <dd>{remoteInsight.edgeLabel}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{remoteInsight.result?.status ?? '—'}</dd>
-            </div>
-            <div>
-              <dt>Remote time</dt>
-              <dd>{remoteInsight.result ? `${fmt(remoteInsight.result.durationMs)} ms` : '—'}</dd>
-            </div>
-          </dl>
-          {#if remoteVantage.error}
-            <p class="remote-error">{remoteVantage.error}</p>
-          {:else}
-            <p class="remote-action">{remoteInsight.action}</p>
-          {/if}
-        </section>
-
-        <section
-          class="diagnose-loaded"
-          class:clean={bufferbloat.grade.grade === 'clean'}
-          class:watch={bufferbloat.grade.grade === 'watch'}
-          class:high={bufferbloat.grade.grade === 'loaded-latency-high'}
-          aria-label="Loaded latency"
-        >
-          <div class="loaded-head">
-            <div>
-              <div class="diagnose-section-kicker">Loaded latency</div>
-              <p class="loaded-headline">Browser latency while the connection is busy</p>
-            </div>
-            {#if bufferbloatBusy}
-              <button
-                type="button"
-                class="diagnose-chip diagnose-chip-action"
-                onclick={handleLoadedLatencyStop}
-              >Stop loaded check</button>
-            {:else}
-              <button
-                type="button"
-                class="diagnose-chip diagnose-chip-action"
-                disabled={!distroStats}
-                aria-disabled={!distroStats}
-                onclick={handleLoadedLatencyCheck}
-              >Run loaded check</button>
-            {/if}
+          <p>Probe each station from a Cloudflare edge in three regions simultaneously. If they hear what your browser hears, the source is upstream. If they don't, it's local to this network.</p>
+          <button type="button" class="action" onclick={openTransit}>Run global transit →</button>
+          <div class="detail">
+            <span class="k">Regions</span><span class="v">IAD · LHR · NRT</span>
+            <span class="k">Last run</span><span class="v">— never this session —</span>
+            <span class="k">Latency</span><span class="v">~3 s round-trip</span>
           </div>
-          <p class="loaded-detail">
-            This measures browser-visible latency while a download is running. It is loaded-latency evidence, not packet-level proof.
-          </p>
-          <dl class="loaded-evidence">
-            <div>
-              <dt>Idle median</dt>
-              <dd>{loadedLatencyMetric(bufferbloat.idleMedianMs)}</dd>
-            </div>
-            <div>
-              <dt>Loaded median</dt>
-              <dd>{loadedLatencyMetric(bufferbloat.loadedMedianMs)}</dd>
-            </div>
-            <div>
-              <dt>Status</dt>
-              <dd>{bufferbloatStatusLabel}</dd>
-            </div>
-          </dl>
-          {#if bufferbloat.error}
-            <p class="loaded-error">{bufferbloat.error}</p>
-          {:else if bufferbloat.status === 'running'}
-            <p class="loaded-action">Downloading a bounded Cloudflare response and timing this endpoint from the browser.</p>
-          {:else}
-            <p class="loaded-action">{bufferbloat.grade.summary}</p>
-          {/if}
-        </section>
+        </div>
 
-        <section class="diagnose-network-context" aria-label="Network context">
-          <div class="network-context-head">
-            <div>
-              <div class="diagnose-section-kicker">Network context</div>
-              <p class="network-context-headline">Outside resolver and public topology context</p>
-            </div>
-            <button
-              type="button"
-              class="diagnose-chip diagnose-chip-action"
-              disabled={networkContextBusy}
-              aria-disabled={networkContextBusy}
-              onclick={handleNetworkContextCheck}
-            >
-              {networkContextBusy ? 'Checking…' : 'Run context check'}
-            </button>
+        <div class="card">
+          <div class="card-head">
+            <h4>Companion agent</h4>
+            <span class="tag" data-s="absent">Not installed</span>
           </div>
-          <p class="network-context-detail">
-            This asks Cloudflare DNS-over-HTTPS and RIPEstat for the focused hostname{focusedHostname ? `, ${focusedHostname}` : ''}. It is not your local DNS path or active route proof.
-          </p>
-          <dl class="network-context-evidence">
-            <div>
-              <dt>Outside resolver</dt>
-              <dd>{networkContextDnsInsight?.headline ?? networkContextDnsError ?? 'Not run'}</dd>
-              {#if networkContextDnsInsight?.detail}
-                <p>{networkContextDnsInsight.detail}</p>
-              {/if}
-            </div>
-            <div>
-              <dt>Public topology</dt>
-              <dd>{networkContextTopologyInsight ?? networkContextTopologyError ?? 'Not run'}</dd>
-            </div>
-          </dl>
-          {#if networkContextError}
-            <p class="network-context-error">{networkContextError}</p>
-          {:else if networkContext.status === 'complete' && networkContextMatchesFocus}
-            <p class="network-context-action">Use this as context only; confirm path or resolver problems with local-agent evidence when needed.</p>
-          {:else}
-            <p class="network-context-action">No context captured for this endpoint yet.</p>
-          {/if}
-        </section>
-
-        <section class="diagnose-local-proof" aria-label="Local companion proof">
-          <div class="local-proof-cta-head">
-            <div>
-              <div class="diagnose-section-kicker">Local companion</div>
-              <p class="local-proof-headline">DNS, route, TLS, and Wi-Fi evidence from this computer</p>
-            </div>
-            <button
-              type="button"
-              class="diagnose-chip diagnose-chip-action"
-              aria-expanded={localProofOpen}
-              onclick={localProofOpen ? handleCloseLocalProof : handleOpenLocalProof}
-            >{localProofOpen ? 'Hide local companion' : 'Open local companion'}</button>
+          <p>A desktop companion can bypass browser security limits to expose precise TCP / TLS times, DNS resolver behavior, and Wi-Fi RSSI from <em>your</em> machine — the data the browser refuses to surface.</p>
+          <button type="button" class="action disabled" aria-disabled="true">Connect agent →</button>
+          <div class="detail">
+            <span class="k">Platform</span><span class="v">macOS · Linux · Win</span>
+            <span class="k">Install</span><span class="v">~12 MB · signed</span>
+            <span class="k">Telemetry</span><span class="v">none · local only</span>
           </div>
-          <p class="local-proof-detail">
-            Local-only checks can capture DNS, route/MTR, TLS, and Wi-Fi evidence from this computer. Chronoscope talks to 127.0.0.1 with a signed pairing token; private Wi-Fi fields stay redacted unless enabled for a run.
-          </p>
-          {#if localProofOpen}
-            <div class="local-proof-embed">
-              <LocalProofPanel onOpenSettings={handleOpenSettings} onClose={handleCloseLocalProof} />
-            </div>
-          {/if}
-        </section>
-      </section>
-    </div>
+        </div>
 
-    <IntelligencePanel />
-  {/if}
-</section>
+        <div class="epistemics">
+          <h4>Why we separate hearing from diagnosis.</h4>
+          <p>Chronoscope measures latency. <strong>It does not guess at root cause without proof.</strong> Most network tools collapse these two — a single number with a one-line guess attached.</p>
+          <p>That collapse is the most common way users get misled — a tool sees a slow round and announces "your ISP is degraded," when the upstream CDN is throttling cross-region traffic. We'd rather show you the evidence and let the diagnosis follow the data.</p>
+          <div class="signoff">Chronoscope · evidence before diagnosis</div>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="foot">
+      <div>Trigger<span class="v">{threshold} ms</span></div>
+      <div class="center">Browser-resident observatory · evidence report · no telemetry leaves this device</div>
+      <div class="right">
+        <button type="button" class="link" onclick={openLive}>← Back to Live</button>
+      </div>
+    </footer>
+  </div>
+{/if}
 
 <style>
-  .diagnose {
-    width: min(100%, 1320px);
-    margin: 0 auto;
-    padding: clamp(24px, 4vw, 48px) clamp(16px, 4vw, 48px) 44px;
-    display: flex;
-    flex-direction: column;
-    gap: 22px;
-    min-height: 0;
-    overflow-y: auto;
-    flex: 1;
-  }
-
-  .diagnose-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 24px;
-    flex-wrap: wrap;
-    padding: clamp(20px, 3vw, 30px);
-    border: 1px solid var(--rule-strong);
-    border-radius: 18px;
-    background:
-      radial-gradient(circle at 12% 40%, var(--station-b-bg), transparent 32%),
-      linear-gradient(135deg, var(--bg-3), rgba(16, 23, 34, 0.72));
-    box-shadow: 0 28px 90px rgba(0, 0, 0, 0.18);
-  }
-  .diagnose-kicker {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-kicker);
-    color: var(--station-b);
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
-
-  /* Section kicker — used by the Distribution / Compare / Phase breakdown
-     section headers. Matches the diagnose-kicker visual rhythm but hangs off
-     a sibling element rather than the title. */
-  .diagnose-section-kicker {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-kicker);
-    color: var(--fg-3);
-    text-transform: uppercase;
-    margin-bottom: 8px;
-  }
-
-  /* ── Distribution histogram ────────────────────────────────────────────── */
-  .diagnose-distro {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 16px;
-    background: color-mix(in srgb, black 40%, transparent);
-    border: 1px solid var(--rule);
-    border-radius: 14px;
-  }
-  .distro-stats {
-    display: flex;
-    align-items: baseline;
-    gap: 18px;
-    flex-wrap: wrap;
-    font-family: var(--mono);
-    font-size: var(--ts-sm);
+  .investigate-surface {
     color: var(--fg);
-  }
-  .distro-stat-label {
-    color: var(--fg-3);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-kicker);
-    text-transform: uppercase;
-    margin-right: 6px;
-  }
-  .distro-stat-meta {
-    color: var(--fg-2);
-    font-size: var(--ts-xs);
-    margin-left: auto;
-  }
-  .distro-chart {
-    display: flex;
-    align-items: flex-end;
-    gap: 3px;
-    height: 96px;
-    padding: 4px 0;
-  }
-  .distro-bin {
-    flex: 1;
-    display: flex;
-    align-items: flex-end;
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.55;
+    overflow-y: auto;
     height: 100%;
   }
-  .distro-bar {
-    width: 100%;
-    background: linear-gradient(to top, color-mix(in srgb, var(--station-b) 30%, transparent), color-mix(in srgb, var(--station-b) 12%, transparent));
-    border: 1px solid color-mix(in srgb, var(--station-b) 40%, transparent);
-    border-radius: 2px;
-    min-height: 1px;
-    transition: height 200ms ease;
+
+  /* ── Titlestrip ─────────────────────────────────────────────────────────── */
+  .titlestrip {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 32px;
+    padding: 28px clamp(20px, 3vw, 48px) 22px;
+    border-bottom: 1px solid var(--rule);
   }
-  .distro-axis {
+  .titlestrip h2 {
+    font-size: 34px;
+    font-weight: 200;
+    letter-spacing: -0.025em;
+    color: var(--fg);
+    line-height: 1;
+    margin: 0;
+  }
+  .titlestrip h2 .sub { margin-left: 20px; color: var(--fg-3); font-size: 18px; font-weight: 300; }
+  .titlestrip .coords {
+    display: inline-flex;
+    gap: 22px;
+    flex-wrap: wrap;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+  }
+  .titlestrip .coords > span { white-space: nowrap; }
+  .titlestrip .coords .v {
+    color: var(--fg);
+    font-weight: 700;
+    margin-left: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── Main layout ────────────────────────────────────────────────────────── */
+  .investigate-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+    gap: 64px;
+    padding: 48px clamp(20px, 3vw, 48px) 64px;
+  }
+
+  /* ── Part header ────────────────────────────────────────────────────────── */
+  .part-head { margin-bottom: 32px; }
+  .part-head .kicker {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.32em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    margin-bottom: 18px;
+  }
+  .part-head .kicker .roman { color: var(--fg); font-weight: 700; }
+  .part-head h3 {
+    font-family: var(--sans);
+    font-weight: 200;
+    font-size: clamp(36px, 4.6vw, 56px);
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    color: var(--fg);
+    margin: 0 0 16px;
+    text-shadow: 0 0 60px rgba(242, 235, 219, 0.08);
+  }
+  .part-head .lede {
+    font-size: 15px;
+    color: var(--fg-2);
+    line-height: 1.55;
+    max-width: 56ch;
+    margin: 0;
+  }
+  .part-head .lede em {
+    font-style: normal;
+    font-family: var(--mono);
+    color: var(--fg);
+  }
+
+  /* ── Station rows ───────────────────────────────────────────────────────── */
+  .stations {
+    border-top: 1px solid var(--rule);
+  }
+  .stations-empty {
+    padding: 36px 0;
+    color: var(--fg-3);
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.08em;
+  }
+  .station-row {
+    padding: 36px 0 40px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .station-row:last-child { border-bottom: 0; }
+
+  .sr-head {
+    display: grid;
+    grid-template-columns: 14px 1fr auto;
+    align-items: center;
+    gap: 18px;
+    margin-bottom: 24px;
+    width: 100%;
+    background: none;
+    border: 0;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+  }
+  .sr-head:hover .nm { color: var(--station-b); }
+  .sr-head:focus-visible {
+    outline: 2px solid var(--station-b);
+    outline-offset: 4px;
+  }
+  .sr-head .mk { width: 12px; height: 12px; display: block; }
+  .sr-head[data-ep="A"] .mk { background: var(--station-a); box-shadow: 0 0 12px var(--station-a); }
+  .sr-head[data-ep="B"] .mk { background: var(--station-b); box-shadow: 0 0 12px var(--station-b); }
+  .sr-head[data-ep="C"] .mk { background: var(--station-c); box-shadow: 0 0 12px var(--station-c); }
+  .sr-head[data-ep="D"] .mk { background: var(--station-d); box-shadow: 0 0 12px var(--station-d); }
+  .sr-head .info .nm {
+    font-family: var(--sans);
+    font-size: 24px;
+    font-weight: 400;
+    color: var(--fg);
+    letter-spacing: -0.01em;
+    line-height: 1;
+    margin-bottom: 4px;
+    transition: color 120ms;
+  }
+  .sr-head .info .host {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg-3);
+    letter-spacing: 0.02em;
+    font-variant-numeric: tabular-nums;
+  }
+  .sr-head .status {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border: 1px solid var(--rule-strong);
+    color: var(--fg-3);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .sr-head .status[data-s="stable"] { color: var(--station-b); border-color: var(--station-b); }
+  .sr-head .status[data-s="warn"]   { color: var(--sev-warn); border-color: var(--sev-warn); }
+  .sr-head .status[data-s="bad"]    { color: var(--sev-bad);  border-color: var(--sev-bad); }
+  .sr-head .status[data-s="crit"]   { color: var(--bg); background: var(--sev-crit); border-color: var(--sev-crit); }
+
+  /* ── Percentile ladder ──────────────────────────────────────────────────── */
+  .ladder {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 24px;
+  }
+  .ladder .cell {
+    padding: 14px 16px;
+    border-right: 1px solid var(--rule);
+  }
+  .ladder .cell:last-child { border-right: 0; }
+  .ladder .cell .k {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    margin-bottom: 8px;
+  }
+  .ladder .cell .v {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 24px;
+    font-weight: 400;
+    color: var(--fg);
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .ladder .cell .v .u { font-size: 11px; color: var(--fg-3); margin-left: 2px; }
+  .ladder .cell .v[data-sev="warn"] { color: var(--sev-warn); }
+  .ladder .cell .v[data-sev="bad"]  { color: var(--sev-bad); }
+  .ladder .cell .v[data-sev="crit"] { color: var(--sev-crit); }
+
+  /* ── Analysis grid: polar + phase ───────────────────────────────────────── */
+  .analysis {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 36px;
+  }
+  .panel-head {
     display: flex;
     justify-content: space-between;
+    align-items: baseline;
     font-family: var(--mono);
-    font-size: var(--ts-xs);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    margin-bottom: 14px;
+  }
+  .panel-head .ti { color: var(--fg); font-weight: 700; }
+
+  /* ── Polar distribution ─────────────────────────────────────────────────── */
+  .polar { padding-top: 12px; border-top: 1px solid var(--rule); }
+  .polar-svg {
+    width: 100%;
+    aspect-ratio: 2 / 1;
+    display: block;
+    overflow: visible;
+  }
+  .polar-axis {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--fg-4);
+    letter-spacing: 0.12em;
+  }
+  .polar-empty {
+    padding: 24px 8px;
+    color: var(--fg-3);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .polar-empty p { margin: 0; }
+
+  /* ── Phase decomposition ────────────────────────────────────────────────── */
+  .phase { padding-top: 12px; border-top: 1px solid var(--rule); }
+  .phase-stack {
+    display: flex;
+    width: 100%;
+    height: 32px;
+    border: 1px solid var(--rule-strong);
+    overflow: hidden;
+    background: var(--bg-2);
+  }
+  .phase-stack > div { height: 100%; position: relative; }
+  .phase-stack > div::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.12) 0%, transparent 50%);
+  }
+  .phase-legend {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+    font-family: var(--mono);
+    font-size: 10px;
     color: var(--fg-2);
   }
-  .distro-empty {
+  .phase-legend .it { display: flex; flex-direction: column; gap: 4px; }
+  .phase-legend .sw { width: 100%; height: 2px; margin-bottom: 4px; }
+  .phase-legend .l {
     color: var(--fg-3);
-    font-size: var(--ts-sm);
-    margin: 0;
-    padding: 8px 0;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
   }
-
-  /* Distribution interpretation — Arc C C5. Headline + one detail line in
-     a quietly-emphasized block under the chart. data-kind hooks per-shape
-     accent colour without changing layout. */
-  .distro-interpretation {
-    margin-top: 12px;
-    padding: 10px 12px;
-    border: 1px solid var(--rule);
-    border-radius: 10px;
-    background: var(--bg-hover);
-  }
-  .distro-interpretation-headline {
-    margin: 0;
+  .phase-legend .v {
     color: var(--fg);
-    font-family: var(--sans);
-    font-size: var(--ts-sm);
-    font-weight: 700;
-  }
-  .distro-interpretation-detail {
-    margin: 4px 0 0;
-    color: var(--fg-3);
-    font-family: var(--sans);
-    font-size: var(--ts-xs);
-    line-height: 1.45;
-  }
-  .distro-interpretation[data-kind='bimodal'] { border-color: var(--stop-border); }
-  .distro-interpretation[data-kind='tail-spikes'] { border-color: var(--stop-border); }
-  .distro-interpretation[data-kind='unimodal-tight'] { border-color: var(--success-border); }
-
-  /* ── Diagnostic answer + browser visibility ───────────────────────────── */
-  .diagnose-answer,
-  .diagnose-visibility,
-  .diagnose-remote,
-  .diagnose-loaded,
-  .diagnose-network-context,
-  .diagnose-local-proof {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 18px;
-    background: var(--bg-2);
-    border: 1px solid var(--rule);
-    border-radius: 16px;
-  }
-  .diagnose-brief {
-    display: grid;
-    grid-template-columns: minmax(138px, 0.18fr) minmax(0, 1fr);
-    align-items: center;
-    gap: clamp(18px, 3vw, 34px);
-    padding: clamp(20px, 3vw, 30px);
-    min-height: 220px;
-    /* v2 alignment: flat panel surface in the same family as the other
-       diagnose panels — drops the cyan-tinted gradient that previously
-       singled this surface out. */
-    background: var(--bg-2);
-    border-color: var(--rule);
-    border-radius: 24px;
-    box-shadow: 0 25px 50px -12px color-mix(in srgb, black 35%, transparent);
-  }
-  .diagnose-brief-score {
-    width: clamp(112px, 12vw, 148px);
-    aspect-ratio: 1;
-    justify-self: center;
-    border-radius: 50%;
-    display: grid;
-    place-items: center;
-    align-content: center;
-    gap: 4px;
-    color: var(--station-b);
-    background: rgba(103, 232, 249, 0.08);
-    border: 2px solid color-mix(in srgb, var(--station-b) 68%, transparent);
-    box-shadow: inset 0 0 0 12px rgba(3, 7, 18, 0.88), 0 0 34px rgba(103, 232, 249, 0.16);
-  }
-  .diagnose-brief-score-value {
-    color: var(--fg);
-    font-family: var(--mono);
-    font-size: 2.625rem;
-    line-height: 0.95;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
-  .diagnose-brief-score-label {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    color: var(--station-b);
-    letter-spacing: var(--tr-label);
-    text-transform: uppercase;
-  }
-  .diagnose-brief-copy {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
-  .diagnose-answer-fact,
-  .diagnose-answer-interpretation {
-    margin: 0;
-    color: var(--fg-2);
-    font-size: var(--ts-base);
-    line-height: 1.55;
-  }
-  .diagnose-answer-fact strong,
-  .diagnose-answer-interpretation strong {
-    color: var(--fg);
-    font-weight: 650;
-  }
-  .diagnose-evidence-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1.22fr) minmax(320px, 0.78fr);
-    gap: 22px;
-    align-items: start;
-  }
-  .diagnose-facts-stack,
-  .diagnose-proof-stack {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    min-width: 0;
-  }
-  .diagnose-column-head {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    padding-bottom: 2px;
-  }
-  .diagnose-column-head .diagnose-section-kicker {
-    margin-bottom: 0;
-    color: var(--station-b);
-  }
-  .diagnose-column-head p {
-    margin: 0;
-    color: var(--fg-3);
-    font-size: var(--ts-sm);
-    line-height: 1.45;
-  }
-  .diagnose-answer-top {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .diagnose-answer-headline,
-  .visibility-headline,
-  .visibility-detail,
-  .visibility-action {
-    margin: 0;
-  }
-  .diagnose-answer-headline {
-    flex: 1 1 240px;
-    min-width: 0;
-    color: var(--fg);
-    font-size: var(--ts-md);
-    line-height: 1.4;
-  }
-  .diagnose-confidence {
-    flex: 0 0 auto;
-    padding: 3px 7px;
-    border-radius: 999px;
-    border: 1px solid var(--rule);
-    color: var(--fg-2);
-    background: rgba(255, 255, 255, 0.035);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-kicker);
-    text-transform: uppercase;
-    white-space: nowrap;
-  }
-  .diagnose-confidence.high {
-    color: var(--station-b);
-    border-color: rgba(134, 239, 172, 0.24);
-    background: rgba(134, 239, 172, 0.06);
-  }
-  .diagnose-confidence.medium {
-    color: var(--station-b);
-    border-color: rgba(103, 232, 249, 0.24);
-    background: rgba(103, 232, 249, 0.05);
-  }
-  .diagnose-confidence.low {
-    color: var(--fg-3);
-  }
-  .diagnose-answer-evidence {
-    margin: 0;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .diagnose-answer-evidence div {
-    min-width: 0;
-    padding-top: 8px;
-    border-top: 1px solid var(--rule);
-  }
-  .diagnose-answer-evidence dt {
-    margin: 0 0 3px;
-    color: var(--fg-2);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-kicker);
-    text-transform: uppercase;
-  }
-  .diagnose-answer-evidence dd {
-    margin: 0;
-    color: var(--fg);
-    font-family: var(--mono);
-    font-size: var(--ts-sm);
-    line-height: 1.35;
-    overflow-wrap: anywhere;
-  }
-  .visibility-headline {
-    color: var(--fg);
-    font-size: var(--ts-md);
-  }
-  .visibility-detail,
-  .visibility-action {
-    color: var(--fg-3);
-    font-size: var(--ts-sm);
-    line-height: 1.45;
-  }
-  .visibility-action {
-    color: var(--station-b);
-  }
 
-  .diagnose-remote.local-path {
-    border-color: rgba(103, 232, 249, 0.28);
-    background: rgba(103, 232, 249, 0.04);
-  }
-  .diagnose-remote.remote-confirms {
-    border-color: rgba(251, 191, 36, 0.28);
-    background: rgba(251, 191, 36, 0.045);
-  }
-  .remote-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .remote-headline,
-  .remote-detail,
-  .remote-action,
-  .remote-error {
-    margin: 0;
-  }
-  .remote-headline {
-    color: var(--fg);
-    font-size: var(--ts-md);
-    line-height: 1.4;
-  }
-  .remote-detail,
-  .remote-action,
-  .remote-error {
-    color: var(--fg-3);
-    font-size: var(--ts-sm);
-    line-height: 1.45;
-  }
-  .remote-action {
-    color: var(--station-b);
-  }
-  .remote-error {
-    color: var(--sev-warn);
-  }
-  .remote-evidence {
-    margin: 0;
-    display: grid;
-    grid-template-columns: minmax(7.25rem, 1.2fr) minmax(4rem, 0.8fr) minmax(5rem, 1fr);
-    gap: 10px;
-  }
-  .remote-evidence div {
-    min-width: 0;
-    padding-top: 8px;
-    border-top: 1px solid var(--rule);
-  }
-  .remote-evidence dt {
-    margin: 0 0 3px;
-    color: var(--fg-2);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-kicker);
-    text-transform: uppercase;
-  }
-  .remote-evidence dd {
-    margin: 0;
-    color: var(--fg);
-    font-family: var(--mono);
-    font-size: var(--ts-sm);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .diagnose-loaded.clean {
-    border-color: rgba(134, 239, 172, 0.24);
-    background: rgba(134, 239, 172, 0.035);
-  }
-  .diagnose-loaded.watch {
-    border-color: rgba(251, 191, 36, 0.28);
-    background: rgba(251, 191, 36, 0.04);
-  }
-  .diagnose-loaded.high {
-    border-color: rgba(249, 168, 212, 0.3);
-    background: rgba(249, 168, 212, 0.045);
-  }
-  .loaded-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .loaded-headline,
-  .loaded-detail,
-  .loaded-action,
-  .loaded-error {
-    margin: 0;
-  }
-  .loaded-headline {
-    color: var(--fg);
-    font-size: var(--ts-md);
-    line-height: 1.4;
-  }
-  .loaded-detail,
-  .loaded-action,
-  .loaded-error {
-    color: var(--fg-3);
-    font-size: var(--ts-sm);
-    line-height: 1.45;
-  }
-  .loaded-action {
-    color: var(--station-b);
-  }
-  .loaded-error {
-    color: var(--sev-warn);
-  }
-  .loaded-evidence {
-    margin: 0;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .loaded-evidence div {
-    min-width: 0;
-    padding-top: 8px;
-    border-top: 1px solid var(--rule);
-  }
-  .loaded-evidence dt {
-    margin: 0 0 3px;
-    color: var(--fg-2);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-kicker);
-    text-transform: uppercase;
-  }
-  .loaded-evidence dd {
-    margin: 0;
-    color: var(--fg);
-    font-family: var(--mono);
-    font-size: var(--ts-sm);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .network-context-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .network-context-headline,
-  .network-context-detail,
-  .network-context-action,
-  .network-context-error {
-    margin: 0;
-  }
-  .network-context-headline {
-    color: var(--fg);
-    font-size: var(--ts-md);
-    line-height: 1.4;
-  }
-  .network-context-detail,
-  .network-context-action,
-  .network-context-error,
-  .network-context-evidence p {
-    color: var(--fg-3);
-    font-size: var(--ts-sm);
-    line-height: 1.45;
-  }
-  .network-context-action {
-    color: var(--station-b);
-  }
-  .network-context-error {
-    color: var(--sev-warn);
-  }
-  .network-context-evidence {
-    margin: 0;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-  }
-  .network-context-evidence div {
-    min-width: 0;
-    padding-top: 8px;
-    border-top: 1px solid var(--rule);
-  }
-  .network-context-evidence dt {
-    margin: 0 0 3px;
-    color: var(--fg-2);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-kicker);
-    text-transform: uppercase;
-  }
-  .network-context-evidence dd {
-    margin: 0;
-    color: var(--fg);
-    font-size: var(--ts-sm);
-    line-height: 1.4;
-  }
-  .network-context-evidence p {
-    margin: 4px 0 0;
-  }
-
-  .local-proof-cta-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .local-proof-headline,
-  .local-proof-detail {
-    margin: 0;
-  }
-  .local-proof-headline {
-    color: var(--fg);
-    font-size: var(--ts-md);
-    line-height: 1.4;
-  }
-  .local-proof-detail {
-    color: var(--fg-3);
-    font-size: var(--ts-sm);
-    line-height: 1.45;
-  }
-  .local-proof-embed {
-    margin-top: 4px;
+  /* ── Carrier opaque ─────────────────────────────────────────────────────── */
+  .opaque {
     padding-top: 12px;
     border-top: 1px solid var(--rule);
-  }
-  .local-proof-embed :global(.local-proof-panel) {
-    margin: 0;
-  }
-
-  /* ── Cross-endpoint correlation ────────────────────────────────────────── */
-  .diagnose-correlation {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
-    padding: 16px;
-    background: rgba(8, 14, 24, 0.62);
-    border: 1px solid var(--rule);
-    border-radius: 14px;
-  }
-  .correlation-headline {
-    margin: 0;
-    color: var(--fg);
-    font-size: var(--ts-md);
-    line-height: 1.4;
-  }
-  .correlation-grid {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    margin-top: 4px;
-  }
-  .correlation-row {
-    display: grid;
-    grid-template-columns: 100px minmax(0, 1fr);
-    align-items: center;
-    gap: 10px;
-  }
-  .correlation-label {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    color: var(--fg-3);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .correlation-row.focused .correlation-label {
-    color: var(--station-b);
-    font-weight: 500;
-  }
-  .correlation-cells {
-    display: grid;
-    grid-template-columns: repeat(16, minmax(0, 1fr));
-    gap: 2px;
-  }
-  .correlation-cell {
-    height: 16px;
-    background: color-mix(in srgb, var(--fg) 12%, transparent);
-    border-radius: 2px;
-  }
-  .correlation-cell.spike {
-    background: var(--station-d);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--station-d) 50%, transparent);
-  }
-  .correlation-cell.missing {
-    background: transparent;
-    border: 1px dashed color-mix(in srgb, var(--fg) 12%, transparent);
-  }
-  .correlation-row.focused .correlation-cell:not(.spike):not(.missing) {
-    background: color-mix(in srgb, var(--station-b) 35%, transparent);
-  }
-  .correlation-legend {
-    display: flex;
-    align-items: center;
     gap: 14px;
-    margin: 4px 0 0;
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    color: var(--fg-3);
-    flex-wrap: wrap;
+    align-items: center;
+    min-height: 130px;
   }
-  .correlation-legend-swatch {
-    display: inline-block;
-    width: 12px;
-    height: 12px;
-    border-radius: 2px;
-    margin-right: 4px;
-    vertical-align: middle;
-  }
-  .correlation-legend-normal { background: color-mix(in srgb, var(--fg) 12%, transparent); }
-  .correlation-legend-spike { background: var(--station-d); }
-  .correlation-legend-missing { background: transparent; border: 1px dashed color-mix(in srgb, var(--fg) 12%, transparent); }
-
-  /* ── Phase breakdown (collapsed by default) ────────────────────────────── */
-  .diagnose-phases {
-    background: rgba(8, 14, 24, 0.62);
-    border: 1px solid var(--rule);
-    border-radius: 14px;
-    padding: 16px;
-  }
-  .diagnose-phases summary {
-    cursor: pointer;
-    list-style: none;
-    display: flex;
-    align-items: baseline;
-    gap: 12px;
-    flex-wrap: wrap;
-  }
-  .diagnose-phases summary::-webkit-details-marker { display: none; }
-  .diagnose-phases summary::before {
-    content: '▸';
-    color: var(--fg-3);
-    transition: transform 150ms ease;
-    display: inline-block;
-  }
-  .diagnose-phases[open] summary::before {
-    transform: rotate(90deg);
-  }
-  .phases-summary-hint {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    color: var(--fg-3);
-  }
-  .diagnose-phases[open] > *:not(summary) {
-    margin-top: 12px;
-  }
-  .phases-caveat {
-    margin: 12px 0 0;
-    padding: 10px 12px;
-    background: rgba(255, 255, 255, 0.025);
-    border-left: 2px solid var(--fg-3);
-    border-radius: 4px;
-    color: var(--fg-3);
-    font-size: var(--ts-xs);
-    line-height: 1.5;
-  }
-  .phases-caveat code {
-    font-family: var(--mono);
-    font-size: 0.95em;
-    background: rgba(255, 255, 255, 0.06);
-    padding: 1px 4px;
-    border-radius: 3px;
-  }
-  .phase-unavailable-card {
-    border: 1px solid rgba(103, 232, 249, 0.16);
-    border-radius: 10px;
-    background: rgba(103, 232, 249, 0.055);
-    padding: 14px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .phase-unavailable-detail,
-  .phase-unavailable-action {
-    margin: 0;
-    color: var(--fg-2);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    line-height: 1.55;
-    letter-spacing: 0.01em;
-  }
-  .phase-unavailable-action {
-    color: var(--station-b);
-  }
-
-  /* ── Browser Visibility chip + ghost rows (PR 3 of synthesis arc) ──────── */
-  .visibility-chip {
-    display: inline-flex;
-    align-self: flex-start;
-    padding: 4px 10px;
-    border-radius: 999px;
-    font-family: var(--mono);
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: var(--tr-label);
-    text-transform: uppercase;
-  }
-  .visibility-chip[data-visibility-level='none'] {
-    color: var(--station-b);
-    background: var(--station-b-bg);
+  .opaque .ic {
+    flex: 0 0 42px;
+    height: 42px;
     border: 1px solid var(--rule-strong);
-  }
-  .visibility-chip[data-visibility-level='total-only'],
-  .visibility-chip[data-visibility-level='mixed'] {
-    color: var(--sev-warn);
-    background: var(--sev-warn-bg);
-    border: 1px solid var(--stop-border);
-  }
-  .visibility-chip[data-visibility-level='phase'] {
-    color: var(--station-b);
-    background: var(--success-bg);
-    border: 1px solid var(--success-border);
-  }
-  .visibility-rows {
-    margin: 8px 0 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .timing-row {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 6px 10px;
-    border-radius: 6px;
-    background: var(--station-b-bg);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    line-height: 1.4;
-    transition: opacity 150ms ease;
-  }
-  .timing-row[data-hidden='true'] {
-    opacity: 0.4;
-  }
-  .timing-row-label {
-    color: var(--fg-2);
-  }
-  .timing-row-value {
-    color: var(--fg-3);
-    letter-spacing: var(--tr-label);
-    text-transform: uppercase;
-    font-weight: 600;
-  }
-  .timing-row[data-hidden='false'] .timing-row-value {
-    color: var(--station-b);
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .timing-row { transition: none; }
-  }
-  .diagnose-title {
-    margin: 0;
-    font-size: clamp(30px, 3.6vw, 46px);
-    line-height: 1.06;
-    font-weight: 700;
-    letter-spacing: var(--tr-tight);
-    color: var(--fg);
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .diagnose-title-pip {
-    width: 10px; height: 10px;
-    border-radius: 50%;
-    align-self: center;
-    box-shadow: 0 0 6px currentColor;
-  }
-  .diagnose-title-url {
-    font-family: var(--mono);
-    font-size: var(--ts-sm);
-    color: var(--fg-3);
-    font-weight: 400;
-    letter-spacing: var(--tr-body);
-  }
-  .diagnose-title-placeholder { color: var(--fg-3); font-weight: 300; }
-
-  .diagnose-actions { display: flex; align-items: center; gap: 10px; }
-  .diagnose-segment {
-    display: inline-flex;
-    padding: 2px;
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 7px;
-    border: 1px solid var(--rule);
-    gap: 2px;
-  }
-  .diagnose-chip {
-    padding: 6px 12px;
-    border-radius: 5px;
-    background: transparent;
-    border: 1px solid transparent;
-    color: var(--fg-2);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: 0.06em;
-    cursor: pointer;
-    transition: color 160ms ease, background 160ms ease, border-color 160ms ease;
-  }
-  .diagnose-chip:hover { color: var(--fg); border-color: var(--rule-strong); }
-  .diagnose-chip.on {
-    background: rgba(255, 255, 255, 0.08);
-    color: var(--fg);
-    border-color: transparent;
-  }
-  .diagnose-chip:focus-visible {
-    outline: 2px solid var(--station-b);
-    outline-offset: 2px;
-  }
-  .diagnose-chip-action {
-    background: rgba(8, 14, 24, 0.44);
-    border: 1px solid var(--rule);
-  }
-
-  /* Empty states */
-  .diagnose-empty {
-    padding: 32px 24px;
-    border: 1px dashed var(--rule);
-    border-radius: 14px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    background: var(--glass-bg-rail-hover);
-  }
-  .diagnose-empty-title {
-    margin: 0;
-    color: var(--fg);
-    font-family: var(--sans);
-    font-size: var(--ts-base);
-    font-weight: 500;
-  }
-  .diagnose-empty-hint {
-    margin: 0;
-    color: var(--fg-3);
-    font-family: var(--mono);
-    font-size: var(--ts-sm);
-    letter-spacing: 0.02em;
-  }
-
-  /* Hero waterfall */
-  .diagnose-waterfall {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .diagnose-bar {
-    display: flex;
-    width: 100%;
-    height: 80px;
-    border-radius: 10px;
-    overflow: hidden;
-    background: var(--bg-3);
-    border: 1px solid var(--rule);
-  }
-  .diagnose-bar-seg {
-    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 2px;
-    position: relative;
-    transition: filter 160ms ease;
-  }
-  .diagnose-bar-seg:hover { filter: brightness(1.1); }
-  .diagnose-bar-seg.dominant {
-    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.25);
-  }
-  .diagnose-bar-label {
+    color: var(--fg-3);
     font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-label);
+    font-size: 18px;
+  }
+  .opaque .copy {
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--fg-2);
+    max-width: 42ch;
+  }
+  .opaque .copy strong {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg);
+    font-weight: 700;
+    margin-bottom: 5px;
+  }
+  .opaque .copy em {
+    font-style: normal;
+    font-family: var(--mono);
+    color: var(--fg);
+  }
+
+  /* ── Station foot ───────────────────────────────────────────────────────── */
+  .sr-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-top: 22px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg-2);
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .sr-foot .vis {
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  .sr-foot .vis[data-v="full"]    { color: var(--station-b); }
+  .sr-foot .vis[data-v="hidden"]  { color: var(--sev-bad); }
+  .sr-foot .vis[data-v="partial"] { color: var(--sev-warn); }
+  .sr-foot .samples {
+    color: var(--fg-3);
     font-variant-numeric: tabular-nums;
-    font-weight: 500;
+  }
+  .sr-foot .samples .v {
+    color: var(--fg);
+    font-weight: 700;
+    margin: 0 4px;
+  }
+
+  /* ── Outside column (Part II) ───────────────────────────────────────────── */
+  aside.outside { position: relative; }
+  aside.outside .card {
+    padding: 26px 0 28px;
+    border-bottom: 1px solid var(--rule);
+  }
+  aside.outside .card:last-of-type { border-bottom: 0; }
+  aside.outside .card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16px;
+    margin-bottom: 12px;
+  }
+  aside.outside .card h4 {
+    font-family: var(--sans);
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--fg);
+    letter-spacing: -0.01em;
+    line-height: 1.15;
+    max-width: 22ch;
+    margin: 0;
+  }
+  aside.outside .card .tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    padding: 5px 10px;
+    border: 1px solid var(--rule-strong);
+    color: var(--fg-3);
+    font-weight: 700;
+    flex-shrink: 0;
     white-space: nowrap;
   }
-  .diagnose-bar-ms {
-    font-weight: 400;
-    margin-left: 2px;
-    opacity: 0.8;
+  aside.outside .card .tag[data-s="ready"]   { color: var(--station-b); border-color: var(--station-b); }
+  aside.outside .card .tag[data-s="absent"]  { color: var(--fg-3); }
+  aside.outside .card p {
+    font-size: 14px;
+    color: var(--fg-2);
+    line-height: 1.55;
+    margin: 0 0 18px;
+    max-width: 46ch;
   }
-  .diagnose-bar-scale {
-    display: flex;
-    gap: 0;
-  }
-  .diagnose-bar-tick {
-    text-align: center;
+  aside.outside .card p em {
+    font-style: normal;
     font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-label);
-    color: var(--fg-3);
-    text-transform: uppercase;
-    min-width: 0;
-  }
-
-  .diagnose-hypothesis-kicker {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-kicker);
-    color: var(--fg-3);
-    text-transform: uppercase;
-  }
-
-  .diagnose-evidence {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-  }
-  .diagnose-evidence-row {
-    display: grid;
-    grid-template-columns: 10px 140px 80px 1fr 40px;
-    gap: 10px;
-    align-items: center;
-    color: var(--fg-3);
-    font-family: var(--mono);
-    font-size: var(--ts-sm);
-    font-variant-numeric: tabular-nums;
-    padding: 2px 4px;
-    border-radius: 4px;
-  }
-  .diagnose-evidence-row.dominant {
     color: var(--fg);
-    background: rgba(255, 255, 255, 0.03);
   }
-  .diagnose-evidence-pip {
-    width: 8px; height: 8px;
-    border-radius: 50%;
-    align-self: center;
+  aside.outside .card .action {
+    border: 1px solid var(--fg);
+    padding: 9px 16px;
+    color: var(--fg);
+    background: transparent;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    transition: background 100ms, color 100ms;
+    cursor: pointer;
   }
-  .diagnose-evidence-name { color: inherit; }
-  .diagnose-evidence-ms { color: var(--fg); }
-  .diagnose-evidence-bar {
+  aside.outside .card .action:hover { background: var(--fg); color: var(--bg); }
+  aside.outside .card .action.disabled {
+    color: var(--fg-3);
+    border-color: var(--rule-strong);
+    cursor: not-allowed;
+  }
+  aside.outside .card .action.disabled:hover {
+    background: transparent;
+    color: var(--fg-3);
+  }
+  aside.outside .card .detail {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 6px 18px;
+    margin-top: 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  aside.outside .card .detail .k {
+    color: var(--fg-3);
+    white-space: nowrap;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 10px;
+    font-weight: 700;
+  }
+  aside.outside .card .detail .v {
+    color: var(--fg-2);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .epistemics {
+    margin-top: 36px;
+    padding: 26px;
+    border: 1px solid var(--rule-strong);
+    background: var(--bg-2);
     position: relative;
-    height: 6px;
-    background: rgba(255, 255, 255, 0.04);
-    border-radius: 3px;
-    overflow: hidden;
   }
-  .diagnose-evidence-fill {
+  .epistemics::before {
+    content: '';
     position: absolute;
     top: 0;
     left: 0;
-    height: 100%;
-    border-radius: 3px;
+    width: 24px;
+    height: 1px;
+    background: var(--station-b);
+    box-shadow: 0 0 10px var(--station-b);
   }
-  .diagnose-evidence-pct {
-    text-align: right;
-    color: var(--fg-3);
-    letter-spacing: var(--tr-label);
+  .epistemics h4 {
+    font-family: var(--sans);
+    font-size: 22px;
+    font-weight: 300;
+    color: var(--fg);
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    margin: 0 0 14px;
   }
-
-  /* Samples */
-  .diagnose-samples {
-    background: rgba(8, 14, 24, 0.62);
-    border: 1px solid var(--rule);
-    border-radius: 14px;
-    padding: 14px 18px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
-  .diagnose-sample-table {
-    width: 100%;
-    border-collapse: collapse;
-  }
-  .diagnose-sample-row td {
-    padding: 3px 0;
-    vertical-align: middle;
-  }
-  .diagnose-sample-round {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    color: var(--fg-3);
-    letter-spacing: var(--tr-label);
-    width: 58px;
-  }
-  .diagnose-sample-bar-cell { width: 100%; padding: 3px 10px; }
-  .diagnose-sample-bar {
-    display: flex;
-    height: 14px;
-    border-radius: 4px;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.03);
-  }
-  .diagnose-sample-seg { height: 100%; min-width: 1px; }
-  .diagnose-sample-neutral {
-    display: block;
-    width: 100%; height: 100%;
-    background: var(--fg-4, #36322B);
-  }
-  .diagnose-sample-total-only {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  .epistemics p {
+    font-size: 13px;
     color: var(--fg-2);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-label);
+    line-height: 1.6;
+    max-width: 50ch;
+    margin: 0;
   }
-  .diagnose-sample-timeout {
-    display: flex;
+  .epistemics p + p { margin-top: 12px; }
+  .epistemics strong { color: var(--fg); font-weight: 500; }
+  .epistemics .signoff {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+  }
+
+  /* ── Footer ─────────────────────────────────────────────────────────────── */
+  .foot {
+    padding: 18px clamp(20px, 3vw, 48px);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: center;
-    width: 100%; height: 100%;
-    background: rgba(249, 168, 212, 0.2);
-    color: var(--station-d);
     font-family: var(--mono);
-    font-size: var(--ts-xs);
-    letter-spacing: var(--tr-label);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    border-top: 1px solid var(--rule);
   }
-  .diagnose-sample-total {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    color: var(--fg-2);
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-    width: 80px;
+  .foot .v {
+    color: var(--fg);
+    margin-left: 6px;
+    font-weight: 700;
+  }
+  .foot .center { text-align: center; }
+  .foot .right { text-align: right; }
+  .foot .link {
+    background: none;
+    border: 0;
+    color: var(--fg-3);
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+    padding: 0;
+    transition: color 120ms;
+  }
+  .foot .link:hover { color: var(--fg); }
+  .foot .link:focus-visible {
+    outline: 2px solid var(--station-b);
+    outline-offset: 2px;
   }
 
-  .sr-only {
-    position: absolute;
-    width: 1px; height: 1px;
-    padding: 0; margin: -1px; overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap; border: 0;
-  }
-
-  /* Investigate landing CSS lives in InvestigateLandingView.svelte after the
-     Arc C B3 extraction; the focused-endpoint detail surface still owns its
-     own styles below. */
-
-  @media (prefers-reduced-motion: reduce) {
-    .diagnose-chip, .diagnose-bar-seg { transition: none; }
-  }
-
-  @media (max-width: 767px) {
-    .diagnose { width: 100%; padding: 16px; gap: 14px; }
-    .diagnose-header { flex-direction: column; align-items: flex-start; gap: 14px; }
-    .diagnose-brief {
-      display: flex;
-      flex-direction: column;
-      align-items: stretch;
-      grid-template-columns: none;
-      min-height: 350px;
-      height: max-content;
-      padding: 16px;
+  /* ── Responsive ─────────────────────────────────────────────────────────── */
+  @media (max-width: 1100px) {
+    .investigate-main {
+      grid-template-columns: 1fr;
+      gap: 48px;
     }
-    .diagnose-brief-score {
-      display: none;
+    .analysis {
+      grid-template-columns: 1fr;
+      gap: 28px;
     }
-    .diagnose-brief-copy {
+  }
+  @media (max-width: 720px) {
+    .titlestrip h2 { font-size: 26px; }
+    .titlestrip h2 .sub {
       display: block;
+      font-size: 14px;
+      margin-left: 0;
+      margin-top: 4px;
     }
-    .diagnose-brief-copy > * + * {
-      margin-top: 10px;
-    }
-    .diagnose-brief .diagnose-answer-headline {
-      display: none;
-    }
-    .diagnose-evidence-layout { grid-template-columns: 1fr; }
-    .diagnose-answer-evidence { grid-template-columns: 1fr; }
-    .remote-evidence { grid-template-columns: 1fr; }
-    .loaded-evidence { grid-template-columns: 1fr; }
-    .network-context-evidence { grid-template-columns: 1fr; }
-    .diagnose-evidence-row { grid-template-columns: 10px 110px 70px 1fr 40px; }
+    .ladder .cell { padding: 10px 8px; }
+    .ladder .cell .v { font-size: 17px; }
+    .phase-legend { font-size: 9px; }
+    .foot { grid-template-columns: 1fr; gap: 4px; text-align: left; }
+    .foot .center, .foot .right { text-align: left; }
+  }
+  @media (max-width: 480px) {
+    .titlestrip { padding: 16px clamp(20px, 3vw, 48px) 14px; gap: 12px; }
+    .titlestrip h2 { font-size: 22px; }
+    .titlestrip h2 .sub { font-size: 12px; }
+    .titlestrip .coords { font-size: 9px; letter-spacing: 0.12em; gap: 12px; }
+    .ladder .cell { padding: 8px 6px; }
+    .ladder .cell .v { font-size: 14px; }
+    .ladder .cell .k { font-size: 9px; letter-spacing: 0.16em; }
+    .phase-legend { grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 8px; }
+    .phase-legend .it .l { letter-spacing: 0.08em; }
+    .sr-head .info .nm { font-size: 18px; }
+    .investigate-main { padding: 28px clamp(14px, 3vw, 48px) 40px; gap: 28px; }
   }
 </style>
