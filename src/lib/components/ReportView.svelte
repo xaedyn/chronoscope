@@ -772,10 +772,17 @@
   }
 
   /* ── Stage (orbital signature canvas) ──────────────────────────────────── */
+  /* Stage spans the viewport area below the masthead. min-height: 600px
+     gives a floor for very-short viewports without overshooting the bottom
+     of the visible area at typical desktop heights (~700-720px). v4 uses
+     min-height: 720px because its masthead is position: sticky and floats
+     over the stage from y=0; dev's masthead is a normal-flow Layout sibling
+     so the stage starts at y=61, and 720px would push the bottom HUD chrome
+     (replay scrub rail) 74px below the fold at 707px viewport. */
   .stage {
     position: relative;
     height: calc(100vh - var(--topbar-height, 60px));
-    min-height: 720px;
+    min-height: 600px;
     background: var(--bg);
     overflow: hidden;
   }
