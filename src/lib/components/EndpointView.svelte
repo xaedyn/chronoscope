@@ -188,11 +188,13 @@
       if (b.p50 === null) return -1;
       return a.p50 - b.p50;
     });
-    const idToRank: Record<string, number> = {};
-    ranked.forEach((r, idx) => { idToRank[r.endpointId] = idx + 1; });
     const totalRanked = ranked.length;
-    return rows.map((r) => {
-      const rank = idToRank[r.endpointId] ?? 0;
+    // Return in RANK order (fastest → slowest) so the row reads left-to-right
+    // as a leaderboard. v4 sorts the same way; the prior version returned
+    // original endpoint order which broke the "where this station ranks"
+    // affordance.
+    return ranked.map((r, idx) => {
+      const rank = idx + 1;
       let annotation = `#${rank}`;
       if (rank === 1) annotation = '#1 fastest';
       else if (rank === totalRanked && totalRanked > 1) annotation = `#${rank} slowest`;
