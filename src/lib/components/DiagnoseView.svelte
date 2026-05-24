@@ -964,13 +964,14 @@
 {/if}
 
 <style>
+  /* Surface root. Other surfaces (Overview, Report, Transit, Endpoint) let
+     the parent shell-main handle scrolling; Investigate matches that pattern
+     so wheel events bubble cleanly without nested scroll containers. */
   .investigate-surface {
     color: var(--fg);
     font-family: var(--sans);
     font-size: 13px;
     line-height: 1.55;
-    overflow-y: auto;
-    height: 100%;
   }
 
   /* ── Titlestrip ─────────────────────────────────────────────────────────── */
@@ -1018,14 +1019,15 @@
   }
 
   /* ── Compare-all overlay ────────────────────────────────────────────────── */
-  /* Spans both columns of the investigate-main grid (Part I + Part II share
-     the top of this section). Mirrors the .compare-section block from
-     proposals/v4/proposal-investigate-v4.html, with tokens substituted for
-     the prototype's hard-coded colors. */
+  /* Lives in the LEFT column (row 1) of the investigate-main grid. Section I
+     (carrier records + per-station blocks) flows to right column row 1; the
+     aside.outside (Part II) auto-flows to left column row 2 below the compare
+     panel. Mirrors proposals/v4/proposal-investigate-v4.html main layout.
+     Earlier version forced grid-column: 1 / -1 which spanned both columns
+     and broke v4 parity. */
   .compare-section {
-    grid-column: 1 / -1;
-    margin-bottom: 24px;
-    padding: 32px 36px;
+    margin-bottom: 56px;
+    padding: 40px 44px;
     border: 1px solid var(--rule-strong);
     background: var(--bg-2);
     position: relative;
