@@ -30,6 +30,7 @@
   import { tokens } from '$lib/tokens';
   import type { MeasurementSample } from '$lib/types';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
+  import { REGION_SHORT_CODES } from '$lib/regional-defaults';
 
   // ── Store reads ────────────────────────────────────────────────────────────
   const endpoints = $derived($endpointStore);
@@ -390,17 +391,9 @@
     return `${monitoredCount} (default set)`;
   });
 
-  // Region short-code lookup for the Vantage line. Mirrors the SettingsDrawer
-  // mapping so the report's "US-W"/"EU" suffix matches the drawer's About row.
-  const REGION_SHORT: Readonly<Record<string, string>> = {
-    'north-america': 'US-W',
-    'europe': 'EU',
-    'east-asia': 'E-AS',
-    'south-southeast-asia': 'S-AS',
-    'latam': 'LATAM',
-    'mea': 'MEA',
-    'oceania': 'OCE',
-  };
+  // Region short codes for the Vantage line come from regional-defaults
+  // (REGION_SHORT_CODES). Single source of truth shared with OverviewView so
+  // the v4 prototype's "US-W"/"EU" labelling stays consistent across surfaces.
 
   const vantageLabel = $derived.by(() => {
     if (typeof navigator === 'undefined') return 'Browser · — · —';
@@ -437,7 +430,7 @@
         os = 'Linux';
       }
     }
-    const region = settings.region ? (REGION_SHORT[settings.region] ?? settings.region.toUpperCase()) : 'US-W';
+    const region = settings.region ? (REGION_SHORT_CODES[settings.region] ?? settings.region.toUpperCase()) : 'US-W';
     return `${browser} · ${os} · ${region}`;
   });
 
