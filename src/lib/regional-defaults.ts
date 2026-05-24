@@ -33,6 +33,21 @@ export const REGION_DISPLAY_NAMES: Readonly<Record<Region, string>> = {
   'oceania':              'Oceania',
 };
 
+// Short region codes for terse chrome (Overview vantage line, Report footer).
+// Matches the v4 prototype's "US-W" / "EU" labelling. Long-form names live in
+// REGION_DISPLAY_NAMES above; pick the form per surface — typically short
+// codes in compact chrome (FlightCard, vantage row) and long names in body
+// copy or settings UI.
+export const REGION_SHORT_CODES: Readonly<Record<Region, string>> = {
+  'north-america':        'US-W',
+  'europe':               'EU',
+  'east-asia':            'E-AS',
+  'south-southeast-asia': 'S-AS',
+  'latam':                'LATAM',
+  'mea':                  'MEA',
+  'oceania':              'OCE',
+};
+
 // ── LaneRole ───────────────────────────────────────────────────────────────
 
 type LaneRole =

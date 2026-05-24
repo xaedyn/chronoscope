@@ -13,7 +13,7 @@
   import { buildDiagnosticNarrative } from '$lib/utils/diagnostic-narrative';
   import { buildRunStoryline, type StoryBeatSeverity } from '$lib/utils/run-storyline';
   import { deriveEndpointTone, type EndpointTone } from '$lib/utils/endpoint-tone';
-  import { REGION_DISPLAY_NAMES } from '$lib/regional-defaults';
+  import { REGION_SHORT_CODES } from '$lib/regional-defaults';
   import type { MeasurementSample } from '$lib/types';
   import type { VerdictRow } from '$lib/utils/verdict';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
@@ -262,9 +262,11 @@
     const ua = navigator.userAgent;
     const ch = ua.includes('Chrome') ? 'Chrome' : ua.includes('Safari') ? 'Safari' : ua.includes('Firefox') ? 'Firefox' : 'Browser';
     const os = ua.includes('Mac') ? 'macOS' : ua.includes('Win') ? 'Windows' : ua.includes('Linux') ? 'Linux' : 'OS';
-    // Append the user's regional default (e.g. "North America") when one is
-    // configured. Region is optional in settings; omit gracefully when unset.
-    const regionLabel = settings.region ? REGION_DISPLAY_NAMES[settings.region] : '';
+    // Append the user's regional default as a short code (e.g. "US-W") to
+    // match the v4 prototype's terse vantage row. Long-form names live in
+    // REGION_DISPLAY_NAMES for body copy / settings; the FlightCard chrome
+    // wants the compact form. Region is optional; omit gracefully when unset.
+    const regionLabel = settings.region ? REGION_SHORT_CODES[settings.region] : '';
     return regionLabel ? `${ch} · ${os} · ${regionLabel}` : `${ch} · ${os}`;
   });
 
