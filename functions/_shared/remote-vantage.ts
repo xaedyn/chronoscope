@@ -10,6 +10,7 @@ import type {
   RemoteVantageVerdict,
   TransitProbeResponse,
 } from '../../src/lib/remote-vantage/types';
+import { ValidationError, classifyProbeError, safeErrorMessage } from './errors';
 
 export interface ReportKV {
   get(key: string): Promise<string | null>;
@@ -90,7 +91,7 @@ function json(status: number, payload: unknown, extraHeaders: HeadersInit = {}):
 function parseBody(request: Request): Promise<unknown> {
   const contentType = request.headers.get('content-type') ?? '';
   if (!contentType.includes('application/json')) {
-    throw new Error('Expected application/json.');
+    throw new ValidationError('Expected application/json.');
   }
   return request.json() as Promise<unknown>;
 }
@@ -170,28 +171,28 @@ function isBlockedHostname(hostname: string): boolean {
 
 function parsePublicUrl(raw: unknown): URL {
   if (typeof raw !== 'string' || raw.length > 2048) {
-    throw new Error('Target URL must be a public http(s) URL.');
+    throw new ValidationError('Target URL must be a public http(s) URL.');
   }
   const url = new URL(raw);
   if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new Error('Target URL must be a public http(s) URL.');
+    throw new ValidationError('Target URL must be a public http(s) URL.');
   }
   if (url.username || url.password || isBlockedHostname(url.hostname) || !PUBLIC_PORTS.has(url.port)) {
-    throw new Error('Target URL must be a public http(s) URL.');
+    throw new ValidationError('Target URL must be a public http(s) URL.');
   }
   return url;
 }
 
 function parseTargets(payload: unknown): RemoteVantageTarget[] {
   if (!isRecord(payload) || !Array.isArray(payload.targets)) {
-    throw new Error('Request body must include targets.');
+    throw new ValidationError('Request body must include targets.');
   }
   if (payload.targets.length === 0 || payload.targets.length > MAX_TARGETS) {
-    throw new Error(`Remote vantage supports 1-${MAX_TARGETS} targets per request.`);
+    throw new ValidationError(`Remote vantage supports 1-${MAX_TARGETS} targets per request.`);
   }
 
   return payload.targets.map((target, index) => {
-    if (!isRecord(target)) throw new Error('Each target must be an object.');
+    if (!isRecord(target)) throw new ValidationError('Each target must be an object.');
     const url = parsePublicUrl(target.url);
     return {
       id: typeof target.id === 'string' && target.id ? target.id.slice(0, 80) : `target-${index + 1}`,
@@ -203,7 +204,7 @@ function parseTargets(payload: unknown): RemoteVantageTarget[] {
 
 function parseDnsHostname(raw: unknown): string {
   if (typeof raw !== 'string' || raw.length > 253) {
-    throw new Error('DNS lookup requires a public hostname.');
+    throw new ValidationError('DNS lookup requires a public hostname.');
   }
 
   const trimmed = raw.trim().replace(/\.$/, '').toLowerCase();
@@ -215,7 +216,7 @@ function parseDnsHostname(raw: unknown): string {
     parseIPv4(trimmed) !== null ||
     isBlockedHostname(trimmed)
   ) {
-    throw new Error('DNS lookup requires a public hostname.');
+    throw new ValidationError('DNS lookup requires a public hostname.');
   }
 
   const labels = trimmed.split('.');
@@ -224,14 +225,14 @@ function parseDnsHostname(raw: unknown): string {
     label.length <= 63 &&
     /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(label)
   ));
-  if (!validLabels) throw new Error('DNS lookup requires a public hostname.');
+  if (!validLabels) throw new ValidationError('DNS lookup requires a public hostname.');
   return trimmed;
 }
 
 function parseDnsRecordType(raw: string | null): DohDnsRecordType {
   const normalized = (raw ?? 'A').toUpperCase();
   if (normalized === 'A' || normalized === 'AAAA') return normalized;
-  throw new Error('DNS lookup supports A and AAAA records.');
+  throw new ValidationError('DNS lookup supports A and AAAA records.');
 }
 
 function edgeFrom(cf?: Partial<RemoteVantageEdge> | null): RemoteVantageEdge {
@@ -308,7 +309,10 @@ async function probeTarget(target: RemoteVantageTarget, options: Required<Pick<R
       checkedAt: options.now(),
       verdict: 'unreachable',
       headers: {},
-      error: error instanceof Error ? error.message : String(error),
+      // Raw fetch errors from the Workers runtime can include hostname/IP
+      // resolution paths, TLS cert detail, internal addresses. Bucket into a
+      // safe category label before exposing to the client.
+      error: classifyProbeError(error),
     };
   } finally {
     clearTimeout(timer);
@@ -333,9 +337,11 @@ export async function handleRemoteProbe(request: Request, options: RemoteProbeOp
     };
     return json(200, payload);
   } catch (error) {
+    // Only ValidationError messages are safe to surface — every other
+    // thrown error could carry runtime detail the client shouldn't see.
     return json(400, {
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: safeErrorMessage(error, 'Invalid remote vantage request.'),
     });
   }
 }
@@ -416,13 +422,13 @@ export async function handleTransitProbe(request: Request, options: RemoteProbeO
   let probeCount: number;
   try {
     const body = await parseBody(request);
-    if (!isRecord(body)) throw new Error('Request body must be an object.');
+    if (!isRecord(body)) throw new ValidationError('Request body must be an object.');
     url = parsePublicUrl(body.target);
     probeCount = parseTransitProbeCount(body.probeCount);
   } catch (error) {
     const failure: TransitProbeResponse = {
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: safeErrorMessage(error, 'Invalid transit probe request.'),
     };
     return json(400, failure);
   }
@@ -604,7 +610,7 @@ async function fetchJson(input: {
       cacheEverything: false,
     },
   } as RequestInit & { cf: Record<string, unknown> });
-  if (!response.ok) throw new Error(`Topology source returned HTTP ${response.status}.`);
+  if (!response.ok) throw new ValidationError(`Topology source returned HTTP ${response.status}.`);
   return response.json() as Promise<unknown>;
 }
 
@@ -743,9 +749,12 @@ export async function handleCreateHostedReport(request: Request, options: Hosted
       expiresAt: now() + REPORT_TTL_SECONDS * 1000,
     } satisfies HostedReportCreateResponse);
   } catch (error) {
+    // KV write failures here would otherwise leak namespace / quota detail.
+    // Only ValidationError messages are safe; everything else falls back to a
+    // generic label.
     return json(400, {
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: safeErrorMessage(error, 'Failed to create hosted report.'),
     });
   }
 }
