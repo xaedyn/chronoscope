@@ -309,42 +309,10 @@
   });
 </script>
 
-<section class="live-surface" aria-label="Live orbital tracker">
-  <div class="coords-bar">
-    <span>Round<span class="v">{roundCount}</span></span>
-    <span>Cadence<span class="v">{cadenceLabel}</span></span>
-    <span>Window<span class="v">{WINDOW} s</span></span>
-    <span>R.A.<span class="v">{raCoord}</span></span>
-    <span>Dec<span class="v">{decCoord}</span></span>
-  </div>
-
-  <div class="hero-num" aria-live="polite">
-    <div class="kicker">Field carrier · p50</div>
-    <div class="number">
-      {#if fieldP50 === null}
-        <span class="awaiting">—</span>
-      {:else}
-        {fieldP50}<span class="u">ms</span>
-      {/if}
-    </div>
-    <div class="caption">
-      {#if stations.length === 0}
-        — No stations on transit —
-      {:else}
-        — {stations.length} {stations.length === 1 ? 'station' : 'stations'} on transit —
-      {/if}
-    </div>
-  </div>
-
-  {#if showVerdictBand}
-    <div class="verdict-band" data-sigil={sigil}>
-      <div class="tag"><span class="pip"></span>{verdictKickerText}</div>
-      <div class="title">{verdictHeadline}</div>
-      <div class="body">{verdictBody}</div>
-    </div>
-  {/if}
-
-  <div class="stage">
+<section class="live-stage" aria-label="Live orbital tracker">
+  <!-- Full-bleed orbital scene as background — fills the entire surface
+       below the masthead. All HUD chrome floats over it via .chrome. -->
+  <div class="stage-bg">
     {#if stations.length > 0}
       <OrbitalScene
         {stations}
@@ -363,6 +331,109 @@
         <p class="hint">Add stations in Settings to begin observation.</p>
       </div>
     {/if}
+  </div>
+
+  <div class="vignette" aria-hidden="true"></div>
+
+  <!-- HUD chrome layer — pointer-events:none on the container, auto on each
+       child so the canvas stays interactive in the gaps between overlays. -->
+  <div class="chrome">
+    <div class="coords-bar">
+      <span>Round<span class="v">{roundCount}</span></span>
+      <span>Cadence<span class="v">{cadenceLabel}</span></span>
+      <span>Window<span class="v">{WINDOW} s</span></span>
+      <span>R.A.<span class="v">{raCoord}</span></span>
+      <span>Dec<span class="v">{decCoord}</span></span>
+    </div>
+
+    <div class="hero-num" aria-live="polite">
+      <div class="kicker">Field carrier · p50</div>
+      <div class="number">
+        {#if fieldP50 === null}
+          <span class="awaiting">—</span>
+        {:else}
+          {fieldP50}<span class="u">ms</span>
+        {/if}
+      </div>
+      <div class="caption">
+        {#if stations.length === 0}
+          — No stations on transit —
+        {:else}
+          — {stations.length} {stations.length === 1 ? 'station' : 'stations'} on transit —
+        {/if}
+      </div>
+    </div>
+
+    {#if showVerdictBand}
+      <div class="verdict-band" data-sigil={sigil}>
+        <div class="tag"><span class="pip"></span>{verdictKickerText}</div>
+        <div class="title">{verdictHeadline}</div>
+        <div class="body">{verdictBody}</div>
+      </div>
+    {/if}
+
+    <div class="stations" role="radiogroup" aria-label="Station focus">
+      {#each chips as chip (chip.id)}
+        <button
+          type="button"
+          class="station-row"
+          data-station={chip.id}
+          data-focused={focusedId === chip.endpointId ? 'true' : 'false'}
+          data-severity={chip.severity}
+          onclick={() => focusStation(chip.endpointId)}
+          aria-pressed={focusedId === chip.endpointId}
+        >
+          <span class="mk" style:background={chip.color} style:box-shadow="0 0 8px {chip.color}"></span>
+          <div class="ident">
+            <div class="name">{chip.label}</div>
+            <div class="meta">{chip.status}</div>
+          </div>
+          <div class="telem">
+            <div class="lat">
+              {#if chip.latency === null}
+                <span class="awaiting">—</span>
+              {:else}
+                {fmt(chip.latency)}<span class="u">ms</span>
+              {/if}
+            </div>
+            <div class="drift">
+              drift
+              <span class="v">
+                {#if chip.drift === null}
+                  —
+                {:else}
+                  {chip.drift >= 0 ? '+' : ''}{chip.drift} ms
+                {/if}
+              </span>
+            </div>
+          </div>
+        </button>
+      {/each}
+    </div>
+
+    <button
+      type="button"
+      class="audio-toggle"
+      data-on={audioOn ? 'true' : 'false'}
+      aria-pressed={audioOn}
+      onclick={toggleAudio}
+    >
+      Audio · {audioOn ? 'on' : 'off'}
+    </button>
+
+    <label class="trigger">
+      <span class="trigger-label">Trigger</span>
+      <input
+        type="range"
+        min="40"
+        max="240"
+        step="5"
+        value={threshold}
+        oninput={updateTrigger}
+        aria-label="Carrier loss threshold in milliseconds"
+      />
+      <span class="trigger-val"><span class="v">{threshold}</span> ms</span>
+    </label>
 
     {#if showTour}
       <div
@@ -400,156 +471,161 @@
       </div>
     {/if}
   </div>
-
-  <div class="stations" role="radiogroup" aria-label="Station focus">
-    {#each chips as chip (chip.id)}
-      <button
-        type="button"
-        class="station-row"
-        data-station={chip.id}
-        data-focused={focusedId === chip.endpointId ? 'true' : 'false'}
-        data-severity={chip.severity}
-        onclick={() => focusStation(chip.endpointId)}
-        aria-pressed={focusedId === chip.endpointId}
-      >
-        <span class="mk" style:background={chip.color} style:box-shadow="0 0 8px {chip.color}"></span>
-        <div class="ident">
-          <div class="name">{chip.label}</div>
-          <div class="meta">{chip.status}</div>
-        </div>
-        <div class="telem">
-          <div class="lat">
-            {#if chip.latency === null}
-              <span class="awaiting">—</span>
-            {:else}
-              {fmt(chip.latency)}<span class="u">ms</span>
-            {/if}
-          </div>
-          <div class="drift">
-            drift
-            <span class="v">
-              {#if chip.drift === null}
-                —
-              {:else}
-                {chip.drift >= 0 ? '+' : ''}{chip.drift} ms
-              {/if}
-            </span>
-          </div>
-        </div>
-      </button>
-    {/each}
-  </div>
-
-  <div class="bottom-controls">
-    <button
-      type="button"
-      class="audio-toggle"
-      data-on={audioOn ? 'true' : 'false'}
-      aria-pressed={audioOn}
-      onclick={toggleAudio}
-    >
-      Audio · {audioOn ? 'on' : 'off'}
-    </button>
-
-    <label class="trigger">
-      <span class="trigger-label">Trigger</span>
-      <input
-        type="range"
-        min="40"
-        max="240"
-        step="5"
-        value={threshold}
-        oninput={updateTrigger}
-        aria-label="Carrier loss threshold in milliseconds"
-      />
-      <span class="trigger-val"><span class="v">{threshold}</span> ms</span>
-    </label>
-  </div>
 </section>
 
 <style>
-  .live-surface {
-    display: grid;
-    /* coords / hero-num / verdict-band? / stage / stations / bottom-controls.
-       The verdict-band row collapses to 0 when the #if is false. */
-    grid-template-rows: auto auto auto 1fr auto auto;
+  /* ── Full-bleed stage architecture (v4 cinematic layout) ─────────────────
+     The orbital scene is the WHOLE viewport background. HUD chrome floats
+     over it via .chrome, each overlay absolutely positioned to a corner or
+     edge. Pointer-events on .chrome are 'none' so the canvas stays
+     interactive in the gaps between overlays. */
+  .live-stage {
+    position: relative;
+    flex: 1;
+    width: 100%;
     height: 100%;
+    min-height: 600px;
     overflow: hidden;
     color: var(--fg);
   }
 
-  /* ── Coords bar ─────────────────────────────────────────────────────────── */
+  /* The 3D scene as a fixed-inset background of the stage. */
+  .stage-bg {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+  .stage-empty {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    color: var(--fg-2);
+    font-family: var(--sans);
+  }
+  .stage-empty .hint {
+    margin-top: 8px;
+    color: var(--fg-3);
+    font-size: 13px;
+  }
+
+  /* Cinematic vignette over the scene. */
+  .vignette {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse at center,
+      transparent 35%,
+      color-mix(in srgb, var(--bg) 45%, transparent) 70%,
+      color-mix(in srgb, var(--bg) 85%, transparent) 100%
+    );
+  }
+
+  /* HUD chrome layer — all overlays live here. Pointer-events:none means
+     clicks pass through to the canvas; each overlay re-enables pointer
+     events for itself. */
+  .chrome {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    pointer-events: none;
+  }
+  .chrome > * { pointer-events: auto; }
+
+  /* ── Coords bar — top-center pill ───────────────────────────────────────── */
   .coords-bar {
-    display: flex;
+    position: absolute;
+    top: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: inline-flex;
+    gap: 26px;
     flex-wrap: wrap;
-    gap: 22px;
-    padding: 12px clamp(20px, 3vw, 48px);
+    padding: 8px 18px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 55%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     font-family: var(--mono);
     font-size: 10px;
-    letter-spacing: 0.18em;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--fg-3);
     font-weight: 700;
-    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
   }
+  .coords-bar > span { white-space: nowrap; }
   .coords-bar .v {
     color: var(--fg);
     font-weight: 700;
-    margin-left: 6px;
+    margin-left: 8px;
     font-variant-numeric: tabular-nums;
   }
 
-  /* ── Hero number ────────────────────────────────────────────────────────── */
+  /* ── Hero number — centered cinematic readout ───────────────────────────── */
   .hero-num {
-    padding: 40px clamp(20px, 3vw, 48px) 24px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     text-align: center;
+    pointer-events: none;
+    user-select: none;
+    max-width: 90vw;
   }
   .hero-num .kicker {
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 0.32em;
     text-transform: uppercase;
     color: var(--fg-3);
     font-weight: 700;
-    margin-bottom: 12px;
+    margin-bottom: 22px;
   }
   .hero-num .number {
     font-family: var(--sans);
     font-weight: 200;
-    font-size: clamp(96px, 14vw, 200px);
+    font-size: clamp(140px, 24vw, 320px);
     letter-spacing: -0.045em;
-    line-height: 0.85;
+    line-height: 0.82;
     color: var(--fg);
-    text-shadow: 0 0 80px color-mix(in srgb, var(--fg) 12%, transparent);
+    text-shadow:
+      0 0 60px color-mix(in srgb, var(--fg) 10%, transparent),
+      0 0 120px color-mix(in srgb, var(--station-b) 6%, transparent);
     font-variant-numeric: tabular-nums;
   }
   .hero-num .number .u {
     font-family: var(--mono);
-    font-size: 0.22em;
+    font-weight: 400;
+    font-size: clamp(18px, 2.4vw, 30px);
     color: var(--fg-3);
     margin-left: 8px;
     letter-spacing: 0.04em;
     vertical-align: 0.78em;
+    display: inline-block;
     text-shadow: none;
   }
   .hero-num .number .awaiting {
     color: var(--fg-3);
   }
   .hero-num .caption {
-    margin-top: 12px;
+    margin-top: 18px;
     font-family: var(--mono);
-    font-size: 10px;
+    font-size: 11px;
     letter-spacing: 0.24em;
     text-transform: uppercase;
     color: var(--fg-3);
     font-weight: 700;
   }
 
-  /* ── Verdict band (between hero number and stage) ───────────────────────── */
-  /* Mirrors proposal-live-v4.html's .verdict-band. Anchored as a flow row in
-     our grid (the prototype uses position: absolute inside the hero stage). */
+  /* ── Verdict band — bottom-left overlay ─────────────────────────────────── */
   .verdict-band {
-    padding: 8px clamp(20px, 3vw, 48px) 20px;
+    position: absolute;
+    bottom: 88px;
+    left: clamp(20px, 3vw, 48px);
     max-width: 56ch;
   }
   .verdict-band .tag {
@@ -615,27 +691,6 @@
   .verdict-band .body :global(strong) {
     color: var(--fg);
     font-weight: 500;
-  }
-
-  /* ── Orbital stage ──────────────────────────────────────────────────────── */
-  .stage {
-    position: relative;
-    min-height: 380px;
-    overflow: hidden;
-  }
-  .stage-empty {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    text-align: center;
-    color: var(--fg-2);
-    font-family: var(--sans);
-  }
-  .stage-empty .hint {
-    margin-top: 8px;
-    color: var(--fg-3);
-    font-size: 13px;
   }
 
   /* ── First-visit onboarding callout ─────────────────────────────────────── */
@@ -837,32 +892,55 @@
     to   { transform: scaleX(1); }
   }
 
-  /* ── Station chip rail ──────────────────────────────────────────────────── */
+  /* ── Stations panel — right-center vertical list overlay ────────────────── */
   .stations {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    border-top: 1px solid var(--rule);
-    background: color-mix(in srgb, var(--bg) 85%, transparent);
+    position: absolute;
+    right: clamp(20px, 3vw, 48px);
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    width: 320px;
+    max-width: 320px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 62%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
   .station-row {
     display: grid;
-    grid-template-columns: 12px 1fr auto;
+    grid-template-columns: 10px 1fr auto;
     align-items: center;
     gap: 14px;
-    padding: 16px clamp(14px, 2vw, 24px);
+    padding: 14px 16px;
     background: transparent;
     border: 0;
-    border-right: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
     color: var(--fg);
     cursor: pointer;
     text-align: left;
     font: inherit;
     transition: background 160ms;
+    position: relative;
+    width: 100%;
   }
-  .station-row:last-child { border-right: 0; }
-  .station-row:hover { background: var(--bg-hover); }
+  .station-row:last-child { border-bottom: 0; }
+  .station-row:hover {
+    background: color-mix(in srgb, var(--fg) 2%, transparent);
+  }
   .station-row[data-focused="true"] {
-    background: color-mix(in srgb, var(--station-b) 6%, transparent);
+    background: color-mix(in srgb, var(--fg) 4%, transparent);
+  }
+  .station-row[data-focused="true"]::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 14%;
+    bottom: 14%;
+    width: 2px;
+    background: var(--station-b);
+    box-shadow: 0 0 10px var(--station-b);
   }
   .station-row:focus-visible {
     outline: 2px solid var(--station-b);
@@ -924,33 +1002,28 @@
   }
   .telem .drift .v { color: var(--fg-2); margin-left: 4px; }
 
-  /* ── Bottom controls (audio + trigger) ──────────────────────────────────── */
-  .bottom-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    padding: 14px clamp(20px, 3vw, 48px);
-    border-top: 1px solid var(--rule);
-    flex-wrap: wrap;
-  }
+  /* ── Audio toggle — bottom-right (left of trigger) ──────────────────────── */
   .audio-toggle {
+    position: absolute;
+    bottom: 22px;
+    right: calc(clamp(20px, 3vw, 48px) + 280px);
+    padding: 10px 14px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 62%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     font-family: var(--mono);
     font-size: 10px;
-    letter-spacing: 0.16em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--fg-3);
     font-weight: 700;
-    border: 1px solid var(--rule-strong);
-    background: transparent;
-    padding: 7px 14px;
     cursor: pointer;
-    transition: color 120ms, background 120ms, border-color 120ms;
+    transition: color 120ms, border-color 120ms;
   }
   .audio-toggle[data-on="true"] {
     color: var(--station-b);
     border-color: var(--station-b);
-    background: color-mix(in srgb, var(--station-b) 8%, transparent);
   }
   .audio-toggle:hover {
     color: var(--fg);
@@ -961,10 +1034,19 @@
     outline-offset: 2px;
   }
 
+  /* ── Trigger slider — bottom-right ──────────────────────────────────────── */
   .trigger {
+    position: absolute;
+    bottom: 22px;
+    right: clamp(20px, 3vw, 48px);
     display: inline-flex;
     align-items: center;
     gap: 12px;
+    padding: 10px 14px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 62%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     font-family: var(--mono);
     font-size: 10px;
     letter-spacing: 0.14em;
@@ -1014,19 +1096,28 @@
   .trigger-val .v { color: var(--sev-bad); }
 
   /* ── Mobile ─────────────────────────────────────────────────────────────── */
+  @media (max-width: 1100px) {
+    /* Compact the stations panel + give the verdict / trigger more room */
+    .stations { width: 280px; max-width: 280px; right: 12px; }
+    .verdict-band { bottom: 32px; max-width: 48ch; }
+  }
   @media (max-width: 720px) {
-    .coords-bar { gap: 14px; font-size: 9px; padding: 10px 14px; }
-    .hero-num { padding: 24px 14px 16px; }
+    .coords-bar { gap: 14px; font-size: 9px; padding: 6px 14px; }
     .hero-num .number { font-size: clamp(72px, 18vw, 120px); }
-    .verdict-band { padding: 6px 14px 16px; }
+    .verdict-band { bottom: 32px; left: 16px; right: 16px; max-width: none; }
     .verdict-band .title { font-size: 22px; }
     .verdict-band .body { font-size: 13px; }
-    .stations { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .station-row:nth-child(2) { border-right: 0; }
-    .station-row:nth-child(3),
-    .station-row:nth-child(4) { border-top: 1px solid var(--rule); }
-    .bottom-controls { flex-direction: column; align-items: stretch; padding: 12px 14px; }
-    .trigger input[type="range"] { width: 100%; }
+    /* On narrow viewports the stations panel sits below the hero number
+       instead of overlaying it. */
+    .stations {
+      position: static;
+      transform: none;
+      width: 100%;
+      max-width: 100%;
+      margin: 100vh auto 24px;
+    }
+    .audio-toggle { right: 16px; bottom: 80px; }
+    .trigger { right: 16px; }
     .tour-hint {
       min-width: 0;
       max-width: none;
