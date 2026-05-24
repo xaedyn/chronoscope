@@ -167,7 +167,7 @@
     settingsStore.update((s) => ({ ...s, burstRounds: val }));
   }
 
-  function applyCorsMode(mode: 'no-cors' | 'cors'): void {
+  function applyCorsMode(mode: 'no-cors' | 'cors' | 'image'): void {
     if (isRunning) return;
     settingsStore.update((s) => ({ ...s, corsMode: mode }));
   }
@@ -592,7 +592,7 @@
 
         <div class="field">
           <div class="label">Request mode
-            <span class="help">How probes are dispatched. <em>CORS</em> exposes phase timing when servers allow it; <em>no-CORS</em> is broadest but blinder.</span>
+            <span class="help">How probes are dispatched. <em>CORS</em> exposes phase timing when servers allow it; <em>no-CORS</em> is broadest but blinder; <em>image</em> probes via opaque image-target semantics (currently behaves as no-CORS — a future engine refactor will dispatch via real Image-element load).</span>
           </div>
           <div class="ctl">
             <div class="seg" role="radiogroup" aria-label="Request mode">
@@ -608,6 +608,12 @@
                 disabled={isRunning}
                 onclick={() => applyCorsMode('no-cors')}
               >no-CORS</button>
+              <button
+                type="button"
+                aria-pressed={settings.corsMode === 'image'}
+                disabled={isRunning}
+                onclick={() => applyCorsMode('image')}
+              >Image</button>
             </div>
           </div>
         </div>

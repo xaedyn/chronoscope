@@ -30,7 +30,7 @@ export type MainToWorkerMessage =
       type: 'measure';
       url: string;
       timeout: number;
-      corsMode: 'no-cors' | 'cors';
+      corsMode: 'no-cors' | 'cors' | 'image';
       epoch: number;
       roundId: number;
     }
@@ -191,7 +191,7 @@ export interface Settings {
   burstRounds: number;
   monitorDelay: number;
   cap: number;
-  corsMode: 'no-cors' | 'cors';
+  corsMode: 'no-cors' | 'cors' | 'image';
   region?: Region;
   // Latency alarm threshold in ms — distinct from `timeout` (which is the hard
   // request abort). Drives classify()/networkQuality() and the chronograph dial.
@@ -300,7 +300,7 @@ export interface ShareReportMetadata {
   readonly reportKind: ReportKind;
   readonly createdAt: number;
   readonly healthThreshold: number;
-  readonly corsMode: 'no-cors' | 'cors';
+  readonly corsMode: 'no-cors' | 'cors' | 'image';
   readonly roundCount: number;
   readonly totalSampleCount: number;
   readonly keptSampleCount: number;
@@ -311,7 +311,7 @@ export interface SharedReportContext {
   readonly reportKind: ReportKind;
   readonly createdAt: number | null;
   readonly healthThreshold: number | null;
-  readonly corsMode: 'no-cors' | 'cors' | null;
+  readonly corsMode: 'no-cors' | 'cors' | 'image' | null;
   readonly roundCount: number;
   readonly totalSampleCount: number;
   readonly keptSampleCount: number;
@@ -385,7 +385,7 @@ export interface SharePayload {
     readonly burstRounds?: number;
     readonly monitorDelay?: number;
     readonly cap: number;
-    readonly corsMode: 'no-cors' | 'cors';
+    readonly corsMode: 'no-cors' | 'cors' | 'image';
   };
   readonly report?: ShareReportMetadata;
   readonly remoteVantage?: ShareRemoteVantageSnapshot;
