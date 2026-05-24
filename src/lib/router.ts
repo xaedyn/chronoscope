@@ -14,11 +14,11 @@
 import { uiStore } from './stores/ui';
 import type { ActiveView } from './types';
 
-export type RouteName = 'overview' | 'live' | 'investigate' | 'endpoint' | 'report';
+export type RouteName = 'overview' | 'live' | 'investigate' | 'endpoint' | 'report' | 'transit';
 
 // Discriminated union so { name: 'endpoint', endpointId: null } cannot typecheck.
 export type RouteState =
-  | { readonly name: 'overview' | 'live' | 'investigate' | 'report'; readonly endpointId: null }
+  | { readonly name: 'overview' | 'live' | 'investigate' | 'report' | 'transit'; readonly endpointId: null }
   | { readonly name: 'endpoint'; readonly endpointId: string };
 
 const ENDPOINT_ID_PATTERN = /^[a-zA-Z0-9_-]{1,64}$/;
@@ -32,6 +32,7 @@ function routeToActiveView(name: RouteName): ActiveView {
     case 'investigate': return 'diagnose';
     case 'endpoint':    return 'diagnose';
     case 'report':      return 'report';
+    case 'transit':     return 'transit';
   }
 }
 
@@ -43,6 +44,7 @@ function activeViewToRoute(active: ActiveView): RouteName {
     case 'live':     return 'live';
     case 'diagnose': return 'investigate';
     case 'report':   return 'report';
+    case 'transit':  return 'transit';
     case 'strata':   return 'overview';
     case 'terminal': return 'overview';
   }
@@ -57,6 +59,7 @@ function pathFor(state: RouteState): string {
     case 'investigate': return '/investigate';
     case 'endpoint':    return `/endpoint/${state.endpointId}`;
     case 'report':      return '/report';
+    case 'transit':     return '/transit';
   }
 }
 
@@ -72,6 +75,7 @@ function parsePath(pathname: string): RouteState | null {
   if (pathname === '/live') return { name: 'live', endpointId: null };
   if (pathname === '/investigate') return { name: 'investigate', endpointId: null };
   if (pathname === '/report') return { name: 'report', endpointId: null };
+  if (pathname === '/transit') return { name: 'transit', endpointId: null };
   if (pathname.startsWith('/endpoint/')) {
     const id = pathname.slice('/endpoint/'.length);
     // Empty id (/endpoint/), trailing slash, or anything that fails the
@@ -108,8 +112,25 @@ export function navigateTo(state: RouteState, options?: NavigateOptions): void {
       history.pushState({}, '', path);
     }
   }
-  applyRouteToStore(state);
-  notify(state);
+  applyAndNotify(state);
+}
+
+// Wrap the state-write + notify pair in document.startViewTransition() so the
+// browser cross-fades the old DOM into the new one. Feature-detected — Safari
+// < 18 and older Firefox fall through to the instant-swap path. Wrapping the
+// notify() call alongside applyRouteToStore() ensures any subscriber-driven
+// DOM work (Layout's {#if activeView} swap, focus restoration, etc.) lands
+// inside the same transition snapshot the browser captures.
+function applyAndNotify(state: RouteState): void {
+  if (typeof document !== 'undefined' && typeof document.startViewTransition === 'function') {
+    document.startViewTransition(() => {
+      applyRouteToStore(state);
+      notify(state);
+    });
+  } else {
+    applyRouteToStore(state);
+    notify(state);
+  }
 }
 
 export function subscribeRoute(handler: (state: RouteState) => void): () => void {
@@ -171,8 +192,8 @@ function handlePopstate(): void {
     }
     return;
   }
-  applyRouteToStore(next);
-  notify(next);
+  // Back/forward gets the same cross-fade treatment as forward navigation.
+  applyAndNotify(next);
 }
 
 function notify(state: RouteState): void {

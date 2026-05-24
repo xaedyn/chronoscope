@@ -210,7 +210,7 @@
   }
   .landing-kicker {
     margin: 0;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: 11px;
     font-weight: 800;
@@ -219,7 +219,7 @@
   }
   .landing-subtitle {
     margin: 6px 0 0;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--sans);
     font-size: var(--ts-sm);
     line-height: 1.5;
@@ -234,9 +234,9 @@
   }
   .landing-empty {
     padding: 18px;
-    border: 1px dashed var(--shell-border);
+    border: 1px dashed var(--rule);
     border-radius: 14px;
-    background: var(--shell-panel);
+    background: var(--bg-2);
     text-align: left;
     display: flex;
     flex-direction: column;
@@ -244,14 +244,14 @@
   }
   .landing-empty-headline {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--sans);
     font-size: var(--ts-sm);
     font-weight: 700;
   }
   .landing-empty-detail {
     margin: 0;
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--sans);
     font-size: var(--ts-xs);
     line-height: 1.45;
@@ -261,23 +261,23 @@
     align-self: flex-start;
     min-height: 36px;
     padding: 0 16px;
-    border: 1px solid var(--shell-border-strong);
-    background: var(--shell-bg-cyan);
-    color: var(--accent-cyan);
+    border: 1px solid var(--rule-strong);
+    background: var(--station-b-bg);
+    color: var(--station-b);
     font-family: var(--sans);
     font-size: var(--ts-sm);
     font-weight: 700;
     cursor: pointer;
     border-radius: 8px;
   }
-  .landing-empty-cta:hover { background: var(--shell-panel-hover); }
+  .landing-empty-cta:hover { background: var(--bg-hover); }
   .endpoint-card {
     width: 100%;
     padding: 18px;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
-    background: var(--shell-panel);
-    color: var(--t1);
+    background: var(--bg-2);
+    color: var(--fg);
     text-align: left;
     cursor: pointer;
     display: flex;
@@ -285,9 +285,9 @@
     gap: 14px;
     transition: background 160ms ease, border-color 160ms ease;
   }
-  .endpoint-card:hover { background: var(--shell-panel-hover); }
+  .endpoint-card:hover { background: var(--bg-hover); }
   .endpoint-card:focus-visible {
-    outline: 2px solid var(--accent-cyan);
+    outline: 2px solid var(--station-b);
     outline-offset: 2px;
   }
   .endpoint-card-row {
@@ -300,7 +300,7 @@
     font-family: var(--mono);
     font-size: var(--ts-md);
     font-weight: 700;
-    color: var(--t1);
+    color: var(--fg);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -313,24 +313,24 @@
     font-weight: 800;
     letter-spacing: var(--tr-label);
     text-transform: uppercase;
-    border: 1px solid var(--shell-border-strong);
-    background: var(--shell-bg-cyan);
-    color: var(--accent-cyan);
+    border: 1px solid var(--rule-strong);
+    background: var(--station-b-bg);
+    color: var(--station-b);
   }
   .endpoint-card[data-tone='good'] .endpoint-card-pill {
-    color: var(--accent-green);
-    background: var(--shell-success-bg);
-    border-color: var(--shell-success-border);
+    color: var(--station-b);
+    background: var(--success-bg);
+    border-color: var(--success-border);
   }
   .endpoint-card[data-tone='watch'] .endpoint-card-pill {
-    color: var(--accent-amber);
-    background: var(--shell-bg-amber);
-    border-color: var(--shell-stop-border);
+    color: var(--sev-warn);
+    background: var(--sev-warn-bg);
+    border-color: var(--stop-border);
   }
   .endpoint-card[data-tone='bad'] .endpoint-card-pill {
-    color: var(--accent-pink);
-    background: var(--shell-stop-bg);
-    border-color: var(--shell-stop-border);
+    color: var(--station-d);
+    background: var(--stop-bg);
+    border-color: var(--stop-border);
   }
   .endpoint-card-metrics {
     display: grid;
@@ -343,10 +343,10 @@
     gap: 2px;
     padding: 10px 12px;
     border-radius: 8px;
-    background: color-mix(in srgb, var(--shell-base) 54%, transparent);
+    background: color-mix(in srgb, var(--bg) 54%, transparent);
   }
   .endpoint-card-metric-label {
-    color: var(--t4);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: 9px;
     font-weight: 800;
@@ -354,7 +354,7 @@
     text-transform: uppercase;
   }
   .endpoint-card-metric-value {
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--mono);
     font-size: var(--ts-sm);
     font-weight: 700;
@@ -370,29 +370,29 @@
     text-transform: uppercase;
   }
   .endpoint-card-visibility[data-visibility-level='none'] {
-    color: var(--accent-cyan);
-    background: var(--shell-bg-cyan);
+    color: var(--station-b);
+    background: var(--station-b-bg);
   }
   .endpoint-card-visibility[data-visibility-level='total-only'],
   .endpoint-card-visibility[data-visibility-level='mixed'] {
-    color: var(--accent-amber);
-    background: var(--shell-bg-amber);
+    color: var(--sev-warn);
+    background: var(--sev-warn-bg);
   }
   .endpoint-card-visibility[data-visibility-level='phase'] {
-    color: var(--accent-green);
-    background: var(--shell-success-bg);
+    color: var(--station-b);
+    background: var(--success-bg);
   }
 
   .validation-card {
     padding: 18px;
     margin-bottom: 14px;
-    border: 1px solid var(--shell-border);
+    border: 1px solid var(--rule);
     border-radius: 14px;
-    background: var(--shell-panel);
+    background: var(--bg-2);
   }
   .validation-card-title {
     margin: 0 0 8px;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--sans);
     font-size: var(--ts-base);
     font-weight: 700;
@@ -403,8 +403,8 @@
   .validation-card-flag {
     padding: 2px 8px;
     border-radius: 999px;
-    background: var(--shell-panel-hover);
-    color: var(--t3);
+    background: var(--bg-hover);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: 9px;
     font-weight: 800;
@@ -413,7 +413,7 @@
   }
   .validation-card-detail {
     margin: 0 0 12px;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--sans);
     font-size: var(--ts-sm);
     line-height: 1.55;
@@ -423,8 +423,8 @@
     padding: 0 16px;
     border-radius: 8px;
     border: 0;
-    background: var(--shell-bg-cyan);
-    color: var(--accent-cyan);
+    background: var(--station-b-bg);
+    color: var(--station-b);
     font-family: var(--sans);
     font-size: var(--ts-sm);
     font-weight: 700;
@@ -441,19 +441,19 @@
   .why-separate-callout {
     margin-top: 16px;
     padding: 16px;
-    border: 1px solid var(--shell-border-strong);
+    border: 1px solid var(--rule-strong);
     border-radius: 14px;
-    background: var(--shell-bg-cyan);
+    background: var(--station-b-bg);
   }
   .why-separate-callout p {
     margin: 0;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--sans);
     font-size: var(--ts-sm);
     line-height: 1.6;
   }
   .why-separate-callout strong {
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
 
   @media (max-width: 1023px) {

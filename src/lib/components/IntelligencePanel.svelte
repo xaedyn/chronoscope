@@ -159,7 +159,7 @@
     gap: 10px;
     padding: 16px;
     background: rgba(255, 255, 255, 0.025);
-    border: 1px solid var(--border-mid);
+    border: 1px solid var(--rule);
     border-radius: 10px;
   }
 
@@ -175,7 +175,7 @@
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
-    color: var(--t3);
+    color: var(--fg-3);
     text-transform: uppercase;
     margin-bottom: 8px;
   }
@@ -189,7 +189,7 @@
   }
 
   .intelligence-headline {
-    color: var(--t1);
+    color: var(--fg);
     font-size: var(--ts-md);
     line-height: 1.4;
   }
@@ -198,25 +198,25 @@
   .intelligence-action,
   .intelligence-error,
   .intelligence-buckets p {
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-sm);
     line-height: 1.45;
   }
 
   .intelligence-action {
-    color: var(--accent-cyan);
+    color: var(--station-b);
   }
 
   .intelligence-error {
-    color: var(--accent-amber);
+    color: var(--sev-warn);
   }
 
   .intelligence-button {
     padding: 6px 12px;
     border-radius: 5px;
     background: transparent;
-    border: 1px solid var(--border-mid);
-    color: var(--t2);
+    border: 1px solid var(--rule);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: 0.06em;
@@ -225,8 +225,8 @@
   }
 
   .intelligence-button:hover:not(:disabled) {
-    color: var(--t1);
-    border-color: var(--border-bright);
+    color: var(--fg);
+    border-color: var(--rule-strong);
   }
 
   .intelligence-button:disabled {
@@ -235,7 +235,7 @@
   }
 
   .intelligence-button:focus-visible {
-    outline: 2px solid var(--accent-cyan);
+    outline: 2px solid var(--station-b);
     outline-offset: 2px;
   }
 
@@ -249,12 +249,12 @@
   .intelligence-buckets div {
     min-width: 0;
     padding-top: 8px;
-    border-top: 1px solid var(--border-mid);
+    border-top: 1px solid var(--rule);
   }
 
   .intelligence-buckets dt {
     margin: 0 0 3px;
-    color: var(--t2);
+    color: var(--fg-2);
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
@@ -266,7 +266,7 @@
 
   .intelligence-buckets dd {
     margin: 0 0 4px;
-    color: var(--t1);
+    color: var(--fg);
     font-family: var(--mono);
     font-size: var(--ts-sm);
     overflow: hidden;

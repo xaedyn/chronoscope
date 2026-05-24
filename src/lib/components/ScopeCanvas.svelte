@@ -370,13 +370,13 @@
         <text
           x={plotX0 - 8} y={yOf(ms) + 3}
           text-anchor="end" font-size="9" font-family={tokens.typography.mono.fontFamily}
-          fill="var(--t4)" letter-spacing="0.1em"
+          fill="var(--fg-3)" letter-spacing="0.1em"
         >{ms}</text>
       {/each}
       <text
         x={plotX0 - 8} y={yOf(maxMs) + 3}
         text-anchor="end" font-size="9" font-family={tokens.typography.mono.fontFamily}
-        fill="var(--t4)" letter-spacing="0.1em"
+        fill="var(--fg-3)" letter-spacing="0.1em"
         data-role="axis-label-max"
       >{maxMs}</text>
     </g>
@@ -392,7 +392,7 @@
           <text
             x={tick.x} y={plotY1 + 14}
             text-anchor="middle" font-size="9" font-family={tokens.typography.mono.fontFamily}
-            fill="var(--t4)" letter-spacing="0.1em"
+            fill="var(--fg-3)" letter-spacing="0.1em"
           >R{tick.round}</text>
         {/if}
       {/each}
@@ -406,13 +406,13 @@
     {#if thresholdOnScale}
       <line
         x1={plotX0} y1={thresholdY} x2={plotX1} y2={thresholdY}
-        stroke="var(--svg-threshold)" stroke-width="1" stroke-dasharray="4 4" opacity="0.6"
+        stroke="var(--sev-bad)" stroke-width="1" stroke-dasharray="4 4" opacity="0.6"
         aria-hidden="true"
       />
       <text
         x={plotX1 - 4} y={thresholdLabelY}
         text-anchor="end" font-size="9" font-family={tokens.typography.mono.fontFamily}
-        fill="var(--svg-threshold)" letter-spacing="0.1em"
+        fill="var(--sev-bad)" letter-spacing="0.1em"
         aria-hidden="true"
       >{triggerLabel}</text>
     {/if}
@@ -462,7 +462,7 @@
         <path
           d="M {b.x - 4} {plotY0 + 6} L {b.x} {plotY0} L {b.x + 4} {plotY0 + 6}"
           fill="none"
-          stroke={b.kind === 'timeout' ? 'var(--accent-pink)' : 'var(--status-timeout)'}
+          stroke={b.kind === 'timeout' ? 'var(--station-d)' : 'var(--sev-crit)'}
           stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"
           opacity={trace.dimmed ? 0.35 : 0.85}
           aria-hidden="true"
@@ -474,7 +474,7 @@
     {#if hoverX !== null}
       <line
         x1={hoverX} y1={plotY0} x2={hoverX} y2={plotY1}
-        stroke="var(--t3)" stroke-width="0.5" opacity="0.6"
+        stroke="var(--fg-3)" stroke-width="0.5" opacity="0.6"
         aria-hidden="true"
       />
     {/if}
@@ -484,7 +484,7 @@
       <text
         x={VB_W / 2} y={VB_H / 2}
         text-anchor="middle" font-size="12" font-family={tokens.typography.mono.fontFamily}
-        fill="var(--t4)" letter-spacing="0.25em"
+        fill="var(--fg-3)" letter-spacing="0.25em"
         aria-hidden="true"
       >AWAITING SAMPLES</text>
     {/if}
@@ -548,7 +548,7 @@
     border: 1px solid rgba(255,255,255,.09);
     border-radius: 5px;
     background: rgba(3, 5, 9, .66);
-    color: var(--t3);
+    color: var(--fg-3);
     font-family: var(--mono);
     font-size: 9px;
     letter-spacing: var(--tr-kicker);
@@ -573,7 +573,7 @@
     font-family: var(--mono);
     font-size: var(--ts-xs);
     letter-spacing: var(--tr-kicker);
-    color: var(--accent-cyan);
+    color: var(--station-b);
     text-transform: uppercase;
     margin-bottom: 6px;
   }
@@ -593,11 +593,11 @@
     font-size: var(--ts-sm);
     font-variant-numeric: tabular-nums;
   }
-  .scope-tooltip-row.dim { color: var(--t4); }
+  .scope-tooltip-row.dim { color: var(--fg-3); }
   .scope-tooltip-pip { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-  .scope-tooltip-name { color: var(--t2); flex: 1; }
+  .scope-tooltip-name { color: var(--fg-2); flex: 1; }
   .scope-tooltip-val { color: var(--tooltip-text); }
-  .scope-tooltip-row.dim .scope-tooltip-val { color: var(--t4); }
+  .scope-tooltip-row.dim .scope-tooltip-val { color: var(--fg-3); }
 
   .scope-sr-live {
     position: absolute;

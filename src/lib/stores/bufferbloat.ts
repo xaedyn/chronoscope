@@ -117,9 +117,13 @@ export async function measureBrowserLatency(
   const start = performance.now();
 
   try {
+    // 'image' mode is a UI distinction; for the saturation probe it has the
+    // same fetch semantics as 'no-cors' (opaque response). See worker.ts for
+    // the same aliasing on the primary measurement path.
+    const fetchMode: RequestMode = options.corsMode === 'image' ? 'no-cors' : options.corsMode;
     await options.fetcher(url, {
       method: 'GET',
-      mode: options.corsMode,
+      mode: fetchMode,
       cache: 'no-store',
       signal: controller.signal,
     });

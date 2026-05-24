@@ -152,14 +152,13 @@ describe('buildDiagnosticReport', () => {
     expect(report.copySummary).not.toMatch(/likely (affected|source|site|network|your network)/i);
     expect(report.copySummary).not.toContain(report.diagnosis.verdict.headline);
     expect(report.copySummary).toContain(report.diagnosis.primaryAnswer.text);
-    // Post-hotfix (fix/synthesis-arc-hotfixes) the report's Trust slot
-    // surfaces actual measurements per kind rather than the prior generic
-    // "Evidence: N+ successful checks across N sites; total timing only."
-    // meta-count, matching the synthesis design contract's Measured Fact
-    // anatomy. For isolated-endpoint kind it names the slowest site by
-    // label and includes its p95.
+    // Three-sentence narrative in v4's voice; uses plain-language wording
+    // ("median latency", "tail reaching") rather than p50/p95 jargon so the
+    // copySummary remains shareable (line 151 enforces no \bp50\b). See
+    // supportingSummaryFor in src/lib/utils/diagnostic-narrative.ts for the
+    // per-kind branches.
     expect(report.copySummary).toContain(
-      'Trust: Median latency is 45 ms across 3 sites; API is the slowest at p95 280 ms.',
+      "Trust: 2 sites are on transit; API is the outlier. The field's median latency is 45 ms; API runs at 240 ms with a tail reaching 280 ms — past the 120 ms trigger. The other sites held tempo, so the slowness is path-isolated to API.",
     );
     expect(report.copySummary).toContain(`Next validation: ${report.diagnosis.primaryValidation.claim.text}`);
     expect(report.copySummary).toContain('Watch for: If detailed timing appears');

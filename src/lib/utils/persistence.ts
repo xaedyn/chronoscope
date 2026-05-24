@@ -25,7 +25,7 @@ export const CURRENT_VERSION = 11;
 
 // Views valid at v10/v11. Hidden legacy routes normalize to overview below.
 const V10_VIEWS: ReadonlySet<string> = new Set<ActiveView>([
-  'overview', 'live', 'diagnose', 'report', 'strata', 'terminal',
+  'overview', 'live', 'diagnose', 'report', 'transit', 'strata', 'terminal',
 ]);
 
 const HIDDEN_VIEWS: ReadonlySet<string> = new Set<ActiveView>(['strata', 'terminal']);
@@ -200,7 +200,7 @@ function readSettingsField(record: Record<string, unknown>): Settings {
   const raw = asRecord(record['settings']) ?? {};
   const region: Region | undefined = isValidRegion(raw['region']) ? raw['region'] : undefined;
   const corsMode =
-    raw['corsMode'] === 'cors' || raw['corsMode'] === 'no-cors'
+    raw['corsMode'] === 'cors' || raw['corsMode'] === 'no-cors' || raw['corsMode'] === 'image'
       ? raw['corsMode']
       : DEFAULT_SETTINGS.corsMode;
   return {
@@ -210,6 +210,11 @@ function readSettingsField(record: Record<string, unknown>): Settings {
     monitorDelay:    typeof raw['monitorDelay']    === 'number' ? raw['monitorDelay']    : DEFAULT_SETTINGS.monitorDelay,
     cap:             clampCap(raw['cap']),
     healthThreshold: typeof raw['healthThreshold'] === 'number' ? raw['healthThreshold'] : DEFAULT_SETTINGS.healthThreshold,
+    // Phase D audio engine — additive field added after v11. Missing in older
+    // v11 payloads (audio defaults to off, matching DEFAULT_SETTINGS), so no
+    // version bump is needed. Future bump welcome when the next schema change
+    // lands and we want to consolidate.
+    audioEnabled:    typeof raw['audioEnabled']    === 'boolean' ? raw['audioEnabled']   : DEFAULT_SETTINGS.audioEnabled,
     corsMode,
     ...(region !== undefined ? { region } : {}),
   };

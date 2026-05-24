@@ -5,8 +5,8 @@
 
 /* ── Root variables (bridged from tokens in App.svelte) ── */
 :root {
-  --sans: 'Sora', system-ui, sans-serif;
-  --mono: 'Martian Mono', monospace;
+  --sans: 'Hanken Grotesk', system-ui, sans-serif;
+  --mono: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
 
   /* Layout ceilings — consumed by OverviewView grid and ChronographDial.
      Fluid below the ceiling (grid via 92vw, dial via 90cqi on its column),
@@ -20,9 +20,9 @@ html, body {
   height: 100%;
   overflow: hidden;
   font-family: var(--sans);
-  color: var(--t1, rgba(255,255,255,.94));
+  color: var(--fg, #F2EBDB);
   -webkit-font-smoothing: antialiased;
-  background: var(--bg-base, #0c0a14);
+  background: var(--bg, #03050A);
 }
 
 #app {
@@ -31,7 +31,7 @@ html, body {
 
 /* ── Focus ring ── */
 :focus-visible {
-  outline: 2px solid var(--accent-cyan, #67e8f9);
+  outline: 2px solid var(--station-b, #8CD4C9);
   outline-offset: 2px;
 }
 
@@ -55,5 +55,23 @@ html, body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ── View Transitions (route navigation cross-fade) ──
+   Used by src/lib/router.ts navigateTo() / popstate handlers. Feature-detected
+   in JS, so this only applies on Chrome/Edge 111+, Safari 18+, etc. The
+   default UA animation is a 250ms cross-fade; we tune it to 220ms with a
+   gentler easing curve to match the v4 cinematic feel. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
   }
 }

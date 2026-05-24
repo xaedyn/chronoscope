@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronoscope — Settings (v4 · Vessel)</title>
+<meta name="description" content="Settings drawer. Stations, cadence, trigger, vantage, network mode, companion agent, audio, motion. Slides over any surface.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#03050A; --bg-2:#080C14; --bg-3:#11171F; --bg-4:#1A2230;
+    --fg:#F2EBDB; --fg-2:#A39A87; --fg-3:#5F594D; --fg-4:#36322B;
+    --rule:rgba(242,235,219,0.06); --rule-strong:rgba(242,235,219,0.14); --rule-faint:rgba(242,235,219,0.03);
+    --station-A:#B7D3EC; --station-B:#8CD4C9; --station-C:#E8D597; --station-D:#D78E68;
+    --sev-warn:#E8C36F; --sev-bad:#D27258; --sev-crit:#B14238;
+    --font:'Hanken Grotesk',system-ui,sans-serif;
+    --font-mono:'Space Mono',ui-monospace,SFMono-Regular,monospace;
+    --pad-x:clamp(20px,3vw,48px);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--fg);min-height:100%}
+  body{font-family:var(--font);font-size:13px;font-weight:400;line-height:1.55;overflow-x:hidden;min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  input,select{font:inherit;color:inherit}
+
+  body::before{
+    content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0.35;
+    background-image:
+      radial-gradient(circle 0.6px at 13% 17%,#F0EBE0 0.6px,transparent 1px),
+      radial-gradient(circle 0.5px at 71% 11%,#F0EBE0 0.5px,transparent 1px),
+      radial-gradient(circle 0.4px at 47% 36%,#C0B8A6 0.4px,transparent 1px),
+      radial-gradient(circle 0.8px at 89% 47%,#F0EBE0 0.8px,transparent 1px),
+      radial-gradient(circle 0.5px at 22% 71%,#F0EBE0 0.5px,transparent 1px),
+      radial-gradient(circle 0.6px at 61% 79%,#C0B8A6 0.6px,transparent 1px),
+      radial-gradient(circle 0.4px at 92% 88%,#F0EBE0 0.4px,transparent 1px);
+  }
+  .page-wrap{position:relative;z-index:1}
+
+  /* MASTHEAD (background page) */
+  .masthead{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:14px var(--pad-x);border-bottom:1px solid var(--rule);background:rgba(3,5,10,0.92);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);position:sticky;top:0;z-index:10}
+  .brand{display:flex;align-items:baseline;gap:12px;font-family:var(--font-mono);font-weight:700;font-size:12px;letter-spacing:0.16em;text-transform:uppercase}
+  .brand .crest{display:inline-block;width:12px;height:12px;border:1.2px solid var(--fg);border-radius:50%;position:relative;transform:translateY(1px);flex-shrink:0}
+  .brand .crest::after{content:'';position:absolute;width:1.2px;height:5px;background:var(--fg);top:1.5px;left:calc(50% - 0.6px);transform-origin:50% 100%;transform:rotate(42deg)}
+  .brand .tag{font-family:var(--font);font-size:11px;font-weight:400;letter-spacing:0.02em;text-transform:none;color:var(--fg-2);margin-left:14px;padding-left:14px;border-left:1px solid var(--rule)}
+  .nav{display:flex;gap:26px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700}
+  .nav a{color:var(--fg-3);padding:4px 0;border-bottom:1px solid transparent;transition:color 120ms,border-color 120ms}
+  .nav a:hover{color:var(--fg)}
+  .controls{display:flex;align-items:center;gap:14px;justify-self:end;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase}
+  .carrier-tag{display:flex;align-items:center;gap:8px;color:var(--station-B);font-weight:700}
+  .carrier-tag .dot{width:6px;height:6px;background:var(--station-B);border-radius:50%;box-shadow:0 0 10px var(--station-B);animation:carrierpulse 2000ms ease-in-out infinite}
+  @keyframes carrierpulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  .ctl-btn{border:1px solid var(--rule-strong);padding:7px 12px;color:var(--fg);font-family:var(--font-mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;transition:background 120ms,border-color 120ms;cursor:pointer}
+  .ctl-btn:hover{background:var(--bg-2);border-color:var(--fg-3)}
+  .ctl-btn--stop{color:var(--sev-bad);border-color:rgba(210,114,88,0.5)}
+  .ctl-btn--stop[aria-pressed="true"]{background:var(--bg-2);border-color:var(--fg-3);color:var(--fg)}
+  .ctl-btn.is-active{background:var(--bg-2);border-color:var(--fg-3);color:var(--fg)}
+
+  /* TITLE STRIP (background — prevents page feeling empty) */
+  .titlestrip{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:32px;padding:28px var(--pad-x) 22px;border-bottom:1px solid var(--rule)}
+  .titlestrip h2{font-size:32px;font-weight:200;letter-spacing:-0.025em;color:var(--fg);line-height:1}
+  .titlestrip h2 .sub{margin-left:20px;color:var(--fg-3);font-size:17px;font-weight:300}
+  .titlestrip .coords{display:inline-flex;gap:22px;flex-wrap:wrap;font-family:var(--font-mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--fg-3)}
+  .titlestrip .coords>span{white-space:nowrap}
+  .titlestrip .coords .v{color:var(--fg);font-weight:700;margin-left:8px;font-variant-numeric:tabular-nums}
+
+  /* BACKGROUND placeholder (so the drawer has something behind it) */
+  .stage-stub{
+    min-height:calc(100vh - 200px);
+    display:grid;place-items:center;
+    color:var(--fg-3);
+    background:radial-gradient(ellipse at center,rgba(140,212,201,0.04) 0%,transparent 60%);
+  }
+  .stage-stub .copy{text-align:center;max-width:46ch;padding:0 var(--pad-x)}
+  .stage-stub .kicker{font-family:var(--font-mono);font-size:10px;letter-spacing:0.28em;text-transform:uppercase;color:var(--fg-3);margin-bottom:16px;font-weight:700}
+  .stage-stub h1{font-family:var(--font);font-weight:200;font-size:clamp(36px,4.4vw,56px);letter-spacing:-0.025em;color:var(--fg-2);line-height:1.1;margin-bottom:16px}
+  .stage-stub p{font-size:14px;color:var(--fg-3);line-height:1.55}
+
+  /* ============= DRAWER ============= */
+  .scrim{
+    position:fixed;inset:0;z-index:90;
+    background:rgba(3,5,10,0.62);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    opacity:0;transition:opacity 320ms cubic-bezier(0.16,0.84,0.42,1);
+    pointer-events:none;
+  }
+  .scrim.open{opacity:1;pointer-events:auto}
+
+  .drawer{
+    position:fixed;top:0;right:0;bottom:0;
+    width:min(520px,92vw);z-index:91;
+    background:var(--bg);
+    border-left:1px solid var(--rule-strong);
+    box-shadow:-24px 0 80px rgba(0,0,0,0.6);
+    transform:translateX(100%);
+    transition:transform 380ms cubic-bezier(0.16,0.84,0.42,1);
+    display:flex;flex-direction:column;
+  }
+  .drawer.open{transform:translateX(0)}
+
+  /* Light leak on drawer edge */
+  .drawer::before{
+    content:'';position:absolute;top:0;bottom:0;left:0;width:1px;
+    background:linear-gradient(180deg,transparent 0%,var(--station-B) 30%,var(--station-B) 70%,transparent 100%);
+    opacity:0.35;box-shadow:0 0 14px var(--station-B);
+    pointer-events:none;
+  }
+
+  .drawer-head{
+    display:grid;grid-template-columns:1fr auto;align-items:center;
+    padding:18px 24px;
+    border-bottom:1px solid var(--rule);
+    flex-shrink:0;
+  }
+  .drawer-head .l{display:flex;align-items:baseline;gap:14px}
+  .drawer-head .title{
+    font-family:var(--font);font-weight:300;font-size:22px;
+    letter-spacing:-0.015em;color:var(--fg);line-height:1;
+  }
+  .drawer-head .sub{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.22em;
+    text-transform:uppercase;color:var(--fg-3);font-weight:700;
+  }
+  .drawer-close{
+    width:32px;height:32px;
+    display:flex;align-items:center;justify-content:center;
+    border:1px solid var(--rule-strong);
+    color:var(--fg-2);
+    transition:color 120ms,border-color 120ms,background 120ms;
+  }
+  .drawer-close:hover{color:var(--fg);border-color:var(--fg-3);background:var(--bg-2)}
+  .drawer-close svg{display:block}
+
+  .drawer-body{
+    flex-grow:1;overflow-y:auto;
+    padding:0;
+  }
+  /* Custom scrollbar */
+  .drawer-body::-webkit-scrollbar{width:6px;background:var(--bg)}
+  .drawer-body::-webkit-scrollbar-thumb{background:var(--rule-strong);border-radius:0}
+  .drawer-body::-webkit-scrollbar-thumb:hover{background:var(--fg-3)}
+
+  /* Section */
+  .section{
+    border-bottom:1px solid var(--rule);
+    padding:24px;
+  }
+  .section:last-child{border-bottom:0}
+  .section-head{
+    display:flex;justify-content:space-between;align-items:baseline;
+    margin-bottom:18px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.22em;
+    text-transform:uppercase;color:var(--fg-3);font-weight:700;
+  }
+  .section-head .num{color:var(--fg-3)}
+  .section-head .title{color:var(--fg)}
+  .section-head .right{display:inline-flex;gap:14px;align-items:baseline}
+
+  /* Field row — label + control side-by-side */
+  .field{
+    display:grid;grid-template-columns:140px 1fr;
+    gap:14px;align-items:start;
+    padding:14px 0;border-top:1px dashed var(--rule);
+  }
+  .field:first-of-type{border-top:0;padding-top:8px}
+  .field .label{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.18em;
+    text-transform:uppercase;color:var(--fg-3);font-weight:700;
+    padding-top:6px;
+  }
+  .field .label .help{
+    display:block;margin-top:4px;font-family:var(--font);font-weight:400;
+    font-size:11px;text-transform:none;letter-spacing:0;color:var(--fg-4);line-height:1.4;
+  }
+  .field .ctl{min-width:0}
+
+  /* Slider */
+  .slider{
+    display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;
+  }
+  .slider input[type="range"]{
+    -webkit-appearance:none;width:100%;height:16px;cursor:pointer;background:transparent;
+  }
+  .slider input[type="range"]::-webkit-slider-runnable-track{height:1px;background:var(--rule-strong)}
+  .slider input[type="range"]::-moz-range-track{height:1px;background:var(--rule-strong)}
+  .slider input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:2px;height:16px;
+    background:var(--fg);margin-top:-7px;
+    box-shadow:0 0 8px var(--fg);
+  }
+  .slider input[type="range"]::-moz-range-thumb{width:2px;height:16px;background:var(--fg);border:0}
+  .slider .val{
+    font-family:var(--font-mono);font-variant-numeric:tabular-nums;
+    font-size:16px;font-weight:400;color:var(--fg);
+    letter-spacing:-0.01em;min-width:78px;text-align:right;
+  }
+  .slider .val .u{font-size:10px;color:var(--fg-3);margin-left:3px;letter-spacing:0}
+
+  /* Trigger slider — special accent */
+  .field[data-accent="trigger"] .slider input[type="range"]::-webkit-slider-thumb{
+    background:var(--sev-bad);box-shadow:0 0 10px var(--sev-bad);
+  }
+  .field[data-accent="trigger"] .slider input[type="range"]::-moz-range-thumb{background:var(--sev-bad)}
+  .field[data-accent="trigger"] .slider .val{color:var(--sev-bad)}
+
+  /* Toggle */
+  .toggle{
+    width:42px;height:22px;position:relative;cursor:pointer;
+    border:1px solid var(--rule-strong);
+    transition:border-color 120ms,background 120ms;
+    flex-shrink:0;
+  }
+  .toggle::after{
+    content:'';position:absolute;top:2px;left:2px;
+    width:14px;height:14px;background:var(--fg-3);
+    transition:transform 200ms cubic-bezier(0.16,0.84,0.42,1),background 120ms,box-shadow 120ms;
+  }
+  .toggle[aria-pressed="true"]{border-color:var(--station-B);background:rgba(140,212,201,0.08)}
+  .toggle[aria-pressed="true"]::after{
+    transform:translateX(20px);
+    background:var(--station-B);
+    box-shadow:0 0 10px var(--station-B);
+  }
+  .toggle-row{
+    display:flex;align-items:center;justify-content:space-between;gap:18px;
+    padding:14px 0;border-top:1px dashed var(--rule);
+  }
+  .toggle-row:first-child{border-top:0;padding-top:8px}
+  .toggle-row .nm{
+    font-family:var(--font);font-size:14px;color:var(--fg);font-weight:400;
+    letter-spacing:-0.005em;
+  }
+  .toggle-row .nm .help{
+    display:block;margin-top:2px;
+    font-family:var(--font);font-size:11px;color:var(--fg-3);font-weight:400;
+    letter-spacing:0;line-height:1.4;max-width:38ch;
+  }
+
+  /* Segmented radio */
+  .seg{
+    display:flex;border:1px solid var(--rule-strong);
+    width:100%;
+  }
+  .seg button{
+    flex:1;padding:8px 10px;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;
+    text-transform:uppercase;color:var(--fg-3);
+    transition:color 120ms,background 120ms,border-color 120ms;
+    border-right:1px solid var(--rule-strong);font-weight:700;
+  }
+  .seg button:last-child{border-right:0}
+  .seg button[aria-pressed="true"]{
+    background:var(--fg);color:var(--bg);
+  }
+  .seg button:hover:not([aria-pressed="true"]){color:var(--fg);background:var(--bg-2)}
+
+  /* Endpoint list */
+  .endpoint-list{
+    display:flex;flex-direction:column;gap:1px;background:var(--rule);
+    border:1px solid var(--rule-strong);
+  }
+  .endpoint-row{
+    background:var(--bg);
+    display:grid;grid-template-columns:14px 1fr auto auto;
+    gap:14px;align-items:center;padding:14px 16px;
+    transition:background 120ms;
+  }
+  .endpoint-row:hover{background:var(--bg-2)}
+  .endpoint-row .mk{width:8px;height:8px}
+  .endpoint-row[data-ep="A"] .mk{background:var(--station-A);box-shadow:0 0 8px var(--station-A)}
+  .endpoint-row[data-ep="B"] .mk{background:var(--station-B);box-shadow:0 0 8px var(--station-B)}
+  .endpoint-row[data-ep="C"] .mk{background:var(--station-C);box-shadow:0 0 8px var(--station-C)}
+  .endpoint-row[data-ep="D"] .mk{background:var(--station-D);box-shadow:0 0 8px var(--station-D)}
+  .endpoint-row .info{min-width:0}
+  .endpoint-row .info .nm{
+    font-size:14px;font-weight:500;color:var(--fg);letter-spacing:-0.005em;
+    margin-bottom:3px;
+  }
+  .endpoint-row .info .host{
+    font-family:var(--font-mono);font-size:10px;color:var(--fg-3);
+    letter-spacing:0.02em;word-break:break-all;
+    font-variant-numeric:tabular-nums;
+  }
+  .endpoint-row .small-toggle{
+    width:32px;height:18px;position:relative;cursor:pointer;
+    border:1px solid var(--rule-strong);flex-shrink:0;
+  }
+  .endpoint-row .small-toggle::after{
+    content:'';position:absolute;top:2px;left:2px;
+    width:10px;height:10px;background:var(--fg-3);
+    transition:transform 200ms cubic-bezier(0.16,0.84,0.42,1),background 120ms,box-shadow 120ms;
+  }
+  .endpoint-row .small-toggle[aria-pressed="true"]{border-color:var(--station-B)}
+  .endpoint-row .small-toggle[aria-pressed="true"]::after{
+    transform:translateX(14px);
+    background:var(--station-B);
+    box-shadow:0 0 6px var(--station-B);
+  }
+  .endpoint-row .remove{
+    width:22px;height:22px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--fg-3);font-family:var(--font-mono);font-size:14px;
+    transition:color 120ms;font-weight:700;
+  }
+  .endpoint-row .remove:hover{color:var(--sev-bad)}
+
+  .endpoint-add{
+    margin-top:14px;display:grid;grid-template-columns:1fr auto;gap:8px;
+  }
+  .endpoint-add input{
+    background:var(--bg-2);border:1px solid var(--rule-strong);
+    padding:10px 12px;font-family:var(--font-mono);
+    font-size:12px;color:var(--fg);letter-spacing:0.02em;
+    outline:none;transition:border-color 120ms;
+  }
+  .endpoint-add input::placeholder{color:var(--fg-3)}
+  .endpoint-add input:focus{border-color:var(--fg-3)}
+  .endpoint-add button{
+    border:1px solid var(--rule-strong);padding:10px 14px;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;
+    text-transform:uppercase;color:var(--fg);font-weight:700;
+    transition:background 120ms,border-color 120ms;
+  }
+  .endpoint-add button:hover{background:var(--bg-2);border-color:var(--fg-3)}
+
+  /* Color picker grid (override station color) */
+  .color-grid{
+    display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-top:8px;
+  }
+  .color-grid .swatch{
+    aspect-ratio:1/1;cursor:pointer;
+    border:1px solid var(--rule);transition:border-color 120ms;
+  }
+  .color-grid .swatch:hover{border-color:var(--fg-3)}
+  .color-grid .swatch.selected{border-color:var(--fg)}
+
+  /* Section helper / note */
+  .section-note{
+    font-size:12px;color:var(--fg-3);line-height:1.5;
+    padding:14px;border:1px solid var(--rule);
+    background:var(--bg-2);
+    margin-top:14px;
+  }
+  .section-note em{font-style:normal;font-family:var(--font-mono);color:var(--fg)}
+  .section-note strong{color:var(--fg);font-weight:500}
+
+  /* Companion agent — special card */
+  .agent-card{
+    background:var(--bg-2);border:1px solid var(--rule-strong);
+    padding:18px;display:flex;flex-direction:column;gap:14px;
+    position:relative;
+  }
+  .agent-card::before{
+    content:'';position:absolute;top:0;left:0;width:18px;height:1px;
+    background:var(--sev-warn);box-shadow:0 0 8px var(--sev-warn);
+  }
+  .agent-card .agent-head{
+    display:flex;justify-content:space-between;align-items:flex-start;gap:12px;
+  }
+  .agent-card .agent-name{font-size:15px;font-weight:500;color:var(--fg)}
+  .agent-card .agent-status{
+    font-family:var(--font-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;
+    color:var(--fg-3);font-weight:700;padding:4px 8px;border:1px solid var(--rule-strong);
+  }
+  .agent-card .agent-body{
+    font-size:12.5px;color:var(--fg-2);line-height:1.55;
+  }
+  .agent-card .agent-body em{font-style:normal;font-family:var(--font-mono);color:var(--fg)}
+  .agent-card .agent-detail{
+    display:grid;grid-template-columns:max-content 1fr;gap:5px 14px;
+    font-family:var(--font-mono);font-size:11px;
+  }
+  .agent-card .agent-detail .k{color:var(--fg-3);text-transform:uppercase;letter-spacing:0.14em;font-size:9px;font-weight:700;white-space:nowrap}
+  .agent-card .agent-detail .v{color:var(--fg-2);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .agent-card .agent-action{
+    border:1px solid var(--fg);padding:8px 14px;color:var(--fg);
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;
+    cursor:pointer;font-weight:700;
+    transition:background 120ms,color 120ms;
+  }
+  .agent-card .agent-action:hover{background:var(--fg);color:var(--bg)}
+
+  /* About */
+  .about{
+    display:grid;grid-template-columns:max-content 1fr;
+    gap:6px 18px;
+    font-family:var(--font-mono);font-size:11px;
+  }
+  .about .k{color:var(--fg-3);text-transform:uppercase;letter-spacing:0.16em;font-size:10px;font-weight:700;white-space:nowrap}
+  .about .v{color:var(--fg);font-variant-numeric:tabular-nums}
+
+  /* Drawer footer */
+  .drawer-foot{
+    flex-shrink:0;padding:18px 24px;
+    border-top:1px solid var(--rule);
+    display:flex;justify-content:space-between;align-items:center;gap:14px;
+    background:rgba(3,5,10,0.92);
+  }
+  .drawer-foot .meta{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.16em;
+    text-transform:uppercase;color:var(--fg-3);font-weight:700;
+  }
+  .drawer-foot .meta .v{color:var(--fg);margin-left:6px}
+  .drawer-foot .actions{display:flex;gap:10px}
+  .drawer-foot .btn{
+    border:1px solid var(--rule-strong);padding:9px 16px;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;
+    color:var(--fg);font-weight:700;cursor:pointer;
+    transition:background 120ms,color 120ms,border-color 120ms;
+  }
+  .drawer-foot .btn:hover{background:var(--bg-2);border-color:var(--fg-3)}
+  .drawer-foot .btn--primary{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+  .drawer-foot .btn--primary:hover{background:var(--station-A);border-color:var(--station-A)}
+
+  /* Drawer open trigger (in the masthead) */
+  .gear{
+    border:1px solid var(--rule-strong);
+    width:36px;height:36px;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--fg-2);cursor:pointer;
+    transition:color 120ms,border-color 120ms,background 120ms;
+  }
+  .gear:hover{color:var(--fg);border-color:var(--fg-3);background:var(--bg-2)}
+  .gear svg{display:block}
+
+  @media (max-width:720px){
+    .field{grid-template-columns:1fr;gap:8px}
+    .field .label{padding-top:0}
+    .endpoint-row{grid-template-columns:14px 1fr auto;gap:10px}
+    .endpoint-row .small-toggle{display:none}
+  }
+
+
+  /* ===== MOBILE FLOOR (375–480 px) ===== */
+  @media (max-width: 480px) {
+    :root { --pad-x: 14px; }
+    .masthead { padding: 10px var(--pad-x); }
+    .brand { font-size: 11px; gap: 8px; }
+    .controls { gap: 8px; }
+    .controls .ctl-btn { padding: 6px 8px; font-size: 9px; letter-spacing: 0.12em; }
+    .controls .ctl-btn.ctl-icon { padding: 6px 7px; }
+    .breadcrumb { padding: 10px var(--pad-x); font-size: 9px; letter-spacing: 0.14em; gap: 8px; }
+    .breadcrumb .meta { gap: 12px; }
+    .titlestrip { padding: 16px var(--pad-x) 14px; gap: 12px; }
+    .titlestrip h2 { font-size: 22px; }
+    .titlestrip h2 .sub { font-size: 12px; margin-left: 0; display: block; margin-top: 3px; }
+    .titlestrip .coords, .titlestrip .meta { font-size: 9px; letter-spacing: 0.12em; gap: 12px; }
+    .hero-meta, .hero-left, .hero-num { padding-left: var(--pad-x); padding-right: var(--pad-x); }
+    .hero-meta h1, .hud-title h1 { font-size: clamp(28px, 9vw, 48px); }
+    .hero-num .number, .hero-comp h1, .hero h1 { font-size: clamp(56px, 18vw, 120px); letter-spacing: -0.04em; }
+    .hero-num .number .u, .hero-comp .number .u { font-size: 14px; vertical-align: 0.65em; }
+    .stage { min-height: 600px; }
+    .scrub { padding: 10px var(--pad-x) 12px; gap: 10px; }
+    .scrub .lbl, .scrub .scrub-read { font-size: 9px; min-width: auto; }
+    .scrub .lbl { display: none; }
+    .below { padding: 48px var(--pad-x) 56px; }
+    .section-head, section .head { font-size: 9px; letter-spacing: 0.16em; }
+    .section-head .l, section .head .l { font-size: 24px; }
+    .foot { padding: 14px var(--pad-x); font-size: 9px; letter-spacing: 0.12em; }
+    .ladder .cell { padding: 8px 6px; }
+    .ladder .cell .v { font-size: 14px; }
+    .ladder .cell .k { font-size: 9px; letter-spacing: 0.16em; }
+    .phase-legend { grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 8px; }
+    .phase-legend .it .l { letter-spacing: 0.08em; }
+    .rank-row { grid-template-columns: 1fr; }
+    .station-tabs { padding: 130px var(--pad-x) 8px; gap: 6px; }
+    .station-tabs .tab { width: auto; min-width: 0; padding: 6px 10px; flex: 1; }
+    .station-tabs .tab .nm { font-size: 11px; }
+    .station-tabs .tab .v { font-size: 9px; }
+    .hud-stats .num { font-size: clamp(32px, 11vw, 56px); }
+    .hud-stats .num .u { font-size: 12px; }
+    /* Surface previews stack on small */
+    .surface-grid, .secondary-row .sec-grid { grid-template-columns: 1fr; }
+    .secondary-row .sec-card { padding: 18px 20px 22px; }
+    .secondary-row .sec-card .nm { font-size: 19px; }
+    /* Footer columns */
+    footer.foot, .foot-bar { grid-template-columns: 1fr; gap: 4px; }
+    .foot-bar .center, .foot-bar .right { text-align: left; }
+  }
+
+
+  /* Keyboard help overlay */
+  .keyboard-help{position:fixed;inset:0;z-index:90;display:none;align-items:center;justify-content:center;background:rgba(3,5,10,0.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:0;transition:opacity 240ms ease-out}
+  .keyboard-help.visible{display:flex;opacity:1}
+  .keyboard-help .panel{background:var(--bg-2);border:1px solid var(--rule-strong);max-width:520px;width:90vw;padding:32px 36px;position:relative;box-shadow:0 24px 72px rgba(0,0,0,0.6)}
+  .keyboard-help .panel::before{content:'';position:absolute;top:0;left:0;width:36px;height:1px;background:var(--station-B);box-shadow:0 0 12px var(--station-B)}
+  .keyboard-help .head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--rule)}
+  .keyboard-help .head h3{font-family:var(--font);font-weight:300;font-size:24px;letter-spacing:-0.015em;color:var(--fg)}
+  .keyboard-help .head .esc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);font-weight:700;padding:4px 8px;border:1px solid var(--rule-strong)}
+  .keyboard-help .grid{display:grid;grid-template-columns:auto 1fr;gap:14px 22px}
+  .keyboard-help .key{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--fg);background:var(--bg-3);border:1px solid var(--rule-strong);padding:4px 10px;min-width:36px;text-align:center;letter-spacing:0.04em;white-space:nowrap}
+  .keyboard-help .label{font-size:13px;color:var(--fg-2);align-self:center;line-height:1.4}
+  .keyboard-help .label em{font-style:normal;font-family:var(--font-mono);color:var(--fg)}
+
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <header class="masthead">
+    <div class="brand">
+      <span class="crest" aria-hidden="true"></span>
+      <span>Chronoscope</span>
+      <span class="tag">Synchronized HTTP latency observation</span>
+    </div>
+    <nav class="nav" aria-label="Primary">
+      <a href="proposal-overview-v4.html">Overview</a>
+      <a href="proposal-live-v4.html">Live</a>
+      <a href="proposal-investigate-v4.html">Investigate</a>
+      <a href="proposal-report-v4.html">Report</a>
+    </nav>
+    <div class="controls">
+      <span class="carrier-tag"><span class="dot"></span>Carrier acquired</span>
+      <button class="gear is-active" id="gearBtn" aria-label="Settings">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+          <circle cx="7" cy="7" r="2"/>
+          <path d="M7 1.5 V3 M7 11 V12.5 M1.5 7 H3 M11 7 H12.5 M3.1 3.1 L4.1 4.1 M9.9 9.9 L10.9 10.9 M3.1 10.9 L4.1 9.9 M9.9 4.1 L10.9 3.1"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="titlestrip">
+    <h2>Settings<span class="sub">Session configuration</span></h2>
+    <div class="coords">
+      <span>Session<span class="v">CHR–260518–1442–A7K</span></span>
+      <span>Round<span class="v">247</span></span>
+      <span>Window<span class="v">60 s</span></span>
+    </div>
+  </div>
+
+  <div class="stage-stub">
+    <div class="copy">
+      <div class="kicker">Drawer slides over any surface</div>
+      <h1>The settings panel is open.</h1>
+      <p>It overlays Overview, Live, Investigate, and Report. Changes apply immediately on Done; Cancel reverts. Click the scrim or press <em style="font-family:var(--font-mono);color:var(--fg-2);font-style:normal">Esc</em> to close without committing.</p>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============= DRAWER ============= -->
+<div class="scrim" id="scrim"></div>
+
+<aside class="drawer" id="drawer" aria-label="Settings" role="dialog" aria-modal="true">
+  <div class="drawer-head">
+    <div class="l">
+      <div class="title">Settings</div>
+      <div class="sub">v4 · Vessel</div>
+    </div>
+    <button class="drawer-close" id="closeBtn" aria-label="Close settings">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M2 2 L12 12 M12 2 L2 12"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+
+    <!-- STATIONS -->
+    <section class="section">
+      <div class="section-head">
+        <span><span class="num">§ 01 ·</span> <span class="title">Stations</span></span>
+        <span class="right"><span>Default set<span style="color:var(--fg);font-weight:700;margin-left:6px;">4</span></span></span>
+      </div>
+
+      <div class="endpoint-list" id="endpointList">
+        <div class="endpoint-row" data-ep="A">
+          <span class="mk"></span>
+          <div class="info">
+            <div class="nm">Google</div>
+            <div class="host">www.google.com</div>
+          </div>
+          <button class="small-toggle" aria-pressed="true" aria-label="Probe Google"></button>
+          <button class="remove" aria-label="Remove Google">×</button>
+        </div>
+        <div class="endpoint-row" data-ep="B">
+          <span class="mk"></span>
+          <div class="info">
+            <div class="nm">Edge</div>
+            <div class="host">edge.akamai.net</div>
+          </div>
+          <button class="small-toggle" aria-pressed="true" aria-label="Probe Edge"></button>
+          <button class="remove" aria-label="Remove Edge">×</button>
+        </div>
+        <div class="endpoint-row" data-ep="C">
+          <span class="mk"></span>
+          <div class="info">
+            <div class="nm">AWS</div>
+            <div class="host">s3.us-west-2.amazonaws.com</div>
+          </div>
+          <button class="small-toggle" aria-pressed="true" aria-label="Probe AWS"></button>
+          <button class="remove" aria-label="Remove AWS">×</button>
+        </div>
+        <div class="endpoint-row" data-ep="D">
+          <span class="mk"></span>
+          <div class="info">
+            <div class="nm">Fastly</div>
+            <div class="host">www.fastly.com</div>
+          </div>
+          <button class="small-toggle" aria-pressed="true" aria-label="Probe Fastly"></button>
+          <button class="remove" aria-label="Remove Fastly">×</button>
+        </div>
+      </div>
+
+      <div class="endpoint-add">
+        <input type="text" id="newEndpointHost" placeholder="hostname.example.com" autocomplete="off">
+        <button id="addBtn">Add station</button>
+      </div>
+
+      <div class="field" style="margin-top:18px;padding-top:18px;border-top:1px solid var(--rule)">
+        <div class="label">Regional default
+          <span class="help">Region the default station set is biased toward.</span>
+        </div>
+        <div class="ctl">
+          <div class="seg" role="radiogroup" aria-label="Regional default">
+            <button data-region="us-w" aria-pressed="true">US-W</button>
+            <button data-region="us-e" aria-pressed="false">US-E</button>
+            <button data-region="eu" aria-pressed="false">EU</button>
+            <button data-region="ap" aria-pressed="false">AP</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TIMING -->
+    <section class="section">
+      <div class="section-head">
+        <span><span class="num">§ 02 ·</span> <span class="title">Timing</span></span>
+      </div>
+
+      <div class="field">
+        <div class="label">Cadence
+          <span class="help">Time between synchronized rounds.</span>
+        </div>
+        <div class="ctl">
+          <div class="slider">
+            <input type="range" id="cadence" min="500" max="5000" step="100" value="1000">
+            <span class="val"><span id="cadenceVal">1.0</span><span class="u">s</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label">Window
+          <span class="help">Rolling window of rounds kept in memory.</span>
+        </div>
+        <div class="ctl">
+          <div class="slider">
+            <input type="range" id="window" min="30" max="240" step="10" value="60">
+            <span class="val"><span id="windowVal">60</span><span class="u">s</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field" data-accent="trigger">
+        <div class="label">Trigger
+          <span class="help">Threshold above which a pulse is marked degraded.</span>
+        </div>
+        <div class="ctl">
+          <div class="slider">
+            <input type="range" id="trigger" min="40" max="500" step="5" value="120">
+            <span class="val"><span id="triggerVal">120</span><span class="u">ms</span></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label">Auto end
+          <span class="help">Stop recording after this many rounds.</span>
+        </div>
+        <div class="ctl">
+          <div class="slider">
+            <input type="range" id="autoend" min="600" max="7200" step="100" value="3600">
+            <span class="val"><span id="autoendVal">3600</span><span class="u">rounds</span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- NETWORK -->
+    <section class="section">
+      <div class="section-head">
+        <span><span class="num">§ 03 ·</span> <span class="title">Network</span></span>
+      </div>
+
+      <div class="field">
+        <div class="label">Request mode
+          <span class="help">How probes are dispatched. <em>CORS</em> exposes phase timing when servers allow it; <em>no-CORS</em> is broadest but blinder.</span>
+        </div>
+        <div class="ctl">
+          <div class="seg" role="radiogroup">
+            <button data-mode="cors" aria-pressed="true">CORS</button>
+            <button data-mode="no-cors" aria-pressed="false">no-CORS</button>
+            <button data-mode="image" aria-pressed="false">Image</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label">Method
+          <span class="help">HEAD is lightest; GET tests real response payload size.</span>
+        </div>
+        <div class="ctl">
+          <div class="seg" role="radiogroup">
+            <button data-method="head" aria-pressed="true">HEAD</button>
+            <button data-method="get" aria-pressed="false">GET</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label">Timeout
+          <span class="help">Pulses past this duration are recorded as carrier-lost.</span>
+        </div>
+        <div class="ctl">
+          <div class="slider">
+            <input type="range" id="timeout" min="500" max="10000" step="100" value="5000">
+            <span class="val"><span id="timeoutVal">5.0</span><span class="u">s</span></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPANION AGENT -->
+    <section class="section">
+      <div class="section-head">
+        <span><span class="num">§ 04 ·</span> <span class="title">Companion agent</span></span>
+        <span class="right" style="color:var(--sev-warn)">Not installed</span>
+      </div>
+
+      <div class="agent-card">
+        <div class="agent-head">
+          <div class="agent-name">Chronoscope local agent</div>
+          <div class="agent-status">Optional</div>
+        </div>
+        <div class="agent-body">
+          A desktop companion exposes precise TCP / TLS times, DNS resolver behavior, and Wi-Fi RSSI from <em>your</em> machine — data the browser refuses to surface.
+        </div>
+        <div class="agent-detail">
+          <span class="k">Platform</span><span class="v">macOS · Linux · Windows</span>
+          <span class="k">Install</span><span class="v">~12 MB · code-signed</span>
+          <span class="k">Telemetry</span><span class="v">none · local only</span>
+          <span class="k">Latency</span><span class="v">localhost · ~0.1 ms</span>
+        </div>
+        <button class="agent-action">Download agent →</button>
+      </div>
+    </section>
+
+    <!-- AUDIO & MOTION -->
+    <section class="section">
+      <div class="section-head">
+        <span><span class="num">§ 05 ·</span> <span class="title">Audio &amp; motion</span></span>
+      </div>
+
+      <div class="toggle-row">
+        <div class="nm">Audio tick
+          <span class="help">Soft 880 Hz tone on each round arrival, at −32 dB.</span>
+        </div>
+        <button class="toggle" aria-pressed="false" data-key="audio" aria-label="Audio tick"></button>
+      </div>
+
+      <div class="toggle-row">
+        <div class="nm">Reduced motion
+          <span class="help">Honors <em>prefers-reduced-motion</em>. Sweep stops; pulses stamp without slide.</span>
+        </div>
+        <button class="toggle" aria-pressed="false" data-key="reduced" aria-label="Reduced motion"></button>
+      </div>
+
+      <div class="toggle-row">
+        <div class="nm">Mouse parallax
+          <span class="help">Camera shifts slightly with cursor for spatial depth.</span>
+        </div>
+        <button class="toggle" aria-pressed="true" data-key="parallax" aria-label="Mouse parallax"></button>
+      </div>
+
+      <div class="toggle-row">
+        <div class="nm">Star field
+          <span class="help">Background of distant stars. Disable for slower devices.</span>
+        </div>
+        <button class="toggle" aria-pressed="true" data-key="stars" aria-label="Star field"></button>
+      </div>
+    </section>
+
+    <!-- SHARING -->
+    <section class="section">
+      <div class="section-head">
+        <span><span class="num">§ 06 ·</span> <span class="title">Sharing &amp; storage</span></span>
+      </div>
+
+      <div class="toggle-row">
+        <div class="nm">Publish hosted report
+          <span class="help">When you press <em>Share</em>, store a snapshot on Cloudflare KV. Off = link contains everything inline.</span>
+        </div>
+        <button class="toggle" aria-pressed="false" data-key="publish" aria-label="Publish hosted report"></button>
+      </div>
+
+      <div class="toggle-row">
+        <div class="nm">Save session locally
+          <span class="help">Keep this session's signature in <em>localStorage</em> after the tab closes.</span>
+        </div>
+        <button class="toggle" aria-pressed="true" data-key="save" aria-label="Save locally"></button>
+      </div>
+
+      <div class="section-note">
+        <strong>No telemetry leaves this browser.</strong> Settings are stored in <em>localStorage</em>. Shared reports are encoded into the URL by default; only the <em>Publish hosted report</em> toggle uploads anything.
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="section">
+      <div class="section-head">
+        <span><span class="num">§ 07 ·</span> <span class="title">About</span></span>
+      </div>
+      <div class="about">
+        <span class="k">Build</span><span class="v">v4.0 · Vessel</span>
+        <span class="k">Cert</span><span class="v">CHR-DSN-260518-V4</span>
+        <span class="k">Vantage</span><span class="v">Chrome 126 · macOS 14.5 · US-W</span>
+        <span class="k">Browser</span><span class="v">Resident · no install</span>
+        <span class="k">License</span><span class="v">MIT</span>
+        <span class="k">Source</span><span class="v">github.com/chronoscope</span>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="drawer-foot">
+    <div class="meta">Changes apply on <span class="v">Done</span></div>
+    <div class="actions">
+      <button class="btn" id="cancelBtn">Cancel</button>
+      <button class="btn btn--primary" id="doneBtn">Done</button>
+    </div>
+  </div>
+</aside>
+
+<script>
+  // Drawer open/close
+  const drawer = document.getElementById('drawer');
+  const scrim = document.getElementById('scrim');
+  const gearBtn = document.getElementById('gearBtn');
+  const closeBtn = document.getElementById('closeBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+  const doneBtn = document.getElementById('doneBtn');
+
+  function open() {
+    drawer.classList.add('open');
+    scrim.classList.add('open');
+    gearBtn.classList.add('is-active');
+    document.body.style.overflow = 'hidden';
+  }
+  function close() {
+    drawer.classList.remove('open');
+    scrim.classList.remove('open');
+    gearBtn.classList.remove('is-active');
+    document.body.style.overflow = '';
+  }
+
+  gearBtn.addEventListener('click', open);
+  closeBtn.addEventListener('click', close);
+  cancelBtn.addEventListener('click', close);
+  doneBtn.addEventListener('click', close);
+  scrim.addEventListener('click', close);
+  window.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+
+  // Sliders
+  function bindSlider(id, valId, fmt) {
+    const s = document.getElementById(id);
+    const v = document.getElementById(valId);
+    s.addEventListener('input', () => v.textContent = fmt ? fmt(s.value) : s.value);
+  }
+  bindSlider('cadence', 'cadenceVal', x => (x/1000).toFixed(1));
+  bindSlider('window', 'windowVal');
+  bindSlider('trigger', 'triggerVal');
+  bindSlider('autoend', 'autoendVal');
+  bindSlider('timeout', 'timeoutVal', x => (x/1000).toFixed(1));
+
+  // Segmented radios
+  document.querySelectorAll('.seg').forEach(seg => {
+    seg.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', () => {
+        seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed','false'));
+        btn.setAttribute('aria-pressed','true');
+      });
+    });
+  });
+
+  // Toggles
+  document.querySelectorAll('.toggle, .small-toggle').forEach(t => {
+    t.addEventListener('click', () => {
+      const p = t.getAttribute('aria-pressed') === 'true';
+      t.setAttribute('aria-pressed', String(!p));
+    });
+  });
+
+  // Endpoint add
+  const newHost = document.getElementById('newEndpointHost');
+  const addBtn = document.getElementById('addBtn');
+  const list = document.getElementById('endpointList');
+  const extraColors = ['#A698D8', '#9ECDD6', '#F0D26A', '#E59A78', '#C7A4E0', '#7EC8B8'];
+  let extraIdx = 0;
+
+  function addEndpoint() {
+    const host = newHost.value.trim();
+    if (!host) return;
+    const color = extraColors[extraIdx % extraColors.length];
+    extraIdx++;
+    const id = 'X' + Math.random().toString(36).slice(2, 5).toUpperCase();
+    const nm = host.replace(/^www\./, '').split('.')[0];
+    const row = document.createElement('div');
+    row.className = 'endpoint-row';
+    row.setAttribute('data-ep', id);
+    row.innerHTML = `
+      <span class="mk" style="background:${color};box-shadow:0 0 8px ${color}"></span>
+      <div class="info"><div class="nm">${nm.charAt(0).toUpperCase()+nm.slice(1)}</div><div class="host">${host}</div></div>
+      <button class="small-toggle" aria-pressed="true" aria-label="Probe ${host}"></button>
+      <button class="remove" aria-label="Remove ${host}">×</button>
+    `;
+    list.appendChild(row);
+    row.querySelector('.small-toggle').addEventListener('click', e => {
+      const p = e.currentTarget.getAttribute('aria-pressed') === 'true';
+      e.currentTarget.setAttribute('aria-pressed', String(!p));
+    });
+    row.querySelector('.remove').addEventListener('click', () => row.remove());
+    newHost.value = '';
+  }
+  addBtn.addEventListener('click', addEndpoint);
+  newHost.addEventListener('keydown', e => { if (e.key === 'Enter') addEndpoint(); });
+
+  // Existing remove buttons
+  document.querySelectorAll('.endpoint-row .remove').forEach(b => {
+    b.addEventListener('click', () => b.closest('.endpoint-row').remove());
+  });
+
+  // Open by default (prototype review state)
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(() => setTimeout(open, 200));
+  } else {
+    setTimeout(open, 200);
+  }
+</script>
+
+
+  <div class="keyboard-help" id="keyboardHelp" role="dialog" aria-label="Keyboard shortcuts">
+    <div class="panel">
+      <div class="head"><h3>Keyboard shortcuts</h3><span class="esc">Esc to close</span></div>
+      <div class="grid">
+        <span class="key">?</span><span class="label">Toggle this help</span>
+        <span class="key">L</span><span class="label">Open Live tracker</span>
+        <span class="key">O</span><span class="label">Open Overview</span>
+        <span class="key">I</span><span class="label">Open Investigate</span>
+        <span class="key">R</span><span class="label">Open Report</span>
+        <span class="key">T</span><span class="label">Open Outside transit</span>
+        <span class="key">S</span><span class="label">Open Settings</span>
+        <span class="key">H</span><span class="label">Back to home (Index)</span>
+        <span class="key">Esc</span><span class="label">Close any overlay</span>
+      </div>
+    </div>
+  </div>
+
+<script>
+  (function(){
+    const _kbHelp = document.getElementById('keyboardHelp');
+    if (!_kbHelp) return;
+    function toggleHelp(force){const w=force!==undefined?force:!_kbHelp.classList.contains('visible');_kbHelp.classList.toggle('visible',w);}
+    window.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const k = e.key;
+      if (k === '?' || (e.shiftKey && k === '/')) { e.preventDefault(); toggleHelp(); }
+      else if (k === 'Escape') { if (_kbHelp.classList.contains('visible')) toggleHelp(false); }
+      else if (k === 'l' || k === 'L') window.location.href = 'proposal-live-v4.html';
+      else if (k === 'o' || k === 'O') window.location.href = 'proposal-overview-v4.html';
+      else if (k === 'i' || k === 'I') window.location.href = 'proposal-investigate-v4.html';
+      else if (k === 'r' || k === 'R') window.location.href = 'proposal-report-v4.html';
+      else if (k === 't' || k === 'T') window.location.href = 'proposal-transit-v4.html';
+      else if (k === 's' || k === 'S') window.location.href = 'proposal-settings-v4.html';
+      else if (k === 'h' || k === 'H') window.location.href = 'index.html';
+    });
+  })();
+</script>
+
+</body>
+</html>

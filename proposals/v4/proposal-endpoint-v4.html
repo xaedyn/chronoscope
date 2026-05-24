@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronoscope — Station / AWS</title>
+<meta name="description" content="Single-station drill-down — full session focus on one endpoint. Solo orbit, polar distribution, phase decomposition, field rank, carrier history timeline.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:#03050A; --bg-2:#080C14; --bg-3:#11171F;
+    --fg:#F2EBDB; --fg-2:#A39A87; --fg-3:#5F594D; --fg-4:#36322B;
+    --rule:rgba(242,235,219,0.06); --rule-strong:rgba(242,235,219,0.14); --rule-faint:rgba(242,235,219,0.03);
+    --station-A:#B7D3EC; --station-B:#8CD4C9; --station-C:#E8D597; --station-D:#D78E68;
+    --sev-warn:#E8C36F; --sev-bad:#D27258; --sev-crit:#B14238;
+    --font:'Hanken Grotesk',system-ui,sans-serif;
+    --font-mono:'Space Mono',ui-monospace,SFMono-Regular,monospace;
+    --pad-x:clamp(20px,3vw,48px);
+    /* Focused station — gets overridden per-station */
+    --focus:#E8D597;
+    --focus-glow:rgba(232,213,151,0.18);
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--fg);min-height:100%}
+  body{font-family:var(--font);font-size:13px;font-weight:400;line-height:1.55;overflow-x:hidden;min-height:100vh;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+  a{color:inherit;text-decoration:none}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+
+  /* HERO STAGE (full viewport) */
+  .stage{
+    position:relative;height:100vh;min-height:760px;
+    background:var(--bg);overflow:hidden;
+  }
+  .stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .stage::after{
+    content:'';position:absolute;inset:0;pointer-events:none;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 800 800'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='3'/><feColorMatrix values='0 0 0 0 0.96 0 0 0 0 0.92 0 0 0 0 0.85 0 0 0 0.06 0'/></filter><rect width='800' height='800' filter='url(%23n)'/></svg>");
+    background-size:400px 400px;opacity:0.55;mix-blend-mode:screen;
+  }
+  .vignette{position:absolute;inset:0;z-index:2;pointer-events:none;
+    background:radial-gradient(ellipse at center,transparent 30%,rgba(3,5,10,0.55) 70%,rgba(3,5,10,0.96) 100%)}
+
+  /* MASTHEAD on stage */
+  .masthead{
+    position:absolute;top:0;left:0;right:0;z-index:5;
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+    padding:14px var(--pad-x);
+    border-bottom:1px solid var(--rule);
+    background:rgba(3,5,10,0.55);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  }
+  .brand{display:flex;align-items:baseline;gap:12px;font-family:var(--font-mono);font-weight:700;font-size:12px;letter-spacing:0.16em;text-transform:uppercase}
+  .brand .crest{display:inline-block;width:12px;height:12px;border:1.2px solid var(--fg);border-radius:50%;position:relative;transform:translateY(1px);flex-shrink:0}
+  .brand .crest::after{content:'';position:absolute;width:1.2px;height:5px;background:var(--fg);top:1.5px;left:calc(50% - 0.6px);transform-origin:50% 100%;transform:rotate(42deg)}
+  .brand .tag{font-family:var(--font);font-size:11px;font-weight:400;letter-spacing:0.02em;text-transform:none;color:var(--fg-2);margin-left:14px;padding-left:14px;border-left:1px solid var(--rule)}
+  .nav{display:flex;gap:26px;font-family:var(--font-mono);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;font-weight:700}
+  .nav a{color:var(--fg-3);padding:4px 0;border-bottom:1px solid transparent;transition:color 120ms,border-color 120ms}
+  .nav a:hover{color:var(--fg)}
+  .controls{display:flex;align-items:center;gap:14px;justify-self:end;font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase}
+  .carrier-tag{display:flex;align-items:center;gap:8px;color:var(--station-B);font-weight:700}
+  .carrier-tag .dot{width:6px;height:6px;background:var(--station-B);border-radius:50%;box-shadow:0 0 10px var(--station-B);animation:carrierpulse 2000ms ease-in-out infinite}
+  @keyframes carrierpulse{0%,100%{opacity:1}50%{opacity:0.4}}
+  .ctl-btn{border:1px solid var(--rule-strong);padding:7px 12px;color:var(--fg);font-family:var(--font-mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;transition:background 120ms,border-color 120ms;cursor:pointer}
+  .ctl-btn:hover{background:var(--bg-2);border-color:var(--fg-3)}
+  .ctl-btn--stop{color:var(--sev-bad);border-color:rgba(210,114,88,0.5)}
+
+  /* BREADCRUMB / coord strip */
+  .breadcrumb{
+    position:absolute;top:74px;left:0;right:0;z-index:4;
+    padding:12px var(--pad-x);
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);
+    background:rgba(3,5,10,0.4);
+    backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+    border-bottom:1px solid var(--rule);
+  }
+  .breadcrumb .crumb{display:inline-flex;gap:14px;align-items:center;flex-wrap:wrap;font-weight:700}
+  .breadcrumb .crumb a{color:var(--fg-3);transition:color 120ms}
+  .breadcrumb .crumb a:hover{color:var(--fg)}
+  .breadcrumb .crumb .sep{color:var(--fg-4)}
+  .breadcrumb .crumb .current{color:var(--focus);text-shadow:0 0 8px var(--focus-glow)}
+  .breadcrumb .meta{display:inline-flex;gap:22px;flex-wrap:wrap}
+  .breadcrumb .meta>span{white-space:nowrap}
+  .breadcrumb .meta .v{color:var(--fg);font-weight:700;margin-left:6px;font-variant-numeric:tabular-nums}
+
+  /* STATION TABS — pinned to top-left of hero */
+  .station-tabs{
+    position:absolute;top:140px;left:var(--pad-x);z-index:4;
+    display:flex;flex-direction:column;gap:6px;
+  }
+  .station-tabs .label{
+    font-family:var(--font-mono);font-size:9px;letter-spacing:0.28em;text-transform:uppercase;
+    color:var(--fg-3);font-weight:700;margin-bottom:8px;
+  }
+  .station-tabs .tab{
+    display:grid;grid-template-columns:8px 1fr auto;
+    gap:10px;align-items:center;padding:8px 14px;
+    background:rgba(3,5,10,0.55);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    border:1px solid var(--rule);
+    width:180px;
+    transition:background 120ms,border-color 120ms;
+    cursor:pointer;text-align:left;
+    position:relative;
+  }
+  .station-tabs .tab:hover{background:rgba(8,12,20,0.7);border-color:var(--rule-strong)}
+  .station-tabs .tab.active{border-color:var(--focus);background:rgba(8,12,20,0.7)}
+  .station-tabs .tab .mk{width:7px;height:7px}
+  .station-tabs .tab[data-ep="A"] .mk{background:var(--station-A);box-shadow:0 0 6px var(--station-A)}
+  .station-tabs .tab[data-ep="B"] .mk{background:var(--station-B);box-shadow:0 0 6px var(--station-B)}
+  .station-tabs .tab[data-ep="C"] .mk{background:var(--station-C);box-shadow:0 0 6px var(--station-C)}
+  .station-tabs .tab[data-ep="D"] .mk{background:var(--station-D);box-shadow:0 0 6px var(--station-D)}
+  .station-tabs .tab .nm{
+    font-family:var(--font);font-size:13px;font-weight:500;color:var(--fg);
+    letter-spacing:-0.005em;
+  }
+  .station-tabs .tab .v{
+    font-family:var(--font-mono);font-size:11px;color:var(--fg-2);
+    font-variant-numeric:tabular-nums;letter-spacing:0;
+    font-weight:700;
+  }
+  .station-tabs .tab.active .v{color:var(--focus)}
+  .station-tabs .tab .v.bad{color:var(--sev-bad)}
+
+  /* HERO COMPOSITION — right side anchored to canvas, no overlay center */
+  .hero-meta{
+    position:absolute;right:var(--pad-x);top:50%;transform:translateY(-50%);
+    z-index:4;text-align:right;
+    max-width:480px;
+    pointer-events:none;
+  }
+  .hero-meta .kicker{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.32em;text-transform:uppercase;
+    color:var(--fg-3);margin-bottom:24px;
+    display:inline-flex;align-items:center;gap:12px;font-weight:700;
+  }
+  .hero-meta .kicker .pip{width:7px;height:7px;background:var(--focus);box-shadow:0 0 10px var(--focus)}
+  .hero-meta .station-name{
+    font-family:var(--font);font-weight:200;
+    font-size:clamp(64px,8vw,128px);
+    letter-spacing:-0.04em;line-height:0.85;
+    color:var(--fg);margin-bottom:16px;
+    text-shadow:0 0 60px var(--focus-glow);
+  }
+  .hero-meta .station-host{
+    font-family:var(--font-mono);font-size:13px;color:var(--fg-2);
+    letter-spacing:0.02em;font-variant-numeric:tabular-nums;
+    margin-bottom:32px;font-weight:400;
+  }
+  .hero-meta .verdict-tag{
+    display:inline-flex;align-items:center;gap:10px;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.24em;text-transform:uppercase;
+    color:var(--sev-bad);font-weight:700;margin-bottom:18px;
+  }
+  .hero-meta .verdict-tag .pip{width:7px;height:7px;background:var(--sev-bad);box-shadow:0 0 8px var(--sev-bad)}
+  .hero-meta .verdict-text{
+    font-family:var(--font);font-weight:300;
+    font-size:clamp(22px,2.4vw,30px);
+    letter-spacing:-0.015em;line-height:1.25;
+    color:var(--fg);max-width:36ch;margin-left:auto;margin-bottom:24px;
+  }
+  .hero-meta .verdict-text em{font-style:normal;font-family:var(--font-mono);color:var(--fg);font-variant-numeric:tabular-nums}
+
+  .hero-meta .quick-stats{
+    display:grid;grid-template-columns:auto auto auto;
+    gap:18px 26px;justify-content:end;
+    margin-bottom:32px;
+  }
+  .hero-meta .quick-stats .stat{
+    text-align:right;
+  }
+  .hero-meta .quick-stats .k{
+    font-family:var(--font-mono);font-size:9px;letter-spacing:0.24em;text-transform:uppercase;
+    color:var(--fg-3);margin-bottom:6px;font-weight:700;
+  }
+  .hero-meta .quick-stats .v{
+    font-family:var(--font);font-weight:200;font-size:38px;
+    color:var(--fg);letter-spacing:-0.025em;line-height:1;
+    font-variant-numeric:tabular-nums;
+  }
+  .hero-meta .quick-stats .v.bad{color:var(--sev-bad)}
+  .hero-meta .quick-stats .v.crit{color:var(--sev-crit)}
+  .hero-meta .quick-stats .v .u{
+    font-family:var(--font-mono);font-size:0.32em;
+    color:var(--fg-3);margin-left:3px;letter-spacing:0.04em;
+    vertical-align:0.78em;display:inline-block;
+  }
+
+  /* Hero number on the left of the orbit */
+  .hero-left{
+    position:absolute;left:var(--pad-x);bottom:120px;z-index:4;
+    pointer-events:none;
+  }
+  .hero-left .label{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.28em;text-transform:uppercase;
+    color:var(--fg-3);margin-bottom:8px;font-weight:700;
+  }
+  .hero-left .field-num{
+    font-family:var(--font);font-weight:200;
+    font-size:clamp(64px,9vw,140px);
+    color:var(--focus);letter-spacing:-0.04em;line-height:0.85;
+    font-variant-numeric:tabular-nums;
+    text-shadow:0 0 80px var(--focus-glow);
+  }
+  .hero-left .field-num .u{
+    font-family:var(--font-mono);font-size:0.22em;
+    color:var(--fg-3);margin-left:6px;letter-spacing:0.04em;
+    vertical-align:0.78em;display:inline-block;text-shadow:none;
+  }
+  .hero-left .field-sub{
+    margin-top:14px;
+    font-family:var(--font-mono);font-size:11px;letter-spacing:0.18em;text-transform:uppercase;
+    color:var(--fg-3);font-weight:700;
+  }
+  .hero-left .field-sub .v{color:var(--fg);font-variant-numeric:tabular-nums;margin-left:6px}
+
+  /* SCRUB rail — bottom edge */
+  .scrub{
+    position:absolute;left:0;right:0;bottom:0;z-index:4;
+    padding:14px var(--pad-x) 16px;
+    display:flex;align-items:center;gap:18px;
+    border-top:1px solid var(--rule);
+    background:rgba(3,5,10,0.55);
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  }
+  .scrub .lbl{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;
+    color:var(--fg-3);font-weight:700;min-width:90px;
+  }
+  .scrub .rail{flex:1;position:relative;height:28px;cursor:ew-resize}
+  .scrub .rail-bg{position:absolute;left:0;right:0;top:50%;height:1px;background:var(--rule-strong);transform:translateY(-0.5px)}
+  .scrub .rail-fill{position:absolute;left:0;top:50%;height:1px;background:var(--focus);box-shadow:0 0 10px var(--focus);transform:translateY(-0.5px);width:100%}
+  .scrub .marks{position:absolute;inset:0;display:flex;align-items:center;pointer-events:none;justify-content:space-between}
+  .scrub .marks .m{width:1px;height:6px;background:var(--rule-strong)}
+  .scrub .marks .m:nth-child(8n + 1){height:10px;background:var(--fg-3)}
+  .scrub .handle{position:absolute;top:50%;transform:translate(-50%,-50%);width:2px;height:18px;background:var(--focus);box-shadow:0 0 12px var(--focus);left:100%;pointer-events:none}
+  .scrub .scrub-read{font-family:var(--font-mono);font-size:10px;letter-spacing:0.16em;text-transform:uppercase;color:var(--fg-3);min-width:110px;text-align:right;font-weight:700}
+  .scrub .scrub-read .v{color:var(--fg);margin-left:4px;font-variant-numeric:tabular-nums}
+
+  /* PAGE CONTENT BELOW HERO */
+  .below{
+    padding:80px var(--pad-x) 96px;
+    border-top:1px solid var(--rule);
+    background:linear-gradient(180deg,rgba(3,5,10,0.94) 0%,var(--bg) 24%);
+    position:relative;
+  }
+
+  /* Field rank strip */
+  .rank-section{
+    margin-bottom:64px;
+  }
+  .section-head{
+    display:flex;justify-content:space-between;align-items:baseline;
+    padding-bottom:18px;margin-bottom:24px;
+    border-bottom:1px solid var(--rule);
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.22em;text-transform:uppercase;
+    color:var(--fg-3);font-weight:700;
+  }
+  .section-head .l{color:var(--fg)}
+  .section-head .r{color:var(--fg-3);display:inline-flex;gap:20px}
+  .section-head .r .v{color:var(--fg);margin-left:6px}
+
+  .rank-row{
+    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:1px;background:var(--rule);border:1px solid var(--rule);
+  }
+  .rank-card{
+    background:var(--bg);padding:22px 24px;
+    display:flex;flex-direction:column;gap:14px;
+    position:relative;
+  }
+  .rank-card.is-focused{background:var(--bg-2)}
+  .rank-card.is-focused::before{
+    content:'';position:absolute;top:0;left:0;right:0;height:1px;
+    background:var(--focus);box-shadow:0 0 12px var(--focus);
+  }
+  .rank-card .head{display:flex;align-items:center;gap:10px}
+  .rank-card .mk{width:8px;height:8px}
+  .rank-card[data-ep="A"] .mk{background:var(--station-A);box-shadow:0 0 8px var(--station-A)}
+  .rank-card[data-ep="B"] .mk{background:var(--station-B);box-shadow:0 0 8px var(--station-B)}
+  .rank-card[data-ep="C"] .mk{background:var(--station-C);box-shadow:0 0 8px var(--station-C)}
+  .rank-card[data-ep="D"] .mk{background:var(--station-D);box-shadow:0 0 8px var(--station-D)}
+  .rank-card .nm{font-family:var(--font);font-size:15px;font-weight:500;color:var(--fg);letter-spacing:-0.005em}
+  .rank-card .rank-tag{margin-left:auto;font-family:var(--font-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);font-weight:700}
+  .rank-card.is-focused .rank-tag{color:var(--focus)}
+  .rank-card .val{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:30px;font-weight:300;color:var(--fg);letter-spacing:-0.02em;line-height:1}
+  .rank-card .val .u{font-size:11px;color:var(--fg-3);margin-left:2px}
+  .rank-card .val.bad{color:var(--sev-bad)}
+  .rank-card .delta{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--fg-3);font-weight:700;
+  }
+  .rank-card .delta .v{color:var(--fg-2);font-variant-numeric:tabular-nums;margin-left:6px}
+  .rank-card .delta .v.warn{color:var(--sev-warn)}
+  .rank-card .delta .v.bad{color:var(--sev-bad)}
+
+  /* ANALYSIS GRID — distribution + phase + history */
+  .analysis{
+    display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);
+    gap:48px;margin-bottom:64px;
+  }
+  .analysis .col h3{
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.22em;text-transform:uppercase;
+    color:var(--fg-3);font-weight:700;margin-bottom:16px;padding-bottom:12px;
+    border-bottom:1px solid var(--rule);
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .analysis .col h3 .l{color:var(--fg)}
+  .analysis .col h3 .r{color:var(--fg-3)}
+
+  /* Polar histogram — large */
+  .polar-large svg{width:100%;aspect-ratio:2/1;display:block;overflow:visible}
+  .polar-axis{display:flex;justify-content:space-between;margin-top:8px;font-family:var(--font-mono);font-size:9px;color:var(--fg-4);letter-spacing:0.12em}
+
+  /* Percentile ladder */
+  .ladder{
+    display:grid;grid-template-columns:repeat(5,minmax(0,1fr));
+    border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);
+    margin-bottom:18px;margin-top:16px;
+  }
+  .ladder .cell{padding:14px 16px;border-right:1px solid var(--rule)}
+  .ladder .cell:last-child{border-right:0}
+  .ladder .cell .k{font-family:var(--font-mono);font-size:10px;letter-spacing:0.22em;text-transform:uppercase;color:var(--fg-3);margin-bottom:8px;font-weight:700}
+  .ladder .cell .v{font-family:var(--font-mono);font-variant-numeric:tabular-nums;font-size:22px;font-weight:400;color:var(--fg);letter-spacing:-0.01em;line-height:1}
+  .ladder .cell .v .u{font-size:10px;color:var(--fg-3);margin-left:2px}
+  .ladder .cell .v.warn{color:var(--sev-warn)}
+  .ladder .cell .v.bad{color:var(--sev-bad)}
+  .ladder .cell .v.crit{color:var(--sev-crit)}
+
+  /* Phase decomposition */
+  .phase-stack{display:flex;width:100%;height:36px;border:1px solid var(--rule-strong);overflow:hidden;background:var(--bg-2)}
+  .phase-stack>div{height:100%;position:relative}
+  .phase-stack>div::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.12) 0%,transparent 50%)}
+  .phase-legend{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:14px;font-family:var(--font-mono);font-size:10px;color:var(--fg-2)}
+  .phase-legend .it{display:flex;flex-direction:column;gap:4px}
+  .phase-legend .sw{width:100%;height:2px;margin-bottom:4px}
+  .phase-legend .l{color:var(--fg-3);text-transform:uppercase;letter-spacing:0.14em;font-weight:700}
+  .phase-legend .v{color:var(--fg);font-weight:700;font-variant-numeric:tabular-nums}
+
+  .opaque{
+    display:flex;gap:14px;align-items:center;min-height:130px;
+    padding:18px;border:1px solid var(--rule-strong);background:var(--bg-2);
+  }
+  .opaque .ic{flex:0 0 42px;height:42px;border:1px solid var(--rule-strong);display:flex;align-items:center;justify-content:center;color:var(--fg-3);font-family:var(--font-mono);font-size:18px}
+  .opaque .copy{font-size:13px;line-height:1.55;color:var(--fg-2);max-width:42ch}
+  .opaque .copy strong{display:block;font-family:var(--font-mono);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg);font-weight:700;margin-bottom:5px}
+  .opaque .copy em{font-style:normal;font-family:var(--font-mono);color:var(--fg)}
+  .opaque .copy a{color:var(--focus);border-bottom:1px solid var(--focus);padding-bottom:1px}
+
+  /* CARRIER HISTORY TIMELINE */
+  .history-section{margin-bottom:64px}
+  .history-chart{
+    position:relative;
+    height:200px;
+    border:1px solid var(--rule-strong);
+    background:var(--bg-2);
+    padding:14px;
+  }
+  .history-chart svg{width:100%;height:100%;display:block;overflow:visible}
+  .history-axis{
+    display:flex;justify-content:space-between;margin-top:8px;
+    font-family:var(--font-mono);font-size:10px;color:var(--fg-3);letter-spacing:0.12em;font-weight:700;
+  }
+  .history-axis>span{white-space:nowrap}
+
+  /* EVENT LOG (station-filtered) */
+  .events-section .events{border-top:1px solid var(--rule)}
+  .events-section .event{
+    display:grid;grid-template-columns:90px 1fr auto;
+    gap:18px;padding:12px 0;align-items:baseline;
+    border-bottom:1px solid var(--rule-faint);font-size:13px;
+  }
+  .events-section .event .t{font-family:var(--font-mono);font-size:10px;color:var(--fg-3);font-variant-numeric:tabular-nums;letter-spacing:0.04em;white-space:nowrap;font-weight:700}
+  .events-section .event .b{color:var(--fg-2);line-height:1.45}
+  .events-section .event .b strong{color:var(--fg);font-weight:500}
+  .events-section .event .b em{font-style:normal;font-family:var(--font-mono);color:var(--fg);font-variant-numeric:tabular-nums}
+  .events-section .event .tag{font-family:var(--font-mono);font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--fg-3);font-weight:700;white-space:nowrap}
+  .events-section .event .tag[data-s="stable"]{color:var(--station-B)}
+  .events-section .event .tag[data-s="warn"]{color:var(--sev-warn)}
+  .events-section .event .tag[data-s="bad"]{color:var(--sev-bad)}
+
+  /* RECOMMENDED NEXT ACTION */
+  .action-card{
+    padding:32px;border:1px solid var(--rule-strong);background:var(--bg-2);
+    position:relative;margin-top:48px;
+  }
+  .action-card::before{content:'';position:absolute;top:0;left:0;width:24px;height:1px;background:var(--focus);box-shadow:0 0 10px var(--focus)}
+  .action-card .kicker{font-family:var(--font-mono);font-size:10px;letter-spacing:0.24em;text-transform:uppercase;color:var(--fg-3);margin-bottom:18px;font-weight:700}
+  .action-card h4{font-family:var(--font);font-size:28px;font-weight:300;color:var(--fg);letter-spacing:-0.02em;line-height:1.2;margin-bottom:14px;max-width:32ch}
+  .action-card p{font-size:14px;color:var(--fg-2);line-height:1.55;margin-bottom:22px;max-width:50ch}
+  .action-card p em{font-style:normal;font-family:var(--font-mono);color:var(--fg)}
+  .action-card .row{display:flex;gap:12px;font-family:var(--font-mono);font-size:11px;letter-spacing:0.14em;text-transform:uppercase}
+  .action-card .row .primary{border:1px solid var(--fg);background:var(--fg);color:var(--bg);padding:11px 18px;font-weight:700;transition:background 120ms,border-color 120ms;cursor:pointer}
+  .action-card .row .primary:hover{background:var(--focus);border-color:var(--focus)}
+  .action-card .row .ghost{border:1px solid var(--rule-strong);color:var(--fg-2);padding:11px 18px;font-weight:700;transition:color 120ms,border-color 120ms;cursor:pointer}
+  .action-card .row .ghost:hover{color:var(--fg);border-color:var(--fg-3)}
+
+  /* FOOTER */
+  .foot{
+    border-top:1px solid var(--rule);padding:18px var(--pad-x);
+    display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+    font-family:var(--font-mono);font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);font-weight:700;
+  }
+  .foot .v{color:var(--fg);margin-left:6px}
+  .foot .center{text-align:center}
+  .foot .right{text-align:right}
+
+  @media (max-width:1100px){
+    .hero-meta{position:static;transform:none;padding:140px var(--pad-x) 24px;max-width:none;text-align:left}
+    .hero-meta .quick-stats{justify-content:start}
+    .hero-meta .quick-stats .stat,.hero-meta .verdict-text{text-align:left;margin-left:0}
+    .station-tabs{position:static;flex-direction:row;flex-wrap:wrap;padding:140px var(--pad-x) 12px;gap:8px}
+    .station-tabs .label{display:none}
+    .station-tabs .tab{width:auto}
+    .hero-left{position:static;padding:24px var(--pad-x) 80px}
+    .analysis{grid-template-columns:1fr;gap:36px}
+    .rank-row{grid-template-columns:repeat(2,1fr)}
+  }
+  @media (max-width:720px){
+    .nav,.brand .tag{display:none}
+    .breadcrumb{font-size:9px}
+    .ladder{grid-template-columns:repeat(5,1fr)}
+    .ladder .cell{padding:10px 8px}
+    .ladder .cell .v{font-size:16px}
+    .rank-row{grid-template-columns:1fr}
+    .foot{grid-template-columns:1fr;gap:4px;text-align:left}
+    .foot .center,.foot .right{text-align:left}
+  }
+
+
+  /* ===== MOBILE FLOOR (375–480 px) ===== */
+  @media (max-width: 480px) {
+    :root { --pad-x: 14px; }
+    .masthead { padding: 10px var(--pad-x); }
+    .brand { font-size: 11px; gap: 8px; }
+    .controls { gap: 8px; }
+    .controls .ctl-btn { padding: 6px 8px; font-size: 9px; letter-spacing: 0.12em; }
+    .controls .ctl-btn.ctl-icon { padding: 6px 7px; }
+    .breadcrumb { padding: 10px var(--pad-x); font-size: 9px; letter-spacing: 0.14em; gap: 8px; }
+    .breadcrumb .meta { gap: 12px; }
+    .titlestrip { padding: 16px var(--pad-x) 14px; gap: 12px; }
+    .titlestrip h2 { font-size: 22px; }
+    .titlestrip h2 .sub { font-size: 12px; margin-left: 0; display: block; margin-top: 3px; }
+    .titlestrip .coords, .titlestrip .meta { font-size: 9px; letter-spacing: 0.12em; gap: 12px; }
+    .hero-meta, .hero-left, .hero-num { padding-left: var(--pad-x); padding-right: var(--pad-x); }
+    .hero-meta h1, .hud-title h1 { font-size: clamp(28px, 9vw, 48px); }
+    .hero-num .number, .hero-comp h1, .hero h1 { font-size: clamp(56px, 18vw, 120px); letter-spacing: -0.04em; }
+    .hero-num .number .u, .hero-comp .number .u { font-size: 14px; vertical-align: 0.65em; }
+    .stage { min-height: 600px; }
+    .scrub { padding: 10px var(--pad-x) 12px; gap: 10px; }
+    .scrub .lbl, .scrub .scrub-read { font-size: 9px; min-width: auto; }
+    .scrub .lbl { display: none; }
+    .below { padding: 48px var(--pad-x) 56px; }
+    .section-head, section .head { font-size: 9px; letter-spacing: 0.16em; }
+    .section-head .l, section .head .l { font-size: 24px; }
+    .foot { padding: 14px var(--pad-x); font-size: 9px; letter-spacing: 0.12em; }
+    .ladder .cell { padding: 8px 6px; }
+    .ladder .cell .v { font-size: 14px; }
+    .ladder .cell .k { font-size: 9px; letter-spacing: 0.16em; }
+    .phase-legend { grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 8px; }
+    .phase-legend .it .l { letter-spacing: 0.08em; }
+    .rank-row { grid-template-columns: 1fr; }
+    .station-tabs { padding: 130px var(--pad-x) 8px; gap: 6px; }
+    .station-tabs .tab { width: auto; min-width: 0; padding: 6px 10px; flex: 1; }
+    .station-tabs .tab .nm { font-size: 11px; }
+    .station-tabs .tab .v { font-size: 9px; }
+    .hud-stats .num { font-size: clamp(32px, 11vw, 56px); }
+    .hud-stats .num .u { font-size: 12px; }
+    /* Surface previews stack on small */
+    .surface-grid, .secondary-row .sec-grid { grid-template-columns: 1fr; }
+    .secondary-row .sec-card { padding: 18px 20px 22px; }
+    .secondary-row .sec-card .nm { font-size: 19px; }
+    /* Footer columns */
+    footer.foot, .foot-bar { grid-template-columns: 1fr; gap: 4px; }
+    .foot-bar .center, .foot-bar .right { text-align: left; }
+  }
+
+
+  /* Keyboard help overlay */
+  .keyboard-help{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:rgba(3,5,10,0.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:0;transition:opacity 240ms ease-out}
+  .keyboard-help.visible{display:flex;opacity:1}
+  .keyboard-help .panel{background:var(--bg-2);border:1px solid var(--rule-strong);max-width:520px;width:90vw;padding:32px 36px;position:relative;box-shadow:0 24px 72px rgba(0,0,0,0.6)}
+  .keyboard-help .panel::before{content:'';position:absolute;top:0;left:0;width:36px;height:1px;background:var(--target);box-shadow:0 0 12px var(--target)}
+  .keyboard-help .head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--rule)}
+  .keyboard-help .head h3{font-family:var(--font);font-weight:300;font-size:24px;letter-spacing:-0.015em;color:var(--fg)}
+  .keyboard-help .head .esc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);font-weight:700;padding:4px 8px;border:1px solid var(--rule-strong)}
+  .keyboard-help .grid{display:grid;grid-template-columns:auto 1fr;gap:14px 22px}
+  .keyboard-help .key{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--fg);background:var(--bg-3);border:1px solid var(--rule-strong);padding:4px 10px;min-width:36px;text-align:center;letter-spacing:0.04em;white-space:nowrap}
+  .keyboard-help .label{font-size:13px;color:var(--fg-2);align-self:center;line-height:1.4}
+
+  /* Station switch fade transition */
+  .hero-meta, .hero-left { transition: opacity 280ms cubic-bezier(0.16, 0.84, 0.42, 1) }
+  body.switching .hero-meta, body.switching .hero-left { opacity: 0.3 }
+
+
+  /* History timeline interactivity */
+  .history-chart{cursor:ew-resize}
+  .history-chart svg{pointer-events:none}
+  .history-chart .h-cursor{
+    position:absolute;top:14px;bottom:34px;width:1px;
+    background:var(--focus);box-shadow:0 0 12px var(--focus);
+    pointer-events:none;left:50%;opacity:0;transition:opacity 200ms;
+  }
+  .history-chart.scrubbed .h-cursor{opacity:1}
+  .history-chart .h-cursor::before{
+    content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+    width:8px;height:8px;background:var(--focus);
+    box-shadow:0 0 10px var(--focus);
+    border-radius:50%;
+  }
+  .history-chart .h-cursor .label{
+    position:absolute;top:-22px;left:50%;transform:translateX(-50%);
+    font-family:var(--font-mono);font-size:9px;letter-spacing:0.16em;text-transform:uppercase;
+    color:var(--focus);font-weight:700;white-space:nowrap;text-shadow:0 0 8px var(--bg);
+  }
+  /* Auto-scrub hint */
+  .history-chart::after{
+    content:'Click to scrub · drag to scan';
+    position:absolute;top:14px;right:18px;
+    font-family:var(--font-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;
+    color:var(--fg-3);font-weight:700;pointer-events:none;
+    opacity:0.6;
+  }
+
+</style>
+</head>
+<body>
+
+  <!-- HERO STAGE -->
+  <section class="stage" id="stage">
+    <canvas id="scene"></canvas>
+    <div class="vignette" aria-hidden="true"></div>
+
+    <header class="masthead">
+      <div class="brand">
+        <span class="crest" aria-hidden="true"></span>
+        <span>Chronoscope</span>
+        <span class="tag">Synchronized HTTP latency observation</span>
+      </div>
+      <nav class="nav" aria-label="Primary">
+        <a href="proposal-overview-v4.html">Overview</a>
+        <a href="proposal-live-v4.html">Live</a>
+        <a href="proposal-investigate-v4.html">Investigate</a>
+        <a href="proposal-report-v4.html">Report</a>
+      </nav>
+      <div class="controls">
+        <span class="carrier-tag"><span class="dot"></span>Carrier acquired</span>
+        <a class="ctl-btn ctl-icon" href="proposal-settings-v4.html" aria-label="Settings" title="Settings"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="7" cy="7" r="2"/><path d="M7 1.5 V3 M7 11 V12.5 M1.5 7 H3 M11 7 H12.5 M3.1 3.1 L4.1 4.1 M9.9 9.9 L10.9 10.9 M3.1 10.9 L4.1 9.9 M9.9 4.1 L10.9 3.1"/></svg></a>
+        <button class="ctl-btn ctl-btn--stop">End session</button>
+        <button class="ctl-btn">Share</button>
+      </div>
+    </header>
+
+    <div class="breadcrumb">
+      <div class="crumb">
+        <a href="proposal-live-v4.html">← Live</a>
+        <span class="sep">/</span>
+        <span>Station</span>
+        <span class="sep">/</span>
+        <span class="current" id="bcCurrent">AWS</span>
+      </div>
+      <div class="meta">
+        <span>Round<span class="v">247</span></span>
+        <span>Samples<span class="v">247</span></span>
+        <span>Window<span class="v">04:09</span></span>
+        <span>Trigger<span class="v">120 ms</span></span>
+      </div>
+    </div>
+
+    <div class="station-tabs">
+      <div class="label">Switch station</div>
+      <button class="tab" data-ep="A">
+        <span class="mk"></span><span class="nm">Google</span><span class="v">22 ms</span>
+      </button>
+      <button class="tab" data-ep="B">
+        <span class="mk"></span><span class="nm">Edge</span><span class="v">42 ms</span>
+      </button>
+      <button class="tab active" data-ep="C">
+        <span class="mk"></span><span class="nm">AWS</span><span class="v">74 ms</span>
+      </button>
+      <button class="tab" data-ep="D">
+        <span class="mk"></span><span class="nm">Fastly</span><span class="v">29 ms</span>
+      </button>
+    </div>
+
+    <div class="hero-meta">
+      <div class="kicker"><span class="pip"></span><span id="hmKicker">Focused station · ground truth</span></div>
+      <div class="station-name" id="hmName">AWS</div>
+      <div class="station-host" id="hmHost">s3.us-west-2.amazonaws.com</div>
+      <div class="verdict-tag" id="hmVerdictTag"><span class="pip"></span><span id="hmTagText">Doppler drift</span></div>
+      <div class="verdict-text" id="hmVerdict">
+        <strong>This station is dragging the downbeat.</strong> Pulses arrive <em>+40 ms</em> past nominal across the last <em>12</em> rounds while the other three carriers hold tempo.
+      </div>
+      <div class="quick-stats">
+        <div class="stat"><div class="k">p50</div><div class="v" id="hmP50">36<span class="u">ms</span></div></div>
+        <div class="stat"><div class="k">p95</div><div class="v bad" id="hmP95">92<span class="u">ms</span></div></div>
+        <div class="stat"><div class="k">Drift</div><div class="v" id="hmDrift">±18<span class="u">ms</span></div></div>
+      </div>
+    </div>
+
+    <div class="hero-left">
+      <div class="label">Last pulse</div>
+      <div class="field-num" id="hlNum">74<span class="u">ms</span></div>
+      <div class="field-sub">Trigger<span class="v">120 ms</span> · 38 ms over baseline</div>
+    </div>
+
+    <div class="scrub" id="scrub" aria-label="Scrub through history">
+      <span class="lbl">Replay</span>
+      <div class="rail" id="rail">
+        <div class="rail-bg"></div>
+        <div class="rail-fill" id="railFill"></div>
+        <div class="marks" id="railMarks"></div>
+        <div class="handle" id="railHandle"></div>
+      </div>
+      <span class="scrub-read">Round<span class="v" id="scrubVal">247 / 247</span></span>
+    </div>
+
+  </section>
+
+  <!-- BELOW HERO -->
+  <section class="below">
+
+    <!-- FIELD RANK -->
+    <div class="rank-section">
+      <div class="section-head">
+        <span class="l">Where this station ranks</span>
+        <span class="r"><span>vs. field<span class="v">p50</span></span><span>Window<span class="v">60 s</span></span></span>
+      </div>
+      <div class="rank-row">
+        <div class="rank-card" data-ep="A">
+          <div class="head"><span class="mk"></span><span class="nm">Google</span><span class="rank-tag">#1 fastest</span></div>
+          <div class="val">20<span class="u">ms</span></div>
+          <div class="delta">vs field<span class="v">−11 ms</span></div>
+        </div>
+        <div class="rank-card" data-ep="D">
+          <div class="head"><span class="mk"></span><span class="nm">Fastly</span><span class="rank-tag">#2</span></div>
+          <div class="val">24<span class="u">ms</span></div>
+          <div class="delta">vs field<span class="v">−7 ms</span></div>
+        </div>
+        <div class="rank-card is-focused" data-ep="C">
+          <div class="head"><span class="mk"></span><span class="nm">AWS</span><span class="rank-tag">#3 · focused</span></div>
+          <div class="val">36<span class="u">ms</span></div>
+          <div class="delta">vs field<span class="v warn">+5 ms</span></div>
+        </div>
+        <div class="rank-card" data-ep="B">
+          <div class="head"><span class="mk"></span><span class="nm">Edge</span><span class="rank-tag">#4 slowest</span></div>
+          <div class="val">40<span class="u">ms</span></div>
+          <div class="delta">vs field<span class="v">+9 ms</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYSIS GRID -->
+    <div class="analysis">
+      <div class="col polar-large">
+        <h3><span class="l">Distribution</span><span class="r">0 – 200 ms · bimodal tail</span></h3>
+        <svg id="polarSvg" viewBox="-105 -110 210 125" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="polar-axis">
+          <span>0</span><span>50</span><span>100</span><span>150</span><span>200 ms</span>
+        </div>
+
+        <div class="ladder">
+          <div class="cell"><div class="k">p50</div><div class="v">34<span class="u">ms</span></div></div>
+          <div class="cell"><div class="k">p75</div><div class="v warn">52<span class="u">ms</span></div></div>
+          <div class="cell"><div class="k">p90</div><div class="v bad">74<span class="u">ms</span></div></div>
+          <div class="cell"><div class="k">p95</div><div class="v bad">92<span class="u">ms</span></div></div>
+          <div class="cell"><div class="k">p99</div><div class="v crit">142<span class="u">ms</span></div></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <h3><span class="l">Resource timing</span><span class="r">phases</span></h3>
+        <div class="opaque">
+          <div class="ic">◌</div>
+          <div class="copy">
+            <strong>Carrier opaque</strong>
+            S3 does not return <em>Timing-Allow-Origin</em>. We hear <em>74 ms</em> total but cannot tell whether the drift sits in DNS, the TLS handshake, or TTFB. <a href="proposal-investigate-v4.html">Run the outside transit →</a>
+          </div>
+        </div>
+
+        <h3 style="margin-top:36px"><span class="l">Station record</span><span class="r">this session</span></h3>
+        <div style="display:grid;grid-template-columns:max-content 1fr;gap:8px 22px;font-family:var(--font-mono);font-size:12px">
+          <span style="color:var(--fg-3);text-transform:uppercase;letter-spacing:0.16em;font-size:10px;font-weight:700">Host</span><span style="color:var(--fg);font-variant-numeric:tabular-nums">s3.us-west-2.amazonaws.com</span>
+          <span style="color:var(--fg-3);text-transform:uppercase;letter-spacing:0.16em;font-size:10px;font-weight:700">Method</span><span style="color:var(--fg)">HEAD · CORS</span>
+          <span style="color:var(--fg-3);text-transform:uppercase;letter-spacing:0.16em;font-size:10px;font-weight:700">Samples</span><span style="color:var(--fg);font-variant-numeric:tabular-nums">247 / 247</span>
+          <span style="color:var(--fg-3);text-transform:uppercase;letter-spacing:0.16em;font-size:10px;font-weight:700">Spikes &gt; 60 ms</span><span style="color:var(--sev-bad);font-variant-numeric:tabular-nums">12</span>
+          <span style="color:var(--fg-3);text-transform:uppercase;letter-spacing:0.16em;font-size:10px;font-weight:700">Carrier loss</span><span style="color:var(--fg);font-variant-numeric:tabular-nums">0</span>
+          <span style="color:var(--fg-3);text-transform:uppercase;letter-spacing:0.16em;font-size:10px;font-weight:700">Worst pulse</span><span style="color:var(--sev-crit);font-variant-numeric:tabular-nums">142 ms · round 147</span>
+          <span style="color:var(--fg-3);text-transform:uppercase;letter-spacing:0.16em;font-size:10px;font-weight:700">Stable since</span><span style="color:var(--fg);font-variant-numeric:tabular-nums">— never this session —</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- HISTORY TIMELINE -->
+    <div class="history-section">
+      <div class="section-head">
+        <span class="l">Carrier history · this station</span>
+        <span class="r"><span>Window<span class="v">04:09</span></span><span>Cadence<span class="v">1 s</span></span></span>
+      </div>
+      <div class="history-chart" id="historyChart"><div class="h-cursor"><div class="label">R—</div></div>
+        <svg id="historySvg" viewBox="0 0 1000 170" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="history-axis">
+        <span>T+00:00</span>
+        <span>T+01:02</span>
+        <span>T+02:04</span>
+        <span>T+03:07</span>
+        <span>T+04:09 · NOW</span>
+      </div>
+    </div>
+
+    <!-- EVENTS -->
+    <div class="events-section">
+      <div class="section-head">
+        <span class="l">Telemetry log · this station only</span>
+        <span class="r"><span>Entries<span class="v">7</span></span></span>
+      </div>
+      <div class="events" id="events"></div>
+    </div>
+
+    <!-- ACTION -->
+    <div class="action-card">
+      <div class="kicker">Recommended next move</div>
+      <h4>Run an outside transit check.</h4>
+      <p>
+        AWS's tempo widened around round <em>34</em>. The drift has not propagated to Google, Edge, or Fastly — so the source is downstream of this browser. <em>If a Cloudflare edge sees the same Doppler from three regions, it's AWS-side. If not, it's local to this network.</em>
+      </p>
+      <div class="row">
+        <button class="primary">Run global transit →</button>
+        <button class="ghost">Compare against history</button>
+        <button class="ghost">Mute this station</button>
+      </div>
+    </div>
+
+  </section>
+
+  <footer class="foot">
+    <div>Cert<span class="v">CHR–260518–1442–A7K</span></div>
+    <div class="center">Station / AWS · browser-resident · no telemetry leaves this device</div>
+    <div class="right">Recording paused at <span class="v">14:46:27 UTC</span></div>
+  </footer>
+
+<script type="importmap">
+{
+  "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+
+// =================== MODEL ===================
+const STATIONS = {
+  A: { name:'Google', host:'www.google.com', color:'#B7D3EC', glow:'rgba(183,211,236,0.18)',
+       p50:20, p95:28, drift:4, last:22, status:'stable', statusText:'Carrier acquired',
+       verdict:'<strong>This station is on transit.</strong> Pulses arrive on the beat with drift under <em>±4 ms</em>.', verdictTag:'In tune',
+       profile:{center:20,spread:4,skew:0.6,ceiling:100}, rank:1, vsField:-11 },
+  B: { name:'Edge', host:'edge.akamai.net', color:'#8CD4C9', glow:'rgba(140,212,201,0.18)',
+       p50:40, p95:51, drift:6, last:42, status:'stable', statusText:'Carrier acquired',
+       verdict:'<strong>This station is on transit.</strong> The slowest of the field by baseline, but its tempo is steady.', verdictTag:'In tune',
+       profile:{center:40,spread:6,skew:0.7,ceiling:100}, rank:4, vsField:9 },
+  C: { name:'AWS', host:'s3.us-west-2.amazonaws.com', color:'#E8D597', glow:'rgba(232,213,151,0.18)',
+       p50:36, p95:92, drift:18, last:74, status:'bad', statusText:'Doppler drift',
+       verdict:'<strong>This station is dragging the downbeat.</strong> Pulses arrive <em>+40 ms</em> past nominal across the last <em>12</em> rounds while the other three carriers hold tempo.', verdictTag:'Doppler drift',
+       profile:{center:34,spread:16,skew:2.4,ceiling:200}, rank:3, vsField:5, badP95:true },
+  D: { name:'Fastly', host:'www.fastly.com', color:'#D78E68', glow:'rgba(215,142,104,0.18)',
+       p50:24, p95:56, drift:9, last:29, status:'warn', statusText:'Carrier wobble',
+       verdict:'<strong>This station is wobbling.</strong> p95 has elevated to <em>56 ms</em> but no carrier loss yet. Hold one window before action.', verdictTag:'Carrier wobble',
+       profile:{center:24,spread:10,skew:1.4,ceiling:100}, rank:2, vsField:-7 },
+};
+
+const TRIGGER = 120;
+let currentEp = 'C';
+
+function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296};}
+
+function genSession(profile, n, seed){
+  const r = rng(seed);
+  const out = [];
+  for (let i=0; i<n; i++){
+    let u = (r()+r()+r()+r())/4 - 0.5;
+    let v = profile.center + u * profile.spread * 4;
+    if (r() < 0.06 * profile.skew) v += r() * profile.center * profile.skew;
+    if (profile.skew > 2 && r() < 0.18) v = profile.center * (1.8 + r() * 1.8);
+    out.push(Math.max(2, v));
+  }
+  return out;
+}
+
+function severityHex(v, defC){
+  if (v >= 4000) return '#B14238';
+  if (v > TRIGGER) return '#D27258';
+  if (v > TRIGGER * 0.7) return '#E8C36F';
+  return defC;
+}
+
+// =================== HERO SCENE — solo orbit ===================
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(28, 1, 0.1, 200);
+camera.position.set(0, 8, 22);
+camera.lookAt(0, 0, 0);
+
+function resize() {
+  const stage = document.getElementById('stage');
+  const w = stage.clientWidth, h = stage.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Stars
+function buildStars() {
+  const N = 2200;
+  const positions = new Float32Array(N * 3);
+  const colors = new Float32Array(N * 3);
+  const sizes = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const r = 50 + Math.random() * 70;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    positions[i*3] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta) - 6;
+    positions[i*3+2] = r * Math.cos(phi);
+    const w = 0.7 + Math.random() * 0.3;
+    colors[i*3] = w * 0.95; colors[i*3+1] = w * 0.92; colors[i*3+2] = w * 0.85;
+    sizes[i] = Math.random() < 0.04 ? 1.7 + Math.random() * 1.2 : 0.3 + Math.random() * 0.5;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  g.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
+    vertexShader: `attribute float size; varying vec3 vColor;
+      void main(){ vColor=color; vec4 mv=modelViewMatrix*vec4(position,1.0);
+        gl_Position=projectionMatrix*mv; gl_PointSize=size*220.0/-mv.z; }`,
+    fragmentShader: `varying vec3 vColor;
+      void main(){ vec2 c=gl_PointCoord-0.5; float d=length(c);
+        float a=smoothstep(0.5,0.0,d); float h=smoothstep(0.5,0.15,d)*0.35;
+        gl_FragColor=vec4(vColor,a*0.95+h); }`,
+  });
+  return new THREE.Points(g, m);
+}
+scene.add(buildStars());
+
+// Ghost orbits — the OTHER 3 stations, dim
+const ghostRadii = [4, 6, 10]; // skip the focus radius (8 reserved for focus)
+const ghostMeshes = [];
+ghostRadii.forEach((r, idx) => {
+  const ringG = new THREE.RingGeometry(r - 0.02, r + 0.02, 256);
+  const ringM = new THREE.MeshBasicMaterial({
+    color: 0xF2EBDB, transparent: true, opacity: 0.06, side: THREE.DoubleSide,
+  });
+  const ring = new THREE.Mesh(ringG, ringM);
+  ring.rotation.x = -Math.PI / 2;
+  scene.add(ring);
+  ghostMeshes.push(ring);
+});
+
+// FOCUS ORBIT — the big one, at radius 8, bright
+const focusRingG = new THREE.RingGeometry(8 - 0.06, 8 + 0.06, 360);
+const focusRingM = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, side: THREE.DoubleSide,
+  uniforms: {
+    uColor: { value: new THREE.Color(STATIONS[currentEp].color) },
+    uSweep: { value: 0 },
+  },
+  vertexShader: `varying vec2 vPos;
+    void main(){ vPos=position.xy; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }`,
+  fragmentShader: `varying vec2 vPos; uniform float uSweep; uniform vec3 uColor;
+    void main(){
+      float a = atan(vPos.y, vPos.x);
+      float diff = a - uSweep;
+      diff = mod(diff + 3.14159265, 6.2831853) - 3.14159265;
+      float behind = clamp(-diff / 6.2831853 * 4.0, 0.0, 1.0);
+      float hot = exp(-behind * 6.0);
+      gl_FragColor = vec4(uColor, 0.42 + hot * 0.8);
+    }`,
+});
+const focusRing = new THREE.Mesh(focusRingG, focusRingM);
+focusRing.rotation.x = -Math.PI / 2;
+scene.add(focusRing);
+
+// Trigger ring
+const triggerRingG = new THREE.RingGeometry(8 + 0.55, 8 + 0.62, 128);
+const triggerRingM = new THREE.MeshBasicMaterial({
+  color: 0xD27258, transparent: true, opacity: 0.35, side: THREE.DoubleSide,
+});
+const triggerRing = new THREE.Mesh(triggerRingG, triggerRingM);
+triggerRing.rotation.x = -Math.PI / 2;
+scene.add(triggerRing);
+
+// Home
+const homeG = new THREE.SphereGeometry(0.16, 24, 24);
+const homeM = new THREE.MeshBasicMaterial({ color: 0xF2EBDB, transparent: true, opacity: 0.95 });
+scene.add(new THREE.Mesh(homeG, homeM));
+const homeHaloG = new THREE.SphereGeometry(0.7, 24, 24);
+const homeHaloM = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `varying vec3 vN; varying vec3 vEye;
+    void main(){ vN=normalize(normalMatrix*normal); vec4 mv=modelViewMatrix*vec4(position,1.0); vEye=normalize(-mv.xyz);
+      gl_Position=projectionMatrix*mv; }`,
+  fragmentShader: `varying vec3 vN; varying vec3 vEye; uniform float uTime;
+    void main(){ float rim=1.0-max(dot(vN,vEye),0.0); rim=pow(rim,1.9);
+      float p=0.85+0.15*sin(uTime*0.0015);
+      gl_FragColor=vec4(0.95,0.92,0.85,rim*0.7*p); }`,
+});
+const homeHalo = new THREE.Mesh(homeHaloG, homeHaloM);
+scene.add(homeHalo);
+
+// PULSES — 247 of them on the focus orbit
+const PULSE_COUNT = 247;
+const pulseGeom = new THREE.BufferGeometry();
+const pulsePos = new Float32Array(PULSE_COUNT * 3);
+const pulseCol = new Float32Array(PULSE_COUNT * 3);
+const pulseSz = new Float32Array(PULSE_COUNT);
+pulseGeom.setAttribute('position', new THREE.BufferAttribute(pulsePos, 3).setUsage(THREE.DynamicDrawUsage));
+pulseGeom.setAttribute('color', new THREE.BufferAttribute(pulseCol, 3).setUsage(THREE.DynamicDrawUsage));
+pulseGeom.setAttribute('aSize', new THREE.BufferAttribute(pulseSz, 1).setUsage(THREE.DynamicDrawUsage));
+const pulseMat = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `
+    attribute float aSize; varying vec3 vColor; uniform float uTime;
+    void main(){ vColor=color;
+      vec4 mv = modelViewMatrix * vec4(position, 1.0);
+      gl_Position = projectionMatrix * mv;
+      float breath = 1.0 + sin(uTime * 0.0015 + position.x * 4.7) * 0.05;
+      gl_PointSize = aSize * 3400.0 / max(0.1, -mv.z) * breath;
+    }`,
+  fragmentShader: `varying vec3 vColor;
+    void main(){ vec2 c=gl_PointCoord-0.5; float d=length(c);
+      if(d>0.5) discard;
+      float core = smoothstep(0.10, 0.0, d) * 1.6;
+      float halo = exp(-d * 5.0) * 1.05;
+      float ring = smoothstep(0.34, 0.28, d) * smoothstep(0.44, 0.36, d) * 0.45;
+      gl_FragColor = vec4(vColor, core + halo + ring); }`,
+});
+const pulsePoints = new THREE.Points(pulseGeom, pulseMat);
+pulsePoints.frustumCulled = false;
+scene.add(pulsePoints);
+
+let sessionSeries = [];
+function rebuildSession(epKey) {
+  const s = STATIONS[epKey];
+  sessionSeries = genSession(s.profile, PULSE_COUNT, epKey.charCodeAt(0) * 1009 + 31);
+  const baseline = [...sessionSeries].sort((a,b)=>a-b)[Math.floor(sessionSeries.length*0.5)];
+  const stCol = new THREE.Color(s.color);
+  for (let i = 0; i < PULSE_COUNT; i++) {
+    const v = sessionSeries[i];
+    const angle = -Math.PI / 2 + (i / PULSE_COUNT) * Math.PI * 2;
+    const ratio = (v - baseline) / Math.max(baseline, 10);
+    const offset = Math.max(-0.4, Math.min(0.8, ratio * 0.55));
+    const r = 8 + offset;
+    pulsePos[i*3]   = r * Math.cos(angle);
+    pulsePos[i*3+1] = 0;
+    pulsePos[i*3+2] = r * Math.sin(angle);
+    const sev = severityHex(v, s.color);
+    const c = new THREE.Color(sev);
+    pulseCol[i*3] = c.r; pulseCol[i*3+1] = c.g; pulseCol[i*3+2] = c.b;
+    const isSev = v > TRIGGER * 0.7;
+    const isCrit = v > TRIGGER;
+    pulseSz[i] = isCrit ? 0.13 : isSev ? 0.10 : 0.075;
+  }
+  pulseGeom.attributes.position.needsUpdate = true;
+  pulseGeom.attributes.color.needsUpdate = true;
+  pulseGeom.attributes.aSize.needsUpdate = true;
+
+  // Update focus ring color
+  focusRingM.uniforms.uColor.value = stCol;
+}
+
+// =================== POLAR DISTRIBUTION ===================
+function renderPolar() {
+  const ep = STATIONS[currentEp];
+  const samples = genSession(ep.profile, 1500, currentEp.charCodeAt(0) * 1009 + 7);
+  const binSize = ep.profile.ceiling > 150 ? 10 : 5;
+  const nBins = Math.ceil(ep.profile.ceiling / binSize);
+  const bins = new Array(nBins).fill(0);
+  for (const v of samples) {
+    let i = Math.floor(v / binSize);
+    if (i >= nBins) i = nBins - 1; if (i < 0) i = 0;
+    bins[i]++;
+  }
+  const maxCount = Math.max(...bins);
+  const sorted = [...samples].sort((a,b)=>a-b);
+  const p50 = sorted[Math.floor(samples.length * 0.5)];
+  const p95 = sorted[Math.floor(samples.length * 0.95)];
+
+  const a = v => Math.PI * (1 - Math.min(v, ep.profile.ceiling) / ep.profile.ceiling);
+  const ri = 28, ro = 88;
+  let html = '';
+  for (const f of [0.25, 0.5, 0.75, 1.0]){
+    const r = ri + (ro - ri) * f;
+    html += `<path d="M ${-r} 0 A ${r} ${r} 0 0 1 ${r} 0" fill="none" stroke="rgba(242,235,219,${f===1?0.14:0.06})" stroke-width="0.6"/>`;
+  }
+  const ticks = ep.profile.ceiling > 150 ? [0, 50, 100, 150, 200] : [0, 25, 50, 75, 100];
+  for (const t of ticks){
+    const ang = a(t);
+    const x1 = ri * Math.cos(ang), y1 = -ri * Math.sin(ang);
+    const x2 = (ri-4) * Math.cos(ang), y2 = -(ri-4) * Math.sin(ang);
+    html += `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="rgba(242,235,219,0.25)" stroke-width="0.7"/>`;
+    const lx = (ri-10) * Math.cos(ang), ly = -(ri-10) * Math.sin(ang) + 3;
+    html += `<text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Space Mono" font-size="6" fill="#5F594D" text-anchor="middle">${t}</text>`;
+  }
+  for (let i=0; i<nBins; i++){
+    if (bins[i] === 0) continue;
+    const v0 = i * binSize, v1 = (i+1) * binSize;
+    if (v0 >= ep.profile.ceiling) continue;
+    const ang0 = a(v0), ang1 = a(v1);
+    const h = (bins[i] / maxCount) * (ro - ri);
+    const rTop = ri + h;
+    const vCenter = (v0 + v1) / 2;
+    let fillC = ep.color;
+    let opacity = 0.85;
+    if (vCenter > TRIGGER) { fillC = '#D27258'; opacity = 0.95; }
+    else if (vCenter > TRIGGER * 0.7) { fillC = '#E8C36F'; opacity = 0.9; }
+    const x1i = ri * Math.cos(ang0), y1i = -ri * Math.sin(ang0);
+    const x2i = ri * Math.cos(ang1), y2i = -ri * Math.sin(ang1);
+    const x1o = rTop * Math.cos(ang0), y1o = -rTop * Math.sin(ang0);
+    const x2o = rTop * Math.cos(ang1), y2o = -rTop * Math.sin(ang1);
+    const sweep = ang0 > ang1 ? 1 : 0;
+    const rGlow = rTop + 1;
+    const x1og = rGlow * Math.cos(ang0), y1og = -rGlow * Math.sin(ang0);
+    const x2og = rGlow * Math.cos(ang1), y2og = -rGlow * Math.sin(ang1);
+    html += `<path d="M ${x1i.toFixed(2)} ${y1i.toFixed(2)} L ${x1og.toFixed(2)} ${y1og.toFixed(2)} A ${rGlow} ${rGlow} 0 0 ${sweep} ${x2og.toFixed(2)} ${y2og.toFixed(2)} L ${x2i.toFixed(2)} ${y2i.toFixed(2)} A ${ri} ${ri} 0 0 ${1-sweep} ${x1i.toFixed(2)} ${y1i.toFixed(2)} Z" fill="${fillC}" fill-opacity="${opacity*0.22}"/>`;
+    html += `<path d="M ${x1i.toFixed(2)} ${y1i.toFixed(2)} L ${x1o.toFixed(2)} ${y1o.toFixed(2)} A ${rTop} ${rTop} 0 0 ${sweep} ${x2o.toFixed(2)} ${y2o.toFixed(2)} L ${x2i.toFixed(2)} ${y2i.toFixed(2)} A ${ri} ${ri} 0 0 ${1-sweep} ${x1i.toFixed(2)} ${y1i.toFixed(2)} Z" fill="${fillC}" fill-opacity="${opacity}"/>`;
+  }
+  function radialMarker(v, c, label){
+    const ang = a(v);
+    const x1 = ri * Math.cos(ang), y1 = -ri * Math.sin(ang);
+    const x2 = (ro + 6) * Math.cos(ang), y2 = -(ro + 6) * Math.sin(ang);
+    const lx = (ro + 14) * Math.cos(ang), ly = -(ro + 14) * Math.sin(ang) + 3;
+    return `<line x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}" stroke="${c}" stroke-width="0.8" stroke-dasharray="1.5 2"/>
+      <text x="${lx.toFixed(2)}" y="${ly.toFixed(2)}" font-family="Space Mono" font-size="7" fill="${c}" text-anchor="middle" font-weight="700">${label} ${Math.round(v)}</text>`;
+  }
+  html += radialMarker(p50, '#F2EBDB', 'p50');
+  html += radialMarker(p95, '#D27258', 'p95');
+  html += `<circle cx="0" cy="0" r="1.8" fill="#F2EBDB" fill-opacity="0.7"/>`;
+  document.getElementById('polarSvg').innerHTML = html;
+}
+
+// =================== HISTORY TIMELINE ===================
+function renderHistory() {
+  const series = sessionSeries;
+  const W = 1000, H = 170, padX = 14, padY = 14;
+  const innerW = W - padX*2, innerH = H - padY*2;
+  const maxV = 200;
+  let html = '';
+  // Trigger line
+  const yTrig = padY + innerH - (TRIGGER / maxV) * innerH;
+  html += `<line x1="${padX}" y1="${yTrig}" x2="${W-padX}" y2="${yTrig}" stroke="#D27258" stroke-opacity="0.4" stroke-dasharray="3 4" stroke-width="0.8"/>`;
+  html += `<text x="${W-padX-2}" y="${yTrig - 4}" font-family="Space Mono" font-size="9" fill="#D27258" text-anchor="end" letter-spacing="0.5">TRIGGER 120 ms</text>`;
+  // Reference rules
+  [25, 50, 75, 100].forEach(v => {
+    const y = padY + innerH - (v / maxV) * innerH;
+    html += `<line x1="${padX}" y1="${y}" x2="${W-padX}" y2="${y}" stroke="#F2EBDB" stroke-opacity="0.04" stroke-width="0.5"/>`;
+    html += `<text x="${padX+4}" y="${y - 2}" font-family="Space Mono" font-size="8" fill="#5F594D" letter-spacing="0.5">${v} ms</text>`;
+  });
+  // Curve
+  const epCol = STATIONS[currentEp].color;
+  let path = '';
+  series.forEach((v, i) => {
+    const x = padX + (i / (series.length - 1)) * innerW;
+    const y = padY + innerH - (Math.min(v, maxV) / maxV) * innerH;
+    path += (i === 0 ? 'M ' : ' L ') + x.toFixed(2) + ' ' + y.toFixed(2);
+  });
+  // Glow + filament
+  html += `<path d="${path}" stroke="${epCol}" stroke-width="3.5" stroke-opacity="0.18" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`;
+  html += `<path d="${path}" stroke="${epCol}" stroke-width="1.1" stroke-opacity="0.92" fill="none" stroke-linejoin="round" stroke-linecap="round"/>`;
+  // Pulse dots
+  series.forEach((v, i) => {
+    const x = padX + (i / (series.length - 1)) * innerW;
+    const y = padY + innerH - (Math.min(v, maxV) / maxV) * innerH;
+    const sev = severityHex(v, epCol);
+    const isSev = sev !== epCol;
+    html += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${isSev?2.6:1.8}" fill="${sev}" fill-opacity="${isSev?0.32:0.25}"/>`;
+    html += `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="${isSev?1.2:0.8}" fill="${sev}"/>`;
+  });
+  document.getElementById('historySvg').innerHTML = html;
+}
+
+// =================== EVENT LOG ===================
+const EVENTS = {
+  C: [
+    {t:'T+04:09',tag:'AWS',s:'bad',b:'Round <em>247</em> · pulse landed at <em>74 ms</em>.'},
+    {t:'T+03:46',tag:'AWS',s:'bad',b:'p95 elevated to <em>92 ms</em> · 3 spikes over <em>60 ms</em> in <em>12</em> rounds.'},
+    {t:'T+02:27',tag:'AWS',s:'bad',b:'Worst pulse this session: <em>142 ms</em> at round <em>147</em>.'},
+    {t:'T+01:18',tag:'AWS',s:'warn',b:'Drift band widened from <em>±6 ms</em> to <em>±18 ms</em>.'},
+    {t:'T+00:34',tag:'AWS',s:'warn',b:'First pulse over the trigger threshold.'},
+    {t:'T+00:18',tag:'ACQ',s:'',b:'Carrier acquired. Baseline <em>30 ms</em>, ±<em>6 ms</em>.'},
+  ],
+  A: [
+    {t:'T+04:09',tag:'GOOGLE',s:'stable',b:'Round <em>247</em> · pulse landed at <em>22 ms</em>.'},
+    {t:'T+02:58',tag:'GOOGLE',s:'stable',b:'Drift tightened to <em>±3 ms</em>.'},
+    {t:'T+00:18',tag:'ACQ',s:'',b:'Carrier acquired. Baseline <em>21 ms</em>.'},
+  ],
+  B: [
+    {t:'T+04:09',tag:'EDGE',s:'stable',b:'Round <em>247</em> · pulse landed at <em>42 ms</em>.'},
+    {t:'T+03:42',tag:'EDGE',s:'stable',b:'Tempo holding at baseline.'},
+    {t:'T+00:18',tag:'ACQ',s:'',b:'Carrier acquired. Baseline <em>40 ms</em>.'},
+  ],
+  D: [
+    {t:'T+04:09',tag:'FASTLY',s:'warn',b:'Round <em>247</em> · pulse landed at <em>29 ms</em>.'},
+    {t:'T+02:18',tag:'FASTLY',s:'warn',b:'p95 elevated to <em>56 ms</em>; not over trigger.'},
+    {t:'T+00:18',tag:'ACQ',s:'',b:'Carrier acquired. Baseline <em>26 ms</em>.'},
+  ],
+};
+function renderEvents() {
+  const el = document.getElementById('events');
+  el.innerHTML = '';
+  EVENTS[currentEp].forEach(ev => {
+    const e = document.createElement('div');
+    e.className = 'event';
+    e.innerHTML = `<span class="t">${ev.t}</span><span class="b">${ev.b}</span><span class="tag" data-s="${ev.s}">${ev.tag}</span>`;
+    el.appendChild(e);
+  });
+}
+
+// =================== SCRUB ===================
+const rail = document.getElementById('rail');
+let scrubbing = false;
+let userScrub = 1.0;
+function setScrubFromX(clientX){
+  const r = rail.getBoundingClientRect();
+  const t = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+  userScrub = t;
+  syncScrubUI();
+}
+function syncScrubUI(){
+  const r = userScrub;
+  const round = Math.round(r * PULSE_COUNT);
+  document.getElementById('scrubVal').textContent = `${round} / ${PULSE_COUNT}`;
+  document.getElementById('railFill').style.width = (r * 100) + '%';
+  document.getElementById('railHandle').style.left = (r * 100) + '%';
+}
+rail.addEventListener('mousedown', e => { scrubbing = true; setScrubFromX(e.clientX); });
+window.addEventListener('mousemove', e => { if (scrubbing) setScrubFromX(e.clientX); });
+window.addEventListener('mouseup', () => scrubbing = false);
+rail.addEventListener('touchstart', e => { scrubbing = true; setScrubFromX(e.touches[0].clientX); });
+window.addEventListener('touchmove', e => { if (scrubbing) setScrubFromX(e.touches[0].clientX); });
+window.addEventListener('touchend', () => scrubbing = false);
+
+// Build tick marks
+const marksEl = document.getElementById('railMarks');
+for (let i = 0; i < 60; i++){
+  const m = document.createElement('div');
+  m.className = 'm';
+  marksEl.appendChild(m);
+}
+
+// =================== STATION SWITCH ===================
+function switchTo(epKey) {
+  currentEp = epKey;
+  const ep = STATIONS[epKey];
+
+  // Update CSS focus variables
+  document.documentElement.style.setProperty('--focus', ep.color);
+  document.documentElement.style.setProperty('--focus-glow', ep.glow);
+
+  // Update HUD text
+  document.getElementById('bcCurrent').textContent = ep.name;
+  document.getElementById('hmName').textContent = ep.name;
+  document.getElementById('hmHost').textContent = ep.host;
+  document.getElementById('hmP50').innerHTML = `${ep.p50}<span class="u">ms</span>`;
+  document.getElementById('hmP95').innerHTML = `${ep.p95}<span class="u">ms</span>`;
+  document.getElementById('hmP95').className = 'v' + (ep.badP95 ? ' bad' : '');
+  document.getElementById('hmDrift').innerHTML = `±${ep.drift}<span class="u">ms</span>`;
+  document.getElementById('hmTagText').textContent = ep.verdictTag;
+  document.getElementById('hmVerdict').innerHTML = ep.verdict;
+  document.getElementById('hlNum').innerHTML = `${ep.last}<span class="u">ms</span>`;
+
+  // Update tab states
+  document.querySelectorAll('.station-tabs .tab').forEach(t => {
+    t.classList.toggle('active', t.getAttribute('data-ep') === epKey);
+  });
+
+  // Update verdict tag color
+  const tag = document.getElementById('hmVerdictTag');
+  const tagPip = tag.querySelector('.pip');
+  let tagColor = '#5F594D';
+  if (ep.status === 'bad') tagColor = '#D27258';
+  else if (ep.status === 'warn') tagColor = '#E8C36F';
+  else if (ep.status === 'stable') tagColor = '#8CD4C9';
+  tag.style.color = tagColor;
+  tagPip.style.background = tagColor;
+  tagPip.style.boxShadow = `0 0 8px ${tagColor}`;
+
+  // Rebuild scene & charts
+  rebuildSession(epKey);
+  renderPolar();
+  renderHistory();
+  renderEvents();
+  userScrub = 1.0;
+  syncScrubUI();
+}
+
+document.querySelectorAll('.station-tabs .tab').forEach(t => {
+  t.addEventListener('click', () => switchTo(t.getAttribute('data-ep')));
+});
+
+// =================== FRAME LOOP ===================
+let cameraAngle = 0;
+let mTX = 0, mTY = 0, mX = 0, mY = 0;
+window.addEventListener('mousemove', (e) => {
+  mTX = ((e.clientX / window.innerWidth) - 0.5) * 2;
+  mTY = ((e.clientY / window.innerHeight) - 0.5) * 2;
+});
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+let startedAt = 0;
+
+function frame(now) {
+  if (!startedAt) startedAt = now;
+  const elapsed = now - startedAt;
+
+  // Sweep angle — full revolution per 60s
+  const sweepAngle = (elapsed / 60000) * Math.PI * 2;
+  focusRingM.uniforms.uSweep.value = sweepAngle - Math.PI / 2;
+
+  // Camera drift + parallax
+  if (!reducedMotion) {
+    cameraAngle += 0.00005;
+    mX += (mTX - mX) * 0.045;
+    mY += (mTY - mY) * 0.045;
+    camera.position.x = Math.sin(cameraAngle) * 3 + mX * 2.0;
+    camera.position.y = 8 - mY * 0.8;
+    camera.position.z = 22 + Math.cos(cameraAngle) * 2;
+    camera.lookAt(0, 0, 0);
+  }
+
+  homeHalo.material.uniforms.uTime.value = now;
+  pulseMat.uniforms.uTime.value = now;
+
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+// =================== KICKOFF ===================
+function start() {
+  switchTo('C');
+  requestAnimationFrame(frame);
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(start);
+else setTimeout(start, 100);
+</script>
+
+
+  <div class="keyboard-help" id="keyboardHelp" role="dialog">
+    <div class="panel">
+      <div class="head"><h3>Keyboard shortcuts</h3><span class="esc">Esc to close</span></div>
+      <div class="grid">
+        <span class="key">?</span><span class="label">Toggle this help</span>
+        <span class="key">1–4</span><span class="label">Focus station by number</span>
+        <span class="key">[</span><span class="label">Previous station</span>
+        <span class="key">]</span><span class="label">Next station</span>
+        <span class="key">T</span><span class="label">Run outside transit on this station</span>
+        <span class="key">L</span><span class="label">Back to Live tracker</span>
+        <span class="key">I</span><span class="label">Open Investigate</span>
+        <span class="key">R</span><span class="label">Open Report</span>
+        <span class="key">S</span><span class="label">Open Settings</span>
+        <span class="key">Esc</span><span class="label">Close any overlay</span>
+      </div>
+    </div>
+  </div>
+
+
+<script>
+  const _kbHelp = document.getElementById('keyboardHelp');
+  const _stationKeys = ['A','B','C','D'];
+  function toggleHelp(force){const w=force!==undefined?force:!_kbHelp.classList.contains('visible');_kbHelp.classList.toggle('visible',w);}
+  function switchToEp(ep){
+    document.body.classList.add('switching');
+    setTimeout(() => {
+      const tab = document.querySelector(`.station-tabs .tab[data-ep="${ep}"]`);
+      if (tab) tab.click();
+      requestAnimationFrame(() => document.body.classList.remove('switching'));
+    }, 280);
+  }
+  function focusOffset(delta){
+    const active = document.querySelector('.station-tabs .tab.active');
+    const cur = active ? _stationKeys.indexOf(active.getAttribute('data-ep')) : 2;
+    const next = (cur + delta + 4) % 4;
+    switchToEp(_stationKeys[next]);
+  }
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const k = e.key;
+    if (k === '?' || (e.shiftKey && k === '/')) { e.preventDefault(); toggleHelp(); }
+    else if (k === 'Escape') { if (_kbHelp.classList.contains('visible')) toggleHelp(false); }
+    else if (k === '1') switchToEp('A');
+    else if (k === '2') switchToEp('B');
+    else if (k === '3') switchToEp('C');
+    else if (k === '4') switchToEp('D');
+    else if (k === '[') focusOffset(-1);
+    else if (k === ']') focusOffset(1);
+    else if (k === 't' || k === 'T') window.location.href = 'proposal-transit-v4.html';
+    else if (k === 'l' || k === 'L') window.location.href = 'proposal-live-v4.html';
+    else if (k === 'i' || k === 'I') window.location.href = 'proposal-investigate-v4.html';
+    else if (k === 'r' || k === 'R') window.location.href = 'proposal-report-v4.html';
+    else if (k === 's' || k === 'S') window.location.href = 'proposal-settings-v4.html';
+  });
+  // Also fade when clicking station tabs
+  document.querySelectorAll('.station-tabs .tab').forEach(tab => {
+    tab.addEventListener('click', (e) => {
+      // Don't intercept the existing click handler
+      document.body.classList.add('switching');
+      setTimeout(() => document.body.classList.remove('switching'), 320);
+    });
+  });
+</script>
+
+
+<script>
+  (function(){
+    const chart = document.getElementById('historyChart');
+    if (!chart) return;
+    const cursor = chart.querySelector('.h-cursor');
+    const label = chart.querySelector('.h-cursor .label');
+    const rail = document.getElementById('rail');
+    if (!rail) return;
+    let scrubbing = false;
+
+    function setFromX(clientX) {
+      const r = chart.getBoundingClientRect();
+      const t = Math.max(0, Math.min(1, (clientX - r.left) / r.width));
+      const round = Math.round(t * 247);
+      // Update cursor position
+      cursor.style.left = (t * 100) + '%';
+      label.textContent = 'R' + round;
+      chart.classList.add('scrubbed');
+      // Update the existing scrub bar to match
+      const railFill = document.getElementById('railFill');
+      const railHandle = document.getElementById('railHandle');
+      const scrubVal = document.getElementById('scrubVal');
+      if (railFill) railFill.style.width = (t * 100) + '%';
+      if (railHandle) railHandle.style.left = (t * 100) + '%';
+      if (scrubVal) scrubVal.textContent = round + ' / 247';
+      // Sync the internal userScrub variable used by the frame loop
+      if (typeof userScrub !== 'undefined') {
+        try { userScrub = t; } catch(e) {}
+        try { window.userScrub = t; } catch(e) {}
+      }
+    }
+
+    chart.addEventListener('mousedown', e => { scrubbing = true; setFromX(e.clientX); });
+    window.addEventListener('mousemove', e => { if (scrubbing) setFromX(e.clientX); });
+    window.addEventListener('mouseup', () => { scrubbing = false; });
+    chart.addEventListener('touchstart', e => { scrubbing = true; setFromX(e.touches[0].clientX); });
+    window.addEventListener('touchmove', e => { if (scrubbing) setFromX(e.touches[0].clientX); });
+    window.addEventListener('touchend', () => { scrubbing = false; });
+
+    // Right arrow / left arrow to step through when chart is hovered
+    chart.addEventListener('mouseenter', () => { chart.setAttribute('tabindex', '0'); });
+    chart.addEventListener('keydown', e => {
+      const k = e.key;
+      const railFill = document.getElementById('railFill');
+      const cur = railFill ? parseFloat(railFill.style.width) / 100 : 1;
+      if (k === 'ArrowLeft' || k === 'ArrowRight') {
+        e.preventDefault();
+        const step = e.shiftKey ? 10/247 : 1/247;
+        const next = Math.max(0, Math.min(1, cur + (k === 'ArrowLeft' ? -step : step)));
+        const r = chart.getBoundingClientRect();
+        setFromX(r.left + next * r.width);
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>

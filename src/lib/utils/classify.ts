@@ -23,28 +23,28 @@ interface HealthStyle {
 // All callers render through var(--…) so dark-mode / future theming stays live.
 export const HEALTH_STYLES: Record<HealthBucket, HealthStyle> = {
   healthy: {
-    color: 'var(--accent-cyan)',
-    glow:  'var(--accent-cyan-glow)',
+    color: 'var(--station-b)',
+    glow:  'var(--station-b)',
     label: 'Healthy',
-    tone:  'var(--accent-cyan-tone)',
+    tone:  'var(--station-b)',
   },
   degraded: {
-    color: 'var(--accent-amber)',
-    glow:  'var(--accent-amber-glow)',
+    color: 'var(--sev-warn)',
+    glow:  'var(--sev-warn)',
     label: 'Degraded',
-    tone:  'var(--accent-amber-tone)',
+    tone:  'var(--sev-warn)',
   },
   unhealthy: {
-    color: 'var(--accent-pink)',
-    glow:  'var(--accent-pink-glow)',
+    color: 'var(--station-d)',
+    glow:  'var(--station-d)',
     label: 'Unhealthy',
-    tone:  'var(--accent-pink-tone)',
+    tone:  'var(--station-d)',
   },
   unknown: {
-    color: 'var(--t4)',
+    color: 'var(--fg-3)',
     glow:  'transparent',
     label: 'No data',
-    tone:  'var(--t4)',
+    tone:  'var(--fg-3)',
   },
 };
 
@@ -142,9 +142,9 @@ export function overviewVerdict(score: number | null): OverviewVerdict {
 }
 
 export const VERDICT_STYLES: Record<OverviewVerdict, VerdictStyle> = {
-  unknown:   { color: 'var(--t4)',           glow: 'transparent',              label: 'Awaiting samples', kicker: '···' },
-  healthy:   { color: 'var(--accent-cyan)',  glow: 'var(--accent-cyan-glow)',  label: 'Healthy',          kicker: 'HEALTHY' },
-  good:      { color: 'var(--accent-green)', glow: 'var(--green-glow)',        label: 'Good',             kicker: 'GOOD' },
-  degraded:  { color: 'var(--accent-amber)', glow: 'var(--accent-amber-glow)', label: 'Degraded',         kicker: 'DEGRADED' },
-  unhealthy: { color: 'var(--accent-pink)',  glow: 'var(--accent-pink-glow)',  label: 'Unhealthy',        kicker: 'CRITICAL' },
+  unknown:   { color: 'var(--fg-3)',           glow: 'transparent',              label: 'Awaiting samples', kicker: '···' },
+  healthy:   { color: 'var(--station-b)',  glow: 'var(--station-b)',  label: 'Healthy',          kicker: 'HEALTHY' },
+  good:      { color: 'var(--station-b)', glow: 'var(--station-b)',        label: 'Good',             kicker: 'GOOD' },
+  degraded:  { color: 'var(--sev-warn)', glow: 'var(--sev-warn)', label: 'Degraded',         kicker: 'DEGRADED' },
+  unhealthy: { color: 'var(--station-d)',  glow: 'var(--station-d)',  label: 'Unhealthy',        kicker: 'CRITICAL' },
 };

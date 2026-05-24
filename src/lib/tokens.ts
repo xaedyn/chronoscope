@@ -4,361 +4,282 @@
 // as JavaScript literals. ESLint's no-raw-visual-values rule (eslint-rules/)
 // enforces this for *.ts files. CSS inside Svelte <style> blocks is enforced
 // separately by stylelint (see .stylelintrc.json + .stylelintignore) — that
-// rule bans raw hex / rgb / rgba / hsl / hsla in CSS. Existing files with
-// historical violations are listed in .stylelintignore on a per-PR ownership
-// basis and cleaned as the synthesis arc progresses.
-// Glass Lanes visual language — locked 2026-04-09.
+// rule bans raw hex / rgb / rgba / hsl / hsla in CSS.
+//
+// Vessel v4 visual language — supersedes Glass Lanes (2026-04-09).
+//
+// History note: this file dropped a large set of v3-era identity tokens —
+// bgBase, shellPanel/shellBorder/etc., t1..t5, cyan*/pink*/amber*/green* (and
+// alpha/glow/tone variants), tier2*, nowDotCyan/Pink, thresholdStroke, ep0..ep9
+// individual slots, orb*, bgAccent — replaced by the Vessel palette below
+// (bg/bg-2..bg-4, fg/fg-2..fg-4, station-A..D, sev-warn/bad/crit, phase-*).
+// See proposals/v4/HANDOFF.md and proposals/v4/DIRECTION-v4.md for the why.
 
 // ── Primitive tokens ───────────────────────────────────────────────────────
 const primitive = {
-  // Background
-  // v2 aesthetic arc PR 3: page bg is pure black, panels are warm-grey
-  // (#1C1C1E) one notch above. Pure solid is the only atmospheric option
-  // that doesn't band on dark — see [[feedback_dark_backgrounds]]. The
-  // prior cyan/amber radial-gradient orbs in Layout.svelte are dropped
-  // alongside this token shift.
-  bgBase: '#000000',
-  bgMid:  '#0A0A0A',
-  bgDeep: '#000000',
+  // Backgrounds — warm-black canvas, four tiers (Vessel §01)
+  bg:    '#03050A',  // page canvas; cool warm-black, deeper than v3's #04060B
+  bg2:   '#080C14',  // card / panel surface; hover states; settings drawer body
+  bg3:   '#11171F',  // inset / well surface; form-field backgrounds; scrub-rail
+  bg4:   '#1A2230',  // settings drawer raised surface; lightest dark tier
 
-  // v2 panel scale: black page → #1C1C1E panel → #2C2C2E raised. Hover
-  // and active stay as alpha-on-white so they read the same across light
-  // and dark panel families.
-  shellBase: '#000000',
-  shellPanel: '#1C1C1E',
-  shellPanelRaised: '#2C2C2E',
-  shellPanelHover: 'rgba(255,255,255,.055)',
-  shellPanelActive: 'rgba(103,232,249,.095)',
-  shellBorder: 'rgba(255,255,255,.08)',
-  shellBorderStrong: 'rgba(255,255,255,.14)',
-  shellDivider: 'rgba(255,255,255,.06)',
-  shellBackdrop: 'rgba(28,28,30,.8)',
-  shellPopover: 'rgba(28,28,30,.96)',
-  shellBgCyan: 'rgba(103,232,249,.045)',
-  shellBgAmber: 'rgba(251,191,36,.028)',
-  shellSuccessBg: 'rgba(134,239,172,.115)',
-  shellSuccessBorder: 'rgba(134,239,172,.32)',
-  shellStopBg: 'rgba(249,168,212,.10)',
-  shellStopBorder: 'rgba(249,168,212,.28)',
+  // Foregrounds — bone-white catalog ink
+  fg:    '#F2EBDB',  // primary text + hero numerics — contrast 14.6:1 on bg
+  fg2:   '#A39A87',  // secondary text — body copy, descriptions, tag values
+  fg3:   '#5F594D',  // tertiary text — mono labels, kickers, axis ticks
+  fg4:   '#36322B',  // decorative — section numerals, separator dots, ghosted
 
-  // Text opacity layers (rgba white)
-  t1: 'rgba(255,255,255,.94)',
-  t2: 'rgba(255,255,255,.58)',
-  t3: 'rgba(255,255,255,.5)',
-  t4: 'rgba(255,255,255,.32)',
-  t5: 'rgba(255,255,255,.07)',
+  // Rules — bone-white at fixed alphas
+  rule:        'rgba(242, 235, 219, 0.06)',
+  ruleStrong:  'rgba(242, 235, 219, 0.14)',
+  ruleFaint:   'rgba(242, 235, 219, 0.03)',
 
-  // Accent
-  cyan:       '#67e8f9',
-  cyanBright: '#a5f3fc',
-  cyan40:     'rgba(103,232,249,.4)',
-  cyan20:     'rgba(103,232,249,.2)',
-  cyan12:     'rgba(103,232,249,.12)',
-  cyan06:     'rgba(103,232,249,.06)',
+  // Stations — calibrated to real stellar luminance bands
+  stationA: '#B7D3EC',  // Sirius blue-white      — Google     (control reference)
+  stationB: '#8CD4C9',  // Vega cyan              — Edge       (also "acquired"/"stable")
+  stationC: '#E8D597',  // Sun yellow-white       — AWS        (regional cloud anchor)
+  stationD: '#D78E68',  // Betelgeuse red-orange  — Fastly     (second-opinion station)
 
-  pink:       '#f9a8d4',
-  pinkBright: '#fbcfe8',
-  pink40:     'rgba(249,168,212,.4)',
-  pink20:     'rgba(249,168,212,.2)',
-  pink12:     'rgba(249,168,212,.12)',
-  pink06:     'rgba(249,168,212,.06)',
-  pink70:     'rgba(249,168,212,.7)',
-  cyan15:     'rgba(103,232,249,.15)',
-  cyan25:     'rgba(103,232,249,.25)',
-  pink15:     'rgba(249,168,212,.15)',
-  pink25:     'rgba(249,168,212,.25)',
-  amber:      '#fbbf24',
-  amberGlow:  'rgba(251,191,36,.33)',   // #fbbf2455 — chronograph degraded glow
-  amberTone:  '#b38410',                // darker amber for arcs/borders
+  // Severity — diagnostic overrides on threshold-cross
+  sevWarn:  '#E8C36F',  // above 70% of trigger — watch but no action
+  sevBad:   '#D27258',  // over trigger — spiking / dragging / doppler-positive
+  sevCrit:  '#B14238',  // timeout / carrier-lost — alarm color across the system
 
-  // Accent glow/tone companions (Phase 0 — v2 views)
-  cyanGlow: 'rgba(103,232,249,.33)',    // #67e8f955
-  cyanTone: '#3aa7b8',
-  pinkGlow: 'rgba(249,168,212,.33)',    // #f9a8d455
-  pinkTone: '#b0628a',
+  // Phase decomposition — Resource Timing breakdown (Investigate)
+  phaseDns:  '#8CD4C9',  // DNS resolution        (matches stationB hue)
+  phaseTcp:  '#B7D3EC',  // TCP handshake         (matches stationA hue)
+  phaseTls:  '#A698D8',  // TLS handshake         (violet — new in v4)
+  phaseTtfb: '#E8D597',  // Time to first byte    (matches stationC hue)
+  phaseXfer: '#D78E68',  // Transfer (payload)    (matches stationD hue)
 
-  green:     '#86efac',
-  greenGlow: 'rgba(134,239,172,.5)',
+  // ── Functional infrastructure primitives ────────────────────────────────
+  // These don't carry v3 brand identity. Values are updated from pure-white
+  // alphas to bone-white alphas so they don't read as cold-white against the
+  // warm-black canvas, but their semantic paths and roles are unchanged.
+  // Consuming components will be redesigned in Phase B/C; tokens stay until then.
 
-  // Tier2 phase palette (opacity-attenuated primitives for waterfall segments)
-  tier2Dns:      'rgba(134,239,172,.7)',   // green   — DNS resolution
-  tier2Tcp:      'rgba(103,232,249,.7)',   // cyan    — TCP connect
-  tier2Tls:      'rgba(196,181,253,.7)',   // violet  — TLS handshake
-  tier2Ttfb:     'rgba(251,191,36,.7)',    // amber   — server processing (TTFB)
-  tier2Transfer: 'rgba(249,168,212,.7)',   // pink    — content transfer
-  tier2LabelText: 'rgba(255,255,255,.40)', // bumped from t4 (.32) to .40 for WCAG AA
+  // Glass surfaces (bone-white alphas — was pure white)
+  glassBg:        'rgba(242, 235, 219, 0.03)',
+  glassBorder:    'rgba(242, 235, 219, 0.07)',
+  glassHighlight: 'rgba(242, 235, 219, 0.12)',
 
-  // Glass surfaces
-  glassBg:        'rgba(255,255,255,.03)',
-  glassBorder:    'rgba(255,255,255,.07)',
-  glassHighlight: 'rgba(255,255,255,.12)',
+  // Topbar / Footer ambient surfaces
+  topbarBg: 'rgba(242, 235, 219, 0.025)',
+  footerBg: 'rgba(242, 235, 219, 0.02)',
 
-  // Topbar
-  topbarBg: 'rgba(255,255,255,.025)',
+  // Tooltip surfaces — repointed to bg2/bg3 family
+  tooltipBg:     'rgba(8, 12, 20, 0.85)',
+  tooltipBgDeep: 'rgba(8, 12, 20, 0.92)',
+  tooltipBorder: 'rgba(242, 235, 219, 0.10)',
+  tooltipText:   'rgba(242, 235, 219, 0.95)',
+  tooltipTextDim:'rgba(242, 235, 219, 0.55)',
 
-  // Footer
-  footerBg: 'rgba(255,255,255,.02)',
+  // v2 chronograph dial face / scope canvas / overlay surfaces
+  // (consumed by v2 components scheduled for redesign in Phase B/C)
+  bgDialFace:    '#141021',
+  overlayDeep:   'rgba(8, 12, 20, 0.85)',
 
-  // Tooltip
-  tooltipBg: 'rgba(20,16,32,.85)',
+  // Rail row surfaces
+  glassBgRailHover:    'rgba(242, 235, 219, 0.06)',
+  glassBgRailSelected: 'rgba(242, 235, 219, 0.10)',
 
-  // Endpoint color palette (10 slots; cyan/pink are assigned in order then cycle)
-  ep0: '#67e8f9',   // cyan
-  ep1: '#f9a8d4',   // pink
-  ep2: '#86efac',   // green
-  ep3: '#fcd34d',   // amber
-  ep4: '#c4b5fd',   // violet
-  ep5: '#6ee7b7',   // emerald
-  ep6: '#fda4af',   // rose
-  ep7: '#7dd3fc',   // sky
-  ep8: '#d9f99d',   // lime
-  ep9: '#e9d5ff',   // purple
-
-  // Data viz
-  gridLine: 'rgba(255,255,255,.03)',
-  futureZone: 'rgba(255,255,255,.018)',
-  nowDotCyan: '#a5f3fc',
-  nowDotPink: '#fbcfe8',
-  thresholdStroke: '#f9a8d4',
-
-  // Chronograph dial face / scope canvas background (Phase 0 — v2 views)
-  bgDialFace: '#141021',
-
-  // Overlay layer used by v2 share/settings sheets (deeper than legacy overlay)
-  overlayDeep: 'rgba(11,8,20,.85)',
-
-  // Rail row surfaces (Phase 0 — v2 endpoint rail)
-  glassBgRailHover:    'rgba(255,255,255,.06)',
-  glassBgRailSelected: 'rgba(255,255,255,.10)',
-
-  // SVG primitives used by dial, orbit ring, scope grid (Phase 0 — v2 views)
-  svgGridCyan:   'rgba(103,232,249,.05)',
-  svgGridMajor:  'rgba(255,255,255,.06)',
-  svgTickMinor:  'rgba(255,255,255,.18)',
-  svgTickMajor:  'rgba(255,255,255,.50)',
-  svgHandStroke: '#ffffff',
-  svgDialRim:    'rgba(255,255,255,.14)',
-  svgOrbitTrack: 'rgba(255,255,255,.06)',
-  svgOrbitEdge:  'rgba(255,255,249,.10)',
-
-  // Tooltip surface for scope crosshair (Phase 0 — v2 Live view)
-  tooltipBgDeep:  'rgba(10,9,18,.92)',
-  tooltipBorder:  'rgba(255,255,255,.10)',
-  tooltipText:    'rgba(255,255,255,.95)',
-  tooltipTextDim: 'rgba(255,255,255,.55)',
-
-  // Orb layers (for App.svelte CSS)
-  orbCyan:   'rgba(103,232,249,.045)',
-  orbPink:   'rgba(249,168,212,.04)',
-  orbViolet: 'rgba(139,92,246,.03)',
-
-  // Ambient background accent (tokenized from Layout.svelte's .bg pink radial)
-  bgAccent: 'rgba(249,168,212,.03)',
-
-  // Elevation-aware surface border hierarchy (dim → mid → bright, ≥ .04 delta per tier)
-  borderDim:    'rgba(255,255,255,.04)',
-  borderMid:    'rgba(255,255,255,.08)',
-  borderBright: 'rgba(255,255,255,.14)',
+  // SVG primitives (used by dial, orbit ring, scope grid — v2 components).
+  // The "Cyan" suffix on svgGridCyan is preserved for callsite stability;
+  // the value is stationB at 5% (was old cyan #67e8f9 at 5%).
+  svgGridCyan:   'rgba(140, 212, 201, 0.05)',
+  svgGridMajor:  'rgba(242, 235, 219, 0.06)',
+  svgTickMinor:  'rgba(242, 235, 219, 0.18)',
+  svgTickMajor:  'rgba(242, 235, 219, 0.50)',
+  svgHandStroke: '#F2EBDB',
+  svgDialRim:    'rgba(242, 235, 219, 0.14)',
+  svgOrbitTrack: 'rgba(242, 235, 219, 0.06)',
+  svgOrbitEdge:  'rgba(242, 235, 219, 0.10)',
 } as const;
 
 // ── Semantic tokens ────────────────────────────────────────────────────────
 export const tokens = {
   color: {
+    // Surface — page canvas + four bg tiers + border rules
     surface: {
-      base:     primitive.bgBase,
-      mid:      primitive.bgMid,
-      deep:     primitive.bgDeep,
-      raised:   primitive.bgMid,
-      elevated: primitive.bgDeep,
-      overlay:  'rgba(0, 0, 0, 0.6)',
-      // Chronograph dial face + scope canvas background (v2 views).
+      base:     primitive.bg,
+      mid:      primitive.bg2,
+      deep:     primitive.bg2,
+      raised:   primitive.bg3,
+      elevated: primitive.bg4,
+      overlay:  'rgba(3, 5, 10, 0.78)',
       dialFace:    primitive.bgDialFace,
       overlayDeep: primitive.overlayDeep,
       border: {
-        dim:    primitive.borderDim,
-        mid:    primitive.borderMid,
-        bright: primitive.borderBright,
+        dim:    primitive.ruleFaint,
+        mid:    primitive.rule,
+        bright: primitive.ruleStrong,
       },
     },
 
+    // Shell — masthead + panel surface family. Paths preserved for callsite
+    // stability; values repointed to bg tiers and bone-white-alpha tints.
     shell: {
-      base: primitive.shellBase,
-      panel: primitive.shellPanel,
-      panelRaised: primitive.shellPanelRaised,
-      panelHover: primitive.shellPanelHover,
-      panelActive: primitive.shellPanelActive,
-      border: primitive.shellBorder,
-      borderStrong: primitive.shellBorderStrong,
-      divider: primitive.shellDivider,
-      backdrop: primitive.shellBackdrop,
-      popover: primitive.shellPopover,
-      bgCyan: primitive.shellBgCyan,
-      bgAmber: primitive.shellBgAmber,
-      successBg: primitive.shellSuccessBg,
-      successBorder: primitive.shellSuccessBorder,
-      stopBg: primitive.shellStopBg,
-      stopBorder: primitive.shellStopBorder,
+      base:           primitive.bg,
+      panel:          primitive.bg2,
+      panelRaised:    primitive.bg3,
+      panelHover:     'rgba(242, 235, 219, 0.055)',
+      panelActive:    'rgba(140, 212, 201, 0.095)',
+      border:         primitive.rule,
+      borderStrong:   primitive.ruleStrong,
+      divider:        primitive.rule,
+      backdrop:       'rgba(3, 5, 10, 0.92)',
+      popover:        'rgba(8, 12, 20, 0.96)',
+      bgCyan:         'rgba(140, 212, 201, 0.045)',
+      bgAmber:        'rgba(232, 195, 111, 0.028)',
+      successBg:      'rgba(140, 212, 201, 0.115)',
+      successBorder:  'rgba(140, 212, 201, 0.32)',
+      stopBg:         'rgba(215, 142, 104, 0.10)',
+      stopBorder:     'rgba(215, 142, 104, 0.28)',
     },
 
-    bg: {
-      accent: primitive.bgAccent,
-    },
-
+    // Text — fg tiers. Canonical paths only; t1..t5 and primary/secondary/muted
+    // aliases were removed in the v4 hard cut. Callsites use fg/fg2/fg3/fg4.
     text: {
-      t1: primitive.t1,
-      t2: primitive.t2,
-      t3: primitive.t3,
-      t4: primitive.t4,
-      t5: primitive.t5,
-      // Legacy aliases used by non-Glass components (persistence layer, share, engine)
-      primary:   primitive.t1,
-      secondary: primitive.t2,
-      muted:     primitive.t3,
+      fg:  primitive.fg,
+      fg2: primitive.fg2,
+      fg3: primitive.fg3,
+      fg4: primitive.fg4,
     },
 
-    accent: {
-      cyan:       primitive.cyan,
-      cyanBright: primitive.cyanBright,
-      cyan40:     primitive.cyan40,
-      cyan20:     primitive.cyan20,
-      cyan12:     primitive.cyan12,
-      cyan06:     primitive.cyan06,
-      cyanGlow:   primitive.cyanGlow,
-      cyanTone:   primitive.cyanTone,
-      pink:       primitive.pink,
-      pinkBright: primitive.pinkBright,
-      pink40:     primitive.pink40,
-      pink20:     primitive.pink20,
-      pink12:     primitive.pink12,
-      pink06:     primitive.pink06,
-      pinkGlow:   primitive.pinkGlow,
-      pinkTone:   primitive.pinkTone,
-      cyan25:           primitive.cyan25,
-      cyanBgSubtle:     primitive.cyan15,
-      cyanBorderSubtle: primitive.cyan25,
-      pink25:           primitive.pink25,
-      pinkBgSubtle:     primitive.pink15,
-      pinkBorderSubtle: primitive.pink25,
-      amber:      primitive.amber,
-      amberGlow:  primitive.amberGlow,
-      amberTone:  primitive.amberTone,
-      green:      primitive.green,
-      greenGlow:  primitive.greenGlow,
+    // Station palette — canonical endpoint identity (v4)
+    station: {
+      A: primitive.stationA,
+      B: primitive.stationB,
+      C: primitive.stationC,
+      D: primitive.stationD,
     },
 
-    glow: {
-      cyan: 'rgba(103,232,249,.2)',
-      pink: 'rgba(249,168,212,.2)',
+    // Severity palette — threshold-cross diagnostic overrides
+    severity: {
+      warn: primitive.sevWarn,
+      bad:  primitive.sevBad,
+      crit: primitive.sevCrit,
     },
 
+    // Phase palette — Resource Timing breakdown (was tier2)
+    phase: {
+      dns:  primitive.phaseDns,
+      tcp:  primitive.phaseTcp,
+      tls:  primitive.phaseTls,
+      ttfb: primitive.phaseTtfb,
+      xfer: primitive.phaseXfer,
+    },
+
+    // Glass surfaces
     glass: {
       bg:          primitive.glassBg,
-      bgStrong:    'rgba(255,255,255,.045)',
-      bgHover:     'rgba(255,255,255,.07)',
-      // Rail-scoped glass surfaces (v2 endpoint rail). Distinct from bgHover/bgStrong
-      // above to preserve existing-component visuals (see Phase 0 handoff notes).
+      bgStrong:    'rgba(242, 235, 219, 0.045)',
+      bgHover:     'rgba(242, 235, 219, 0.07)',
       bgRailHover:    primitive.glassBgRailHover,
       bgRailSelected: primitive.glassBgRailSelected,
       border:      primitive.glassBorder,
       borderHover: primitive.glassHighlight,
       highlight:      primitive.glassHighlight,
-      highlightStrong: 'rgba(255,255,255,.9)',
-      shadow:         'rgba(0,0,0,.15)',
-      shadowStrong: 'rgba(0,0,0,.5)',
-      statsBorder:  'rgba(255,255,255,.04)',
+      highlightStrong: 'rgba(242, 235, 219, 0.9)',
+      shadow:         'rgba(0, 0, 0, 0.15)',
+      shadowStrong:   'rgba(0, 0, 0, 0.5)',
+      statsBorder:    'rgba(242, 235, 219, 0.04)',
     },
 
-    topbar: {
-      bg: primitive.topbarBg,
-    },
-
-    footer: {
-      bg: primitive.footerBg,
-    },
+    topbar: { bg: primitive.topbarBg },
+    footer: { bg: primitive.footerBg },
 
     tooltip: {
-      bg: primitive.tooltipBg,
-      // Deep tooltip surface for v2 scope crosshair.
+      bg:      primitive.tooltipBg,
       bgDeep:  primitive.tooltipBgDeep,
       border:  primitive.tooltipBorder,
       text:    primitive.tooltipText,
       textDim: primitive.tooltipTextDim,
     },
 
+    // SVG primitives — chart/dial/scope. Paths preserved; values are
+    // bone-white alphas (was pure white). nowDotCyan/nowDotPink/thresholdStroke
+    // were retired with the v3 accent palette.
     svg: {
-      gridLine:        primitive.gridLine,
-      futureZone:      primitive.futureZone,
-      nowDotCyan:      primitive.nowDotCyan,
-      nowDotPink:      primitive.nowDotPink,
-      thresholdStroke: primitive.thresholdStroke,
-      // v2 chronograph + scope primitives.
-      gridLineCyan:  primitive.svgGridCyan,
-      gridLineMajor: primitive.svgGridMajor,
-      tickMinor:     primitive.svgTickMinor,
-      tickMajor:     primitive.svgTickMajor,
-      handStroke:    primitive.svgHandStroke,
-      dialRim:       primitive.svgDialRim,
-      orbitTrack:    primitive.svgOrbitTrack,
-      orbitEdge:     primitive.svgOrbitEdge,
+      gridLine:        'rgba(242, 235, 219, 0.03)',
+      futureZone:      'rgba(242, 235, 219, 0.018)',
+      gridLineCyan:    primitive.svgGridCyan,
+      gridLineMajor:   primitive.svgGridMajor,
+      tickMinor:       primitive.svgTickMinor,
+      tickMajor:       primitive.svgTickMajor,
+      handStroke:      primitive.svgHandStroke,
+      dialRim:         primitive.svgDialRim,
+      orbitTrack:      primitive.svgOrbitTrack,
+      orbitEdge:       primitive.svgOrbitEdge,
     },
 
+    // Heatmap ramp — repointed onto the v4 station/severity scale so no
+    // anachronistic v3 yellow/orange leaks into screenshots before the
+    // consuming component is rewritten in Phase B/C. The duplication on
+    // elevated/slow is intentional: both live in the "bad" tier.
     heatmap: {
-      fast:     'rgba(103,232,249,.6)',   // cyan — clearly good (brand accent)
-      normal:   'rgba(234,179,8,.4)',     // yellow — moderate
-      elevated: 'rgba(249,115,22,.7)',    // orange — attention
-      slow:     'rgba(239,68,68,.7)',     // red — problem
-      timeout:  'rgba(185,28,28,.85)',    // crimson — critical
+      fast:     'rgba(140, 212, 201, 0.6)',   // stationB at 60%
+      normal:   'rgba(232, 195, 111, 0.5)',   // sevWarn at 50%
+      elevated: 'rgba(210, 114, 88, 0.7)',    // sevBad at 70%
+      slow:     'rgba(210, 114, 88, 0.85)',   // sevBad at 85% (deeper end of bad tier)
+      timeout:  'rgba(177, 66, 56, 0.9)',     // sevCrit at 90%
     },
 
-    orb: {
-      cyan:   primitive.orbCyan,
-      pink:   primitive.orbPink,
-      violet: primitive.orbViolet,
-    },
-
-    tier2: {
-      dns:       primitive.tier2Dns,
-      tcp:       primitive.tier2Tcp,
-      tls:       primitive.tier2Tls,
-      ttfb:      primitive.tier2Ttfb,
-      transfer:  primitive.tier2Transfer,
-      labelText: primitive.tier2LabelText,
-    },
-
+    // Endpoint palette — 10 cycling slots. First 4 are the canonical stations;
+    // 5–10 are spectral extras via oklch(78% 0.13 H) varying hue (per DIRECTION).
+    // Stored as oklch() strings — Chronoscope targets modern browsers
+    // (oklch supported Chrome 111+, Safari 15.4+, FF 113+).
     endpoint: [
-      primitive.ep0, primitive.ep1, primitive.ep2, primitive.ep3, primitive.ep4,
-      primitive.ep5, primitive.ep6, primitive.ep7, primitive.ep8, primitive.ep9,
+      primitive.stationA,                  // ep0 — Sirius blue-white
+      primitive.stationB,                  // ep1 — Vega cyan
+      primitive.stationC,                  // ep2 — Sun yellow-white
+      primitive.stationD,                  // ep3 — Betelgeuse red-orange
+      'oklch(78% 0.13 280)',               // ep4 — violet-purple
+      'oklch(78% 0.13 320)',               // ep5 — magenta
+      'oklch(78% 0.13 350)',               // ep6 — red-pink
+      'oklch(78% 0.13 25)',                // ep7 — coral
+      'oklch(78% 0.13 130)',               // ep8 — green
+      'oklch(78% 0.13 215)',               // ep9 — blue-teal
     ] as readonly string[],
 
-    // Legacy chrome group — referenced by Settings/Share drawers which are not redesigned in this phase
+    // Legacy chrome group — referenced by Settings/Share drawers which are
+    // redesigned in Phase C. Repointed to stationB (cyan's v3 "active/focus"
+    // role → stationB in v4).
     chrome: {
-      border:      'rgba(255,255,255,.07)',
-      borderHover: 'rgba(255,255,255,.12)',
-      borderFocus: primitive.cyan,
-      accent:      primitive.cyan,
-      accentHover: primitive.cyanBright,
+      border:      primitive.rule,
+      borderHover: primitive.ruleStrong,
+      borderFocus: primitive.stationB,
+      accent:      primitive.stationB,
+      accentHover: primitive.fg,
     },
 
-    // Legacy status colors — referenced by measurement engine and worker
+    // Engine state colors. status.timeout/error are rendered visibly in
+    // EndpointRow + ScopeCanvas; status.offline/idle have no current consumers
+    // but the file is the source of truth so all four are remapped to the v4
+    // severity / foreground scale to avoid anachronistic v3 purples.
     status: {
-      timeout: '#9b5de5',
-      error:   '#c77dff',
-      offline: '#7b2cbf',
-      success: primitive.green,
-      idle:    '#4a5568',
+      timeout: primitive.sevCrit,
+      error:   primitive.sevBad,
+      offline: primitive.fg3,
+      success: primitive.stationB,
+      idle:    primitive.fg4,
     },
   },
 
   typography: {
     sans: {
-      fontFamily: "'Sora', system-ui, sans-serif",
+      fontFamily: "'Hanken Grotesk', system-ui, sans-serif",
       weights: { thin: 200, light: 300, regular: 400, medium: 500, semibold: 600, bold: 700 },
     },
     mono: {
-      fontFamily: "'Martian Mono', monospace",
-      weights: { thin: 200, light: 300, regular: 400, medium: 500 },
+      // Space Mono ships only weights 400 and 700. Callsites referencing the
+      // dropped thin/light/medium weights will resolve to undefined; the TS
+      // pass surfaces and migrates them as part of Phase A.
+      fontFamily: "'Space Mono', ui-monospace, SFMono-Regular, monospace",
+      weights: { regular: 400, bold: 700 },
     },
-    // Scale
+    // Scale — per-surface v4 doubling (hero 240–320px, etc.) belongs in
+    // Phase C as each surface is composed against the v4 markup.
     heroSize:   54,
     heroWeight: 200,
     statSize:   14,
@@ -373,19 +294,16 @@ export const tokens = {
     label:   { size: 11, weight: 500, opacity: 0.58, letterSpacing: '0.06em' },
     body:    { size: 14, weight: 400, opacity: 0.94, letterSpacing: '0' },
 
-    // v2 named scale — aligned to the prototype (`v2/Chronoscope v2.html`), which
-    // is the pixel-fidelity source of truth. Half-pixel sizes from the earlier
-    // handoff spec were reconciled to the prototype's integer-px scale.
     scale: {
-      xs:   '10px',  // micro labels, all-caps only
-      sm:   '11px',  // mono metadata, urls
-      md:   '12px',  // controls, chip text
-      base: '13px',  // body copy, chips
-      lg:   '14px',  // rail metrics, brand name, sub-metric numbers
-      xl:   '17px',  // subsection titles, logo
-      xl2:  '20px',  // section titles
-      xl3:  '24px',  // page titles
-      xxl:  '32px',  // reserved for Overview triptych values
+      xs:   '10px',
+      sm:   '11px',
+      md:   '12px',
+      base: '13px',
+      lg:   '14px',
+      xl:   '17px',
+      xl2:  '20px',
+      xl3:  '24px',
+      xxl:  '32px',
     },
     tracking: {
       kicker:  '0.22em',
@@ -404,31 +322,28 @@ export const tokens = {
     xs:  4,
     sm:   8,
     md:  12,
-    lg:  18,   // lane cards
-    btn: 10,   // buttons
+    lg:  18,
+    btn: 10,
   },
 
   timing: {
-    // Glass animations
     bgShift:       20000,
     orbFloat:      15000,
     pulse:          2000,
     nowRing:        2000,
     hoverLine:        80,
     hoverTip:        100,
-    tooltipDelay:     50,    // faster than hoverTip — tier2 tooltip needs snappier response
-    // Generic
+    tooltipDelay:     50,
     fadeIn:          200,
     btnHover:        200,
     domThrottle:     100,
     copiedFeedback: 2000,
 
-    // v2 motion primitives.
-    handLerp:        0.15,   // dial hand smoothing factor (per-frame)
-    pulseRim:         400,   // ms — inner-rim stroke color swap on threshold cross
-    pulseDialGlow:    900,   // ms — outer drop-shadow flash window; shared by CSS keyframe duration and JS pulse-window timer so the two can't drift
-    orbitPulse:      1400,   // ms — orbit pip radius pulse when over threshold
-    traceRepaint:      16,   // ms — scope canvas repaint throttle
+    handLerp:        0.15,
+    pulseRim:         400,
+    pulseDialGlow:    900,
+    orbitPulse:      1400,
+    traceRepaint:      16,
   },
 
   easing: {
@@ -445,29 +360,23 @@ export const tokens = {
   },
 
   shadow: {
-    low:  '0 2px 8px rgba(0,0,0,.4)',
-    high: '0 8px 32px rgba(0,0,0,.6)',
-    popover: '0 18px 60px rgba(0,0,0,.42)',
+    low:  '0 2px 8px rgba(0, 0, 0, 0.4)',
+    high: '0 8px 32px rgba(0, 0, 0, 0.6)',
+    popover: '0 18px 60px rgba(0, 0, 0, 0.42)',
   },
 
   shell: {
     topbarHeight: 60,
     popoverWidth: 280,
-    topbarBackdropFilter: 'blur(18px) saturate(1.22)',
-    popoverBackdropFilter: 'blur(18px) saturate(1.2)',
-    brandHighlightShadow: 'inset 0 1px 0 rgba(255,255,255,.12)',
+    topbarBackdropFilter: 'blur(8px)',
+    popoverBackdropFilter: 'blur(12px)',
+    brandHighlightShadow: 'inset 0 1px 0 rgba(242, 235, 219, 0.12)',
     navHeight: 48,
     controlSize: 40,
     mobileControlSize: 38,
     contentMaxWidth: 2200,
   },
 
-  // Shell + sliding window constants. Phase 7 retired the Lanes family and
-  // its layout-algorithm tokens (gapPx / padding* / dotRadius / nowDotRadius /
-  // ringInitialR / compactThreshold / compactHeaderHeight / maxEndpoints /
-  // panelWidth / minHeight / chartPadding*). chartWindow still drives the
-  // Live scope window; topbarHeight / railWidth / xAxisHeight / footerHeight
-  // are the v2 shell chrome constants.
   lane: {
     chartWindow:    60,
     topbarHeight:   58,
