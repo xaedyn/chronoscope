@@ -200,7 +200,7 @@ function readSettingsField(record: Record<string, unknown>): Settings {
   const raw = asRecord(record['settings']) ?? {};
   const region: Region | undefined = isValidRegion(raw['region']) ? raw['region'] : undefined;
   const corsMode =
-    raw['corsMode'] === 'cors' || raw['corsMode'] === 'no-cors'
+    raw['corsMode'] === 'cors' || raw['corsMode'] === 'no-cors' || raw['corsMode'] === 'image'
       ? raw['corsMode']
       : DEFAULT_SETTINGS.corsMode;
   return {
