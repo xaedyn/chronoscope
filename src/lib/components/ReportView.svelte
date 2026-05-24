@@ -90,7 +90,13 @@
     Object.fromEntries(monitored.slice(0, 4).map((ep, i) => [ep.id, STATION_IDS[i]])),
   );
 
-  const WINDOW = tokens.lane.chartWindow;
+  // Report is a session-signature plot, not a rolling-window live view. WINDOW
+  // here is the number of pulse slots allocated per station, sized for typical
+  // session lengths (1-6 minutes at 1Hz typically resolves to <360 rounds).
+  // For longer sessions, samples are downsampled uniformly so the recording
+  // stays renderable without overlapping pulses. v4's prototype uses a
+  // hard-coded 247-round demo; this is the same anatomy generalised.
+  const WINDOW = 360;
   const stationData = $derived.by<Record<string, readonly (number | null)[]>>(() => {
     const out: Record<string, (number | null)[]> = {};
     for (const ep of monitored.slice(0, 4)) {
@@ -101,17 +107,59 @@
         continue;
       }
       const all = m.samples.toArray();
-      const tail = all.slice(-WINDOW);
-      const buf: (number | null)[] = new Array(WINDOW).fill(null);
-      const offset = WINDOW - tail.length;
-      for (let i = 0; i < tail.length; i++) {
-        const s = tail[i];
-        buf[offset + i] = s.status === 'ok' ? s.latency : null;
-      }
-      out[id] = buf;
+      out[id] = downsampleToWindow(all, WINDOW, (s) => s.status === 'ok' ? s.latency : null);
     }
     return out;
   });
+  // Parallel timestamp array. Without this, OrbitalScene's writeAt detection
+  // falsely flashes pulses as "fresh" every time the reactive buffer rebuilds
+  // (see commit 4cc8e38 — same bug we fixed on Live). The signature plot wants
+  // every pulse settled; sample timestamps make all of them aged out by the
+  // time the user is on /report.
+  const stationTimestamps = $derived.by<Record<string, readonly (number | null)[]>>(() => {
+    const out: Record<string, (number | null)[]> = {};
+    for (const ep of monitored.slice(0, 4)) {
+      const id = epToStation[ep.id];
+      const m = measurements.endpoints[ep.id];
+      if (!m) {
+        out[id] = new Array(WINDOW).fill(null);
+        continue;
+      }
+      const all = m.samples.toArray();
+      out[id] = downsampleToWindow(all, WINDOW, (s) => s.status === 'ok' ? s.timestamp : null);
+    }
+    return out;
+  });
+  // Uniformly downsample a sample stream to a fixed-width pulse buffer. Pads
+  // with nulls when the stream is shorter than the window (early-session
+  // signature); strides through evenly when the stream is longer (long-session
+  // signature). Keeps the angular sweep of pulses around the ring proportional
+  // to total session duration regardless of round count.
+  function downsampleToWindow<T extends MeasurementSample, V>(
+    samples: readonly T[],
+    window: number,
+    project: (s: T) => V,
+  ): (V | null)[] {
+    const buf: (V | null)[] = new Array(window).fill(null);
+    if (samples.length === 0) return buf;
+    if (samples.length <= window) {
+      // Pack the recording into the END of the buffer so it grows clockwise as
+      // the session accumulates (matches Live's tail-packing convention).
+      const offset = window - samples.length;
+      for (let i = 0; i < samples.length; i++) {
+        const s = samples[i];
+        if (s !== undefined) buf[offset + i] = project(s);
+      }
+      return buf;
+    }
+    // Long session: stride uniformly through the recording.
+    const stride = samples.length / window;
+    for (let i = 0; i < window; i++) {
+      const s = samples[Math.floor(i * stride)];
+      if (s !== undefined) buf[i] = project(s);
+    }
+    return buf;
+  }
 
   // ── Session identity / coords ─────────────────────────────────────────────
   const sessionStart = $derived(measurements.startedAt);
@@ -612,6 +660,7 @@
         <OrbitalScene
           {stations}
           {stationData}
+          {stationTimestamps}
           triggerMs={settings.healthThreshold}
           windowSeconds={WINDOW}
           windowRounds={WINDOW}
