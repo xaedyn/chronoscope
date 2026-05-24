@@ -149,7 +149,9 @@ describe('buildDiagnosticNarrative', () => {
     expect(narrative.snapshotEligibility.eligible).toBe(true);
     expect(narrative.primaryValidation.id).toBe('share-snapshot');
     expect(narrative.safeSummary).toContain('This browser test: This test looks healthy.');
-    expect(narrative.supportingSummary).toBe('Clean browser-visible run: 35+ successful checks across 3 sites.');
+    expect(narrative.supportingSummary).toBe(
+      'All 3 sites are on transit. Latency holds steady around 50 ms across the field; google has the highest tail at 70 ms — well under the 120 ms trigger. The field is coordinated — no drift detected across 35+ synchronized rounds.',
+    );
     expect(narrative.triageActions.map((action) => action.id)).toEqual(['share-snapshot', 'keep-running']);
     expect(narrative.triageActions[0].action).toContain('Share this clean measured run');
     expect(narrative.triageActions[0].why).toContain('mature checks');
@@ -177,7 +179,7 @@ describe('buildDiagnosticNarrative', () => {
     expect(narrative.severity).toBe('healthy');
     expect(narrative.primaryAnswer.text).toBe('Looks good, with minor variation.');
     expect(narrative.supportingSummary).toBe(
-      'Good browser-visible run with variation: no site is consistently slow; 35+ successful checks across 3 sites.',
+      'All 3 sites are on transit. Median latency is 46 ms across the field; Google carries the highest tail at 175 ms. Some natural variation in this window, but no site is consistently slow — the field is coordinated.',
     );
     expect(narrative.safeSummary).toContain('Looks good, with minor variation.');
     expect(narrative.triageActions[0].action).toBe('Share this measured run with the variation visible.');
@@ -224,13 +226,13 @@ describe('buildDiagnosticNarrative', () => {
     );
     expect(narrative.evidence.some((item) => item.label === 'Site to inspect' && item.value === 'API')).toBe(true);
     expect(narrative.safeSummary).not.toMatch(/likely (source|site|network|your network)/i);
-    // Post-hotfix (fix/synthesis-arc-hotfixes) the Measured Fact slot
-    // surfaces actual measurements per kind rather than the prior generic
-    // "Evidence: N+ successful checks across N sites; total timing only."
-    // meta-count. For the isolated-endpoint kind, it now names the slowest
-    // site by label and includes its p95.
+    // Three-sentence narrative in v4's voice (~150–220 ch). Per-kind body
+    // length is intentionally balanced across all states so the Overview
+    // hero's vertical alignment doesn't shift between state transitions
+    // under grid align-items: center. See supportingSummaryFor in
+    // src/lib/utils/diagnostic-narrative.ts for branch structure.
     expect(narrative.supportingSummary).toBe(
-      'Median latency is 45 ms across 3 sites; API is the slowest at p95 70 ms.',
+      "2 sites are on transit; API is the outlier. The field's median latency is 45 ms; API runs at 240 ms with a tail reaching 70 ms — past the 120 ms trigger. The other sites held tempo, so the slowness is path-isolated to API.",
     );
     expect(narrative.nextSteps.join(' ')).toContain('Open Investigate');
     expect(narrative.triageActions.map((action) => action.id)).toEqual([
@@ -584,7 +586,10 @@ describe('buildDiagnosticNarrative', () => {
     for (const narrative of scenarios) {
       const { supportingSummary } = narrative;
       expect(supportingSummary).toBeTruthy();
-      expect(supportingSummary!.length).toBeLessThanOrEqual(120);
+      // Body is a 3-sentence narrative (~150–220 ch baseline, up to ~280 ch
+      // when site labels are long). The cap exists to prevent the body
+      // from running away — not to mandate a single-sentence summary.
+      expect(supportingSummary!.length).toBeLessThanOrEqual(300);
       expect([
         narrative.primaryAnswer.text,
         supportingSummary,
