@@ -128,22 +128,27 @@
   // Each diagnostic kind gets a sentence that says what the headline implies
   // *for the user*, not a restated version of it. Mirrors the interpretation
   // copy shipped in PR #190 to v2 and preserved through v4.
+  // Observer's-notes second paragraph. The first paragraph (verdictBodySegments)
+  // now carries the measured-fact narrative across all states (see
+  // supportingSummaryFor in $lib/utils/diagnostic-narrative.ts). This second
+  // paragraph is the next-step / what-to-watch-for follow-on so the notes
+  // panel adds value beyond the body rather than restating it.
   const interpretation = $derived.by<string>(() => {
     switch (diagnosticNarrative.kind) {
       case 'collecting':
-        return 'Chronoscope needs a few successful checks before it can compare endpoints responsibly.';
+        return 'The diagnosis becomes actionable once each site has a few mature samples — usually within the next minute as the cadence holds at 1 round per second.';
       case 'healthy':
-        return 'Chronoscope has not seen a meaningful slowdown or failure in this window.';
+        return 'If anything changes — drift, jitter, packet loss, or a single-site spike — the live tracker surfaces it within one round. Until then, treat this window as a clean baseline.';
       case 'isolated-endpoint':
-        return "That points to either your browser's route to that one endpoint, or the endpoint itself. An outside check can confirm whether the slowness follows the endpoint from other networks.";
+        return "Next move: run an outside transit check. If a Cloudflare edge sees the same slowness, the source is the endpoint itself. If the edge sees clean responses, the path from your browser is suspect.";
       case 'shared-network':
-        return 'Multiple endpoints slowing in the same window typically points to a shared link between your browser and them — most often local network or upstream ISP.';
+        return 'Check your local network first — Wi-Fi quality, VPN, or upstream ISP saturation are the common causes. An outside transit check from a Cloudflare edge confirms whether the slowness is local to you or shared more broadly.';
       case 'multiple-slow':
-        return 'Several endpoints over the threshold without a shared slow phase — likely either a shared upstream issue or coincident endpoint-side slowness. An outside check helps separate the two.';
+        return 'Run an outside transit check from a Cloudflare edge. If the same sites slow there too, the cause is genuinely shared. If only your browser sees them slow, the issue is local to this network.';
       case 'packet-loss':
-        return 'Failed requests in the browser can come from the endpoint, the route to it, or a CORS block. An outside check separates these without changing your local network.';
+        return 'Run an outside transit check. If failures appear from a Cloudflare edge too, the endpoint or path is suspect. If the edge succeeds, the issue is local to this network or your browser configuration.';
       case 'jitter':
-        return "Bouncing latency without a clear failure pattern usually points to congestion somewhere on the path. The path's not down — it's noisy.";
+        return "Watch whether the swings settle or escalate. Congestion that resolves on its own is common; sustained jitter usually means a path is overloaded or there's contention upstream.";
     }
   });
 
