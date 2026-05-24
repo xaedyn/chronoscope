@@ -394,8 +394,6 @@
   const COMPARE_NBINS = COMPARE_CEIL / COMPARE_BIN;
   const COMPARE_MIN_SAMPLES = 4;
 
-  let compareExpanded = $state(false);
-
   interface CompareStation {
     readonly endpointId: string;
     readonly stationId: StationId;
@@ -632,27 +630,12 @@
       <!-- ============ COMPARE ALL STATIONS OVERLAY ============ -->
       <!-- Spans both columns of the main grid so the side-by-side overlay sits
            above the per-station rows and the outside-vantage column. -->
-      <section class="compare-section" class:expanded={compareExpanded}>
+      <section class="compare-section">
         <div class="compare-head">
           <div class="l"><em>Compare</em> all four stations</div>
-          <div class="toggle" role="group" aria-label="Toggle comparison overlay">
-            <button
-              type="button"
-              data-mode="expand"
-              aria-pressed={compareExpanded ? 'false' : 'true'}
-              onclick={() => (compareExpanded = true)}
-            >Show overlay</button>
-            <button
-              type="button"
-              data-mode="collapse"
-              aria-pressed={compareExpanded ? 'true' : 'false'}
-              onclick={() => (compareExpanded = false)}
-            >Hide overlay</button>
-          </div>
         </div>
 
-        {#if compareExpanded}
-          {#if compareOverlay}
+        {#if compareOverlay}
             <div class="compare-content">
               <div class="compare-plot">
                 <svg
@@ -735,11 +718,10 @@
                 {/if}
               </div>
             </div>
-          {:else}
-            <div class="compare-empty">
-              <p>Collecting comparison data. Each station needs at least four successful samples before the overlay can render.</p>
-            </div>
-          {/if}
+        {:else}
+          <div class="compare-empty">
+            <p>Collecting comparison data. Each station needs at least four successful samples before the overlay can render.</p>
+          </div>
         {/if}
       </section>
 
@@ -1011,22 +993,22 @@
   }
 
   /* ── Main layout ────────────────────────────────────────────────────────── */
+  /* Single-column stack at every viewport. The compare overlay, the
+     per-station blocks, and the outside-vantage probes all flow in a single
+     column so they read big as the user scrolls. v4's prototype switches to
+     this layout below 1100px; we apply it always — per-user preference for
+     the narrow-viewport feel at desktop widths too. */
   .investigate-main {
     display: grid;
-    grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
-    gap: 64px;
+    grid-template-columns: 1fr;
+    gap: 48px;
     padding: 48px clamp(20px, 3vw, 48px) 64px;
   }
 
   /* ── Compare-all overlay ────────────────────────────────────────────────── */
-  /* Lives in the LEFT column (row 1) of the investigate-main grid. Section I
-     (carrier records + per-station blocks) flows to right column row 1; the
-     aside.outside (Part II) auto-flows to left column row 2 below the compare
-     panel. Mirrors proposals/v4/proposal-investigate-v4.html main layout.
-     Earlier version forced grid-column: 1 / -1 which spanned both columns
-     and broke v4 parity. */
+  /* Always expanded — no SHOW/HIDE toggle. The overlay carries the
+     side-by-side distribution comparison; users always want it visible. */
   .compare-section {
-    margin-bottom: 56px;
     padding: 40px 44px;
     border: 1px solid var(--rule-strong);
     background: var(--bg-2);
@@ -1050,9 +1032,8 @@
     gap: 14px;
     padding-bottom: 18px;
     border-bottom: 1px solid var(--rule);
+    margin-bottom: 24px;
   }
-  .compare-section.expanded .compare-head { margin-bottom: 24px; }
-  .compare-section:not(.expanded) .compare-head { border-bottom: 0; padding-bottom: 0; }
   .compare-section .compare-head .l {
     font-family: var(--sans);
     font-weight: 200;
@@ -1066,30 +1047,6 @@
     color: var(--station-b);
     font-weight: 300;
   }
-  .compare-section .toggle {
-    display: flex;
-    border: 1px solid var(--rule-strong);
-  }
-  .compare-section .toggle button {
-    padding: 7px 14px;
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--fg-3);
-    font-weight: 700;
-    background: transparent;
-    border: 0;
-    border-right: 1px solid var(--rule-strong);
-    cursor: pointer;
-    transition: background 120ms, color 120ms;
-  }
-  .compare-section .toggle button:last-child { border-right: 0; }
-  .compare-section .toggle button[aria-pressed="true"] {
-    background: var(--fg);
-    color: var(--bg);
-  }
-  .compare-section .toggle button:hover:not([aria-pressed="true"]) { color: var(--fg); }
 
   .compare-content {
     display: grid;
@@ -1685,10 +1642,10 @@
 
   /* ── Responsive ─────────────────────────────────────────────────────────── */
   @media (max-width: 1100px) {
-    .investigate-main {
-      grid-template-columns: 1fr;
-      gap: 48px;
-    }
+    /* Main is already single-column at all widths (see .investigate-main),
+       but the per-station polar+phase split and the compare plot+legend
+       split still need to collapse on narrower viewports so each subblock
+       gets enough horizontal room. */
     .analysis {
       grid-template-columns: 1fr;
       gap: 28px;
