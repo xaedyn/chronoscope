@@ -87,6 +87,33 @@
     return out;
   });
 
+  // Parallel array of per-slot sample timestamps. OrbitalScene uses these to
+  // compute pulse "freshness" age. Without timestamps the scene falls back to
+  // writeAt detection, which misfires on every buffer shift and makes every
+  // pulse render fresh simultaneously — producing a dense bright necklace
+  // instead of v4's "one fresh pulse + settled trail" look.
+  const stationTimestamps = $derived.by<Record<string, readonly (number | null)[]>>(() => {
+    const out: Record<string, (number | null)[]> = {};
+    for (const ep of monitored.slice(0, 4)) {
+      const id = epToStation[ep.id];
+      const m = measurements.endpoints[ep.id];
+      if (!m) {
+        out[id] = new Array(WINDOW).fill(null);
+        continue;
+      }
+      const all = m.samples.toArray();
+      const tail = all.slice(-WINDOW);
+      const buf: (number | null)[] = new Array(WINDOW).fill(null);
+      const offset = WINDOW - tail.length;
+      for (let i = 0; i < tail.length; i++) {
+        const s = tail[i];
+        buf[offset + i] = s.status === 'ok' ? s.timestamp : null;
+      }
+      out[id] = buf;
+    }
+    return out;
+  });
+
   const focusedStation = $derived<string | null>(
     focusedId === null ? null : (epToStation[focusedId] ?? null),
   );
@@ -317,6 +344,7 @@
       <OrbitalScene
         {stations}
         {stationData}
+        {stationTimestamps}
         {focusedStation}
         triggerMs={threshold}
         windowSeconds={WINDOW}
@@ -489,9 +517,13 @@
     color: var(--fg);
   }
 
-  /* The 3D scene as a fixed-inset background of the stage. */
+  /* The 3D scene fills the entire viewport (including behind the masthead),
+     matching the v4 prototype's full-viewport stage. The masthead floats over
+     it via backdrop-blur. Without this the canvas aspect would be ~2.23
+     (below-masthead only), which widens the horizontal FOV and makes the
+     orbits feel smaller; v4 uses the full ~2.04 aspect so orbits dominate. */
   .stage-bg {
-    position: absolute;
+    position: fixed;
     inset: 0;
     z-index: 0;
   }
@@ -538,7 +570,7 @@
   /* ── Coords bar — top-center pill ───────────────────────────────────────── */
   .coords-bar {
     position: absolute;
-    top: 22px;
+    top: 78px;
     left: 50%;
     transform: translateX(-50%);
     display: inline-flex;
@@ -893,11 +925,13 @@
   }
 
   /* ── Stations panel — right-center vertical list overlay ────────────────── */
+  /* v4 anchors the panel's TOP edge at 50% (its CSS specifies translateY(-50%)
+     but the kickerFade entrance animation overrides the transform back to
+     identity); the panel hangs from mid-stage downward. Match that exactly. */
   .stations {
     position: absolute;
     right: clamp(20px, 3vw, 48px);
     top: 50%;
-    transform: translateY(-50%);
     display: flex;
     flex-direction: column;
     gap: 1px;
@@ -1057,7 +1091,7 @@
   .trigger input[type="range"] {
     -webkit-appearance: none;
     appearance: none;
-    width: 160px;
+    width: 100px;
     height: 14px;
     cursor: pointer;
     background: transparent;

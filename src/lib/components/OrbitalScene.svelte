@@ -72,6 +72,7 @@
     lastGoodMarker = null,
     currentRound = null,
     cadenceMs = null,
+    stationTimestamps = undefined,
   }: {
     stations: readonly OrbitalStation[];
     stationData: Readonly<Record<string, readonly (number | null)[]>>;
@@ -100,6 +101,14 @@
     // Optional cadence (ms per round) — when provided alongside currentRound,
     // the hover tooltip computes elapsed time labels (T+MM:SS).
     cadenceMs?: number | null;
+    // Optional per-slot sample timestamps (parallel array to stationData). When
+    // provided, pulse age is computed as (now - timestamp) / PULSE_DECAY_MS,
+    // which correctly identifies only newly-arrived samples as "fresh". Without
+    // this, the writeAt-based detection misfires every time the data array
+    // shifts (new sample arrives) — every slot looks fresh simultaneously,
+    // producing a dense bright necklace instead of v4's "one fresh pulse +
+    // settled trail" look.
+    stationTimestamps?: Readonly<Record<string, readonly (number | null)[]>>;
   } = $props();
 
   // Element refs (Svelte 5: bind:this fills these at mount)
@@ -657,12 +666,28 @@
     if (stars) (stars.material as THREE.ShaderMaterial).uniforms.uTime.value = now;
     if (homeHalo) (homeHalo.material as THREE.ShaderMaterial).uniforms.uTime.value = now;
 
-    for (const buf of Object.values(pulses)) {
+    const nowEpoch = Date.now();
+    for (const stationId of Object.keys(pulses)) {
+      const buf = pulses[stationId];
+      if (!buf) continue;
+      const timestamps = stationTimestamps?.[stationId];
       let changed = false;
       for (let i = 0; i < windowRounds; i++) {
-        const wa = buf.writeAt[i];
-        if (!Number.isFinite(wa)) continue;
-        const newAge = Math.min(1, (now - wa) / PULSE_DECAY_MS);
+        let newAge: number;
+        if (timestamps) {
+          // Preferred: sample-timestamp-based age. Correctly identifies only
+          // recently-arrived samples as fresh, regardless of buffer shifts.
+          // Sample timestamps are Date.now() (ms since epoch), so compare in
+          // the same basis — NOT performance.now() which is ms since page load.
+          const ts = timestamps[i];
+          if (ts === null || ts === undefined || !Number.isFinite(ts)) continue;
+          newAge = Math.max(0, Math.min(1, (nowEpoch - ts) / PULSE_DECAY_MS));
+        } else {
+          // Fallback: writeAt-based age. Misfires on shifted buffers.
+          const wa = buf.writeAt[i];
+          if (!Number.isFinite(wa)) continue;
+          newAge = Math.min(1, (now - wa) / PULSE_DECAY_MS);
+        }
         if (buf.ages[i] !== newAge) {
           buf.ages[i] = newAge;
           changed = true;
