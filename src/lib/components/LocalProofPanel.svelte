@@ -70,14 +70,14 @@
 
   .local-proof-head p {
     margin: 7px 0 0;
-    color: var(--t2);
+    color: var(--fg-2);
     line-height: 1.45;
   }
 
   .section-kicker {
     font-family: var(--mono);
     font-size: var(--ts-xs);
-    color: var(--t3);
+    color: var(--fg-3);
     letter-spacing: var(--tr-label);
     text-transform: uppercase;
   }
@@ -87,7 +87,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    color: var(--t3);
+    color: var(--fg-3);
     font-size: var(--ts-sm);
     line-height: 1.35;
   }
@@ -97,9 +97,9 @@
     flex: 0 0 auto;
     min-height: 34px;
     border-radius: 8px;
-    border: 1px solid var(--border-mid);
+    border: 1px solid var(--rule);
     background: rgba(255,255,255,.025);
-    color: var(--t2);
+    color: var(--fg-2);
     padding: 0 11px;
     font-family: var(--sans);
     font-size: var(--ts-sm);
@@ -107,14 +107,14 @@
   }
 
   .secondary-button {
-    color: var(--accent-cyan);
+    color: var(--station-b);
     border-color: rgba(103,232,249,.3);
   }
 
   .quiet-button:hover,
   .secondary-button:hover {
-    color: var(--t1);
-    border-color: var(--border-bright);
+    color: var(--fg);
+    border-color: var(--rule-strong);
   }
 
   @media (max-width: 640px) {

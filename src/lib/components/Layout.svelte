@@ -1,5 +1,5 @@
 <!-- src/lib/components/Layout.svelte -->
-<!-- Figma-aligned shell. Topbar + top-level nav + active content.             -->
+<!-- App shell. Vessel v4 masthead + top-level nav + active content.            -->
 <!-- Routes activeView to Overview / Live / Investigate / Report. The legacy   -->
 <!-- Lanes family was retired in Phase 7 — the v6→v7 migration rewrites         -->
 <!-- 'lanes' / 'timeline' / 'heatmap' / 'split' to 'overview' so nothing        -->
@@ -10,12 +10,14 @@
   import { measurementStore } from '$lib/stores/measurements';
   import { endpointStore } from '$lib/stores/endpoints';
   import { uiStore } from '$lib/stores/ui';
-  import { tokens } from '$lib/tokens';
-  import Topbar from './Topbar.svelte';
+  import { currentRoute, subscribeRoute, type RouteState } from '$lib/router';
+  import Masthead from './Masthead.svelte';
   import OverviewView from './OverviewView.svelte';
   import LiveView from './LiveView.svelte';
   import DiagnoseView from './DiagnoseView.svelte';
+  import EndpointView from './EndpointView.svelte';
   import ReportView from './ReportView.svelte';
+  import TransitView from './TransitView.svelte';
 
   let { onStart, onStop }: {
     onStart?: () => void;
@@ -33,6 +35,20 @@
 
   const activeView = $derived($uiStore.activeView);
   const sharedReportMode = $derived($uiStore.isSharedView && $uiStore.sharedReportMode);
+  const focusedEndpointId = $derived($uiStore.focusedEndpointId);
+
+  // Track router state so we can render the v4 EndpointView surface for the
+  // /endpoint/:id route — distinct from the /investigate landing surface that
+  // DiagnoseView serves. Both routes resolve activeView === 'diagnose'.
+  let route = $state<RouteState>(currentRoute());
+  $effect(() => {
+    const off = subscribeRoute((next) => { route = next; });
+    return off;
+  });
+  const isEndpointRoute = $derived(route.name === 'endpoint');
+  const showEndpointSurface = $derived(
+    activeView === 'diagnose' && focusedEndpointId !== null && isEndpointRoute,
+  );
 
   onMount(() => {
     unsubLifecycle = measurementStore.subscribe((state) => {
@@ -55,24 +71,10 @@
 
 <a href="#main-content" class="skip-link">Skip to main content</a>
 
-<div
-  class="bg"
-  aria-hidden="true"
-  style:--bg-base={tokens.color.surface.base}
-  style:--shell-bg={tokens.color.shell.base}
-  style:--shell-bg-cyan={tokens.color.shell.bgCyan}
-  style:--shell-bg-amber={tokens.color.shell.bgAmber}
-></div>
+<div class="bg" aria-hidden="true"></div>
 
-<div
-  class="app"
-  style:--bg-base={tokens.color.surface.base}
-  style:--shell-bg={tokens.color.shell.base}
-  style:--shell-bg-cyan={tokens.color.shell.bgCyan}
-  style:--shell-bg-amber={tokens.color.shell.bgAmber}
-  style:--t1={tokens.color.text.t1}
->
-  <Topbar {onStart} {onStop} />
+<div class="app">
+  <Masthead {onStart} {onStop} />
 
   {#if sharedReportMode}
     <main id="main-content" class="shell-main report-main" tabindex="-1">
@@ -84,10 +86,14 @@
         <main id="main-content" class="shell-main" tabindex="-1">
           {#if activeView === 'live'}
             <LiveView />
+          {:else if showEndpointSurface}
+            <EndpointView />
           {:else if activeView === 'diagnose'}
             <DiagnoseView />
           {:else if activeView === 'report'}
             <ReportView />
+          {:else if activeView === 'transit'}
+            <TransitView />
           {:else}
             <!--
               Fallback: overview renders here as the default. Legacy route IDs
@@ -114,7 +120,7 @@
 <style>
   .skip-link {
     position: absolute; top: -40px; left: 0; z-index: 9999;
-    padding: 8px 16px; background: var(--accent-cyan); color: var(--bg-base);
+    padding: 8px 16px; background: var(--station-b); color: var(--bg);
     font-weight: 600; text-decoration: none;
     border-radius: 0 0 4px 0; transition: top 100ms ease;
   }
@@ -127,7 +133,7 @@
      raster, which is overkill for this surface. */
   .bg {
     position: fixed; inset: 0; z-index: 0;
-    background: var(--shell-bg);
+    background: var(--bg);
   }
 
   .app {
@@ -140,7 +146,7 @@
     height: 100svh;
     display: flex; flex-direction: column;
     overflow: hidden;
-    color: var(--t1);
+    color: var(--fg);
   }
 
   .shell-body {

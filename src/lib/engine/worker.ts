@@ -236,10 +236,16 @@ if (typeof (globalThis as any).WorkerGlobalScope !== 'undefined' && self instanc
       const probeUrl = resolveProbeUrl(url);
       const startMark = performance.now();
 
+      // 'image' mode is a UI distinction; from the worker's vantage it has the
+      // same fetch semantics as 'no-cors' (opaque response, no CORS preflight).
+      // A real image-element-based probe would have to run on the main thread,
+      // which is a future engine refactor — Phase D ships the alias.
+      const fetchMode: RequestMode = corsMode === 'image' ? 'no-cors' : corsMode;
+
       try {
         await fetch(probeUrl, {
           method: 'GET',
-          mode: corsMode,
+          mode: fetchMode,
           cache: 'no-store',
           credentials: 'omit',
           signal,

@@ -19,8 +19,16 @@
   import { initRouter } from '$lib/router';
   import { initShortcuts } from '$lib/utils/shortcuts';
   import { autoStartDecision } from '$lib/utils/status-intent';
+  import {
+    setEnabled as setAudioEnabled,
+    playTick,
+    playSessionStart,
+    playCarrierLost,
+    playThresholdCross,
+  } from '$lib/audio';
   import type { PersistedSettings } from '$lib/types';
   import Layout from './Layout.svelte';
+  import LandingView from './LandingView.svelte';
   import SettingsDrawer from './SettingsDrawer.svelte';
   import SharePopover from './SharePopover.svelte';
   import SharedResultsBanner from './SharedResultsBanner.svelte';
@@ -30,69 +38,133 @@
 
   let engine: MeasurementEngine | null = null;
 
-  // ── Bridge tokens to CSS custom properties ──────────────────────────────────
+  // ── Landing gate ────────────────────────────────────────────────────────────
+  // Show the marketing/onboarding LandingView on true first visit only. The
+  // gate clears once the user clicks Begin (which writes the localStorage flag
+  // and starts the engine) or Explore (which writes the flag and navigates).
+  // After that, Layout takes over forever on this device. Cold-visit / empty
+  // states are handled inside OverviewView by a separate agent.
+  //
+  // We read the flag synchronously at $state declaration so the FIRST render
+  // already mounts the right surface (no Landing → Layout swap on mount, which
+  // would create + destroy a WebGL context unnecessarily for returning
+  // visitors, and would break tests that don't expect LandingView to mount).
+  function readOnboardedFlag(): boolean {
+    if (typeof localStorage === 'undefined') return true;
+    try {
+      return localStorage.getItem('chronoscope-onboarded') === 'true';
+    } catch {
+      return true;
+    }
+  }
+
+  let onboardedFlag = $state(readOnboardedFlag());
+
+  const showLanding = $derived(
+    !onboardedFlag
+      && !$uiStore.isSharedView
+      && $uiStore.pendingShare === null
+      && $measurementStore.lifecycle === 'idle'
+      && $measurementStore.roundCounter === 0,
+  );
+
+  function handleLandingStart(): void {
+    // Mirror handleStart but also clear the gate so Layout takes over.
+    onboardedFlag = true;
+    handleStart();
+  }
+
+  function handleLandingExplore(): void {
+    // Explore path: localStorage already written by LandingView. Flip the
+    // in-memory gate so showLanding becomes false this tick.
+    onboardedFlag = true;
+  }
+
+  // ── Bridge tokens to CSS custom properties (Vessel v4) ─────────────────────
+  // Emits v4 canonical CSS variable names only. No bridge aliases — every var
+  // here has exactly one name. v3 emissions (--accent-*, --t1..--t5, --shell-*,
+  // --bg-base, --border-mid, --status-timeout, --svg-threshold) were dropped
+  // when their tokens were retired; callsites migrated in the Phase A sweep.
   function bridgeTokensToCss(): void {
     const root = document.documentElement;
 
-    // Background
-    root.style.setProperty('--bg-base', tokens.color.surface.base);
+    // Background tiers
+    root.style.setProperty('--bg',   tokens.color.surface.base);
+    root.style.setProperty('--bg-2', tokens.color.surface.mid);
+    root.style.setProperty('--bg-3', tokens.color.surface.raised);
+    root.style.setProperty('--bg-4', tokens.color.surface.elevated);
 
-    // Figma redesign shell foundation
-    root.style.setProperty('--shell-bg',             tokens.color.shell.base);
-    root.style.setProperty('--shell-panel',          tokens.color.shell.panel);
-    root.style.setProperty('--shell-panel-raised',   tokens.color.shell.panelRaised);
-    root.style.setProperty('--shell-panel-hover',    tokens.color.shell.panelHover);
-    root.style.setProperty('--shell-panel-active',   tokens.color.shell.panelActive);
-    root.style.setProperty('--shell-border',         tokens.color.shell.border);
-    root.style.setProperty('--shell-border-strong',  tokens.color.shell.borderStrong);
-    root.style.setProperty('--shell-divider',        tokens.color.shell.divider);
-    root.style.setProperty('--shell-backdrop',       tokens.color.shell.backdrop);
-    root.style.setProperty('--shell-popover',        tokens.color.shell.popover);
-    root.style.setProperty('--shell-bg-cyan',        tokens.color.shell.bgCyan);
-    root.style.setProperty('--shell-bg-amber',       tokens.color.shell.bgAmber);
-    root.style.setProperty('--shell-success-bg',     tokens.color.shell.successBg);
-    root.style.setProperty('--shell-success-border', tokens.color.shell.successBorder);
-    root.style.setProperty('--shell-stop-bg',        tokens.color.shell.stopBg);
-    root.style.setProperty('--shell-stop-border',    tokens.color.shell.stopBorder);
+    // Foreground tiers
+    root.style.setProperty('--fg',   tokens.color.text.fg);
+    root.style.setProperty('--fg-2', tokens.color.text.fg2);
+    root.style.setProperty('--fg-3', tokens.color.text.fg3);
+    root.style.setProperty('--fg-4', tokens.color.text.fg4);
 
-    // Text opacity layers
-    root.style.setProperty('--t1', tokens.color.text.t1);
-    root.style.setProperty('--t2', tokens.color.text.t2);
-    root.style.setProperty('--t3', tokens.color.text.t3);
-    root.style.setProperty('--t4', tokens.color.text.t4);
-    root.style.setProperty('--t5', tokens.color.text.t5);
+    // Rules
+    root.style.setProperty('--rule',        tokens.color.surface.border.mid);
+    root.style.setProperty('--rule-strong', tokens.color.surface.border.bright);
+    root.style.setProperty('--rule-faint',  tokens.color.surface.border.dim);
 
-    // Accent
-    root.style.setProperty('--accent-cyan',       tokens.color.accent.cyan);
-    root.style.setProperty('--accent-pink',       tokens.color.accent.pink);
-    root.style.setProperty('--accent-pink-glow',  tokens.color.accent.pinkGlow);
-    root.style.setProperty('--accent-amber',      tokens.color.accent.amber);
-    root.style.setProperty('--accent-amber-glow', tokens.color.accent.amberGlow);
-    root.style.setProperty('--accent-green',      tokens.color.accent.green);
-    root.style.setProperty('--green-glow',        tokens.color.accent.greenGlow);
+    // Stations
+    root.style.setProperty('--station-a', tokens.color.station.A);
+    root.style.setProperty('--station-b', tokens.color.station.B);
+    root.style.setProperty('--station-c', tokens.color.station.C);
+    root.style.setProperty('--station-d', tokens.color.station.D);
 
-    // Glass
-    root.style.setProperty('--glass-bg',        tokens.color.glass.bg);
-    root.style.setProperty('--glass-border',    tokens.color.glass.border);
-    root.style.setProperty('--glass-highlight', tokens.color.glass.highlight);
+    // Severity
+    root.style.setProperty('--sev-warn', tokens.color.severity.warn);
+    root.style.setProperty('--sev-bad',  tokens.color.severity.bad);
+    root.style.setProperty('--sev-crit', tokens.color.severity.crit);
+
+    // Phase decomposition
+    root.style.setProperty('--phase-dns',  tokens.color.phase.dns);
+    root.style.setProperty('--phase-tcp',  tokens.color.phase.tcp);
+    root.style.setProperty('--phase-tls',  tokens.color.phase.tls);
+    root.style.setProperty('--phase-ttfb', tokens.color.phase.ttfb);
+    root.style.setProperty('--phase-xfer', tokens.color.phase.xfer);
+
+    // Bg variants (interaction states + modal backdrops)
+    root.style.setProperty('--bg-hover',    tokens.color.shell.panelHover);
+    root.style.setProperty('--bg-active',   tokens.color.shell.panelActive);
+    root.style.setProperty('--bg-backdrop', tokens.color.shell.backdrop);
+    root.style.setProperty('--bg-overlay',  tokens.color.surface.overlay);
+    root.style.setProperty('--bg-popover',  tokens.color.shell.popover);
+
+    // Tinted backgrounds (station-B and sev-warn at low alpha)
+    root.style.setProperty('--station-b-bg', tokens.color.shell.bgCyan);
+    root.style.setProperty('--sev-warn-bg',  tokens.color.shell.bgAmber);
+
+    // Banner surfaces
+    root.style.setProperty('--success-bg',     tokens.color.shell.successBg);
+    root.style.setProperty('--success-border', tokens.color.shell.successBorder);
+    root.style.setProperty('--stop-bg',        tokens.color.shell.stopBg);
+    root.style.setProperty('--stop-border',    tokens.color.shell.stopBorder);
+
+    // Glass surfaces (kept from infrastructure; values updated to bone-white)
+    root.style.setProperty('--glass-bg',               tokens.color.glass.bg);
+    root.style.setProperty('--glass-border',           tokens.color.glass.border);
+    root.style.setProperty('--glass-highlight',        tokens.color.glass.highlight);
+    root.style.setProperty('--glass-bg-rail-hover',    tokens.color.glass.bgRailHover);
+    root.style.setProperty('--glass-bg-rail-selected', tokens.color.glass.bgRailSelected);
 
     // Fonts
     root.style.setProperty('--sans', tokens.typography.sans.fontFamily);
     root.style.setProperty('--mono', tokens.typography.mono.fontFamily);
 
     // Spacing
-    root.style.setProperty('--spacing-xs',  `${tokens.spacing.xs}px`);
-    root.style.setProperty('--spacing-sm',  `${tokens.spacing.sm}px`);
-    root.style.setProperty('--spacing-md',  `${tokens.spacing.md}px`);
-    root.style.setProperty('--spacing-lg',  `${tokens.spacing.lg}px`);
-    root.style.setProperty('--spacing-xl',  `${tokens.spacing.xl}px`);
+    root.style.setProperty('--spacing-xs', `${tokens.spacing.xs}px`);
+    root.style.setProperty('--spacing-sm', `${tokens.spacing.sm}px`);
+    root.style.setProperty('--spacing-md', `${tokens.spacing.md}px`);
+    root.style.setProperty('--spacing-lg', `${tokens.spacing.lg}px`);
+    root.style.setProperty('--spacing-xl', `${tokens.spacing.xl}px`);
 
     // Radius
+    root.style.setProperty('--radius-xs', `${tokens.radius.xs}px`);
     root.style.setProperty('--radius-sm', `${tokens.radius.sm}px`);
     root.style.setProperty('--radius-md', `${tokens.radius.md}px`);
     root.style.setProperty('--radius-lg', `${tokens.radius.lg}px`);
 
-    // v2 typography scale (--ts-*) + tracking (--tr-*)
+    // Typography scale + tracking
     root.style.setProperty('--ts-xs',   tokens.typography.scale.xs);
     root.style.setProperty('--ts-sm',   tokens.typography.scale.sm);
     root.style.setProperty('--ts-md',   tokens.typography.scale.md);
@@ -100,59 +172,45 @@
     root.style.setProperty('--ts-lg',   tokens.typography.scale.lg);
     root.style.setProperty('--ts-xl',   tokens.typography.scale.xl);
     root.style.setProperty('--ts-2xl',  tokens.typography.scale.xl2);
-    root.style.setProperty('--tr-kicker',  tokens.typography.tracking.kicker);
-    root.style.setProperty('--tr-label',   tokens.typography.tracking.label);
-    root.style.setProperty('--tr-tight',   tokens.typography.tracking.tight);
-    root.style.setProperty('--tr-body',    tokens.typography.tracking.body);
+    root.style.setProperty('--tr-kicker', tokens.typography.tracking.kicker);
+    root.style.setProperty('--tr-label',  tokens.typography.tracking.label);
+    root.style.setProperty('--tr-tight',  tokens.typography.tracking.tight);
+    root.style.setProperty('--tr-body',   tokens.typography.tracking.body);
 
-    // v2 structural chrome + surface border (used by topbar/rail/switcher)
-    root.style.setProperty('--topbar-height',       `${tokens.lane.topbarHeight}px`);
-    root.style.setProperty('--rail-width',          `${tokens.lane.railWidth}px`);
-    root.style.setProperty('--border-mid',          tokens.color.surface.border.mid);
-    root.style.setProperty('--border-bright',       tokens.color.surface.border.bright);
-    root.style.setProperty('--surface-topbar-bg',   tokens.color.surface.overlayDeep);
-    root.style.setProperty('--shell-topbar-height', `${tokens.shell.topbarHeight}px`);
-    root.style.setProperty('--shell-popover-width', `${tokens.shell.popoverWidth}px`);
-    root.style.setProperty('--shell-topbar-backdrop', tokens.shell.topbarBackdropFilter);
-    root.style.setProperty('--shell-popover-backdrop', tokens.shell.popoverBackdropFilter);
-    root.style.setProperty('--shell-brand-highlight-shadow', tokens.shell.brandHighlightShadow);
-    root.style.setProperty('--shell-nav-height', `${tokens.shell.navHeight}px`);
-    root.style.setProperty('--shell-control-size', `${tokens.shell.controlSize}px`);
-    root.style.setProperty('--shell-mobile-control-size', `${tokens.shell.mobileControlSize}px`);
-    root.style.setProperty('--content-max-w', `${tokens.shell.contentMaxWidth}px`);
-    root.style.setProperty('--shadow-popover', tokens.shadow.popover);
+    // Shell structural chrome (dimensions, filters, shadows — non-color)
+    root.style.setProperty('--topbar-height',                `${tokens.lane.topbarHeight}px`);
+    root.style.setProperty('--rail-width',                   `${tokens.lane.railWidth}px`);
+    root.style.setProperty('--shell-topbar-height',          `${tokens.shell.topbarHeight}px`);
+    root.style.setProperty('--shell-popover-width',          `${tokens.shell.popoverWidth}px`);
+    root.style.setProperty('--shell-topbar-backdrop',         tokens.shell.topbarBackdropFilter);
+    root.style.setProperty('--shell-popover-backdrop',        tokens.shell.popoverBackdropFilter);
+    root.style.setProperty('--shell-brand-highlight-shadow',  tokens.shell.brandHighlightShadow);
+    root.style.setProperty('--shell-nav-height',             `${tokens.shell.navHeight}px`);
+    root.style.setProperty('--shell-control-size',           `${tokens.shell.controlSize}px`);
+    root.style.setProperty('--shell-mobile-control-size',    `${tokens.shell.mobileControlSize}px`);
+    root.style.setProperty('--content-max-w',                `${tokens.shell.contentMaxWidth}px`);
 
-    // v2 tooltip variants
-    root.style.setProperty('--tooltip-bg-deep',      tokens.color.tooltip.bgDeep);
-    root.style.setProperty('--tooltip-border',       tokens.color.tooltip.border);
-    root.style.setProperty('--tooltip-text',         tokens.color.tooltip.text);
+    // Tooltip surfaces (kept from v2; values updated to bone-white)
+    root.style.setProperty('--tooltip-bg-deep', tokens.color.tooltip.bgDeep);
+    root.style.setProperty('--tooltip-border',  tokens.color.tooltip.border);
+    root.style.setProperty('--tooltip-text',    tokens.color.tooltip.text);
 
-    // v2 SVG primitives (dial, orbit ring, scope)
-    root.style.setProperty('--svg-grid-line', tokens.color.svg.gridLine);
-    root.style.setProperty('--svg-grid-cyan', tokens.color.svg.gridLineCyan);
-    root.style.setProperty('--svg-grid-major', tokens.color.svg.gridLineMajor);
-    root.style.setProperty('--svg-tick-minor', tokens.color.svg.tickMinor);
-    root.style.setProperty('--svg-tick-major', tokens.color.svg.tickMajor);
+    // SVG primitives (kept from v2; values updated to bone-white)
+    root.style.setProperty('--svg-grid-line',   tokens.color.svg.gridLine);
+    root.style.setProperty('--svg-grid-cyan',   tokens.color.svg.gridLineCyan);
+    root.style.setProperty('--svg-grid-major',  tokens.color.svg.gridLineMajor);
+    root.style.setProperty('--svg-tick-minor',  tokens.color.svg.tickMinor);
+    root.style.setProperty('--svg-tick-major',  tokens.color.svg.tickMajor);
     root.style.setProperty('--svg-hand-stroke', tokens.color.svg.handStroke);
-    root.style.setProperty('--svg-dial-rim',   tokens.color.svg.dialRim);
+    root.style.setProperty('--svg-dial-rim',    tokens.color.svg.dialRim);
     root.style.setProperty('--svg-orbit-track', tokens.color.svg.orbitTrack);
-    root.style.setProperty('--svg-orbit-edge', tokens.color.svg.orbitEdge);
-    root.style.setProperty('--svg-threshold',  tokens.color.svg.thresholdStroke);
+    root.style.setProperty('--svg-orbit-edge',  tokens.color.svg.orbitEdge);
 
-    // v2 rail surfaces
-    root.style.setProperty('--glass-bg-rail-hover',    tokens.color.glass.bgRailHover);
-    root.style.setProperty('--glass-bg-rail-selected', tokens.color.glass.bgRailSelected);
-
-    // v2 motion primitives
-    root.style.setProperty('--timing-pulse-rim',        `${tokens.timing.pulseRim}ms`);
-    root.style.setProperty('--timing-pulse-dial-glow',  `${tokens.timing.pulseDialGlow}ms`);
-
-    // Shared with Settings/Share drawers
-    root.style.setProperty('--surface-raised',   tokens.color.surface.raised);
-    root.style.setProperty('--status-timeout',   tokens.color.status.timeout);
-    root.style.setProperty('--surface-overlay', tokens.color.surface.overlay);
-    root.style.setProperty('--timing-btn',           `${tokens.timing.btnHover}ms`);
-    root.style.setProperty('--radius-xs', `${tokens.radius.xs}px`);
+    // Motion timings + shadows
+    root.style.setProperty('--timing-pulse-rim',       `${tokens.timing.pulseRim}ms`);
+    root.style.setProperty('--timing-pulse-dial-glow', `${tokens.timing.pulseDialGlow}ms`);
+    root.style.setProperty('--timing-btn',             `${tokens.timing.btnHover}ms`);
+    root.style.setProperty('--shadow-popover',          tokens.shadow.popover);
   }
 
   // ── Persistence save subscription ───────────────────────────────────────────
@@ -212,6 +270,69 @@
   function handleStop(): void {
     if (!engine) return;
     engine.stop();
+  }
+
+  let unsubAudio: (() => void) | null = null;
+
+  function setupAudioWiring(): void {
+    // Sync persisted preference to the audio engine module.
+    setAudioEnabled(get(settingsStore).audioEnabled);
+
+    // ── Lifecycle observer: session-start chime + carrier-lost / threshold-cross
+    // per endpoint. We watch the measurement state's transitions and fire the
+    // matching sound primitive. The audio module gates internally on enabled,
+    // so we don't re-check here.
+    let prevLifecycle = get(measurementStore).lifecycle;
+    let prevRound = get(measurementStore).roundCounter;
+    const prevEndpointStatus: Record<string, 'ok' | 'timeout' | 'error' | null> = {};
+    const prevAboveThreshold: Record<string, boolean> = {};
+    // Seed the per-endpoint prior-state maps from current store snapshot.
+    {
+      const m = get(measurementStore);
+      const threshold = get(settingsStore).healthThreshold;
+      for (const [id, ep] of Object.entries(m.endpoints)) {
+        prevEndpointStatus[id] = ep.lastStatus;
+        prevAboveThreshold[id] = ep.lastLatency !== null && ep.lastLatency > threshold;
+      }
+    }
+
+    unsubAudio = measurementStore.subscribe((state) => {
+      const threshold = get(settingsStore).healthThreshold;
+
+      // Session start: idle/stopped → starting/running
+      const wasIdle = prevLifecycle === 'idle' || prevLifecycle === 'stopped' || prevLifecycle === 'completed';
+      const nowStarting = state.lifecycle === 'starting' || state.lifecycle === 'running';
+      if (wasIdle && nowStarting && prevLifecycle !== state.lifecycle) {
+        playSessionStart();
+      }
+      prevLifecycle = state.lifecycle;
+
+      // Round tick: one tick when the roundCounter advances (debounces multi-
+      // endpoint same-round arrivals into a single sound).
+      if (state.roundCounter !== prevRound && state.roundCounter > prevRound) {
+        playTick();
+        prevRound = state.roundCounter;
+      }
+
+      // Per-endpoint carrier-lost + threshold-cross detection.
+      for (const [id, ep] of Object.entries(state.endpoints)) {
+        const lastStatus = ep.lastStatus;
+        const wasStatus = prevEndpointStatus[id] ?? null;
+        // Carrier-lost: prior was 'ok' (or null seed) AND now is 'timeout' or 'error'
+        if ((wasStatus === 'ok' || wasStatus === null) && (lastStatus === 'timeout' || lastStatus === 'error')) {
+          playCarrierLost();
+        }
+        prevEndpointStatus[id] = lastStatus;
+
+        // Threshold cross: latency just crossed above the trigger from below.
+        const above = ep.lastLatency !== null && ep.lastLatency > threshold;
+        const wasAbove = prevAboveThreshold[id] ?? false;
+        if (above && !wasAbove && lastStatus === 'ok') {
+          playThresholdCross();
+        }
+        prevAboveThreshold[id] = above;
+      }
+    });
   }
 
   function setupHistorySync(): void {
@@ -286,10 +407,16 @@
     // 7. Local-only history baselines
     setupHistorySync();
 
+    // 7b. Wire audio engine to the persisted preference + measurement events.
+    setupAudioWiring();
+
     // 8. Register keyboard shortcuts
     destroyShortcuts = initShortcuts();
 
-    // 9. Safe auto-start for ordinary public sessions only
+    // 9. Safe auto-start for ordinary public sessions only — but suppress
+    //    when the user hasn't onboarded yet (we want them to see LandingView
+    //    and click Begin themselves). Returning visitors with the onboarded
+    //    flag set still auto-start as before.
     const ui = get(uiStore);
     const decision = autoStartDecision({
       endpoints: get(endpointStore),
@@ -298,7 +425,20 @@
       hasPendingShare: ui.pendingShare !== null,
     });
     uiStore.setAutoStartSuppressionReason(decision.reason);
-    if (decision.shouldStart) {
+
+    // Also suppress auto-start when the localStorage onboarded flag is absent:
+    // first-time visitors should see LandingView and click Begin explicitly.
+    // The onStart handler fires engine.start() and writes the flag, so
+    // subsequent visits auto-start.
+    const onboarded = (() => {
+      try {
+        return localStorage.getItem('chronoscope-onboarded') === 'true';
+      } catch {
+        return true; // SSR / no-localStorage safety: don't trap users
+      }
+    })();
+
+    if (decision.shouldStart && onboarded) {
       engine.start();
     }
   }
@@ -315,29 +455,37 @@
     unsubEndpoints?.();
     unsubUi?.();
     unsubHistoryLifecycle?.();
+    unsubAudio?.();
     destroyShortcuts?.();
     if (persistDebounceTimer !== null) clearTimeout(persistDebounceTimer);
   });
 </script>
 
 <div id="chronoscope-root">
-  {#if $uiStore.pendingShare}
-    <ConfigStagingBanner />
-  {:else if $uiStore.isSharedView && !$uiStore.sharedReportMode}
-    <SharedResultsBanner />
-  {/if}
-  <Layout onStart={handleStart} onStop={handleStop} />
-  {#if $uiStore.showSettings}
-    <SettingsDrawer />
-  {/if}
-  {#if $uiStore.showEndpoints}
-    <EndpointDrawer />
-  {/if}
-  {#if $uiStore.showShare}
-    <SharePopover />
-  {/if}
-  {#if $uiStore.showKeyboardHelp}
-    <KeyboardOverlay />
+  {#if showLanding}
+    <!-- First-visit marketing/onboarding surface. Replaces the app shell
+         entirely (no banner / drawer / popover mounts) until the user clicks
+         Begin or Explore. -->
+    <LandingView onStart={handleLandingStart} onExplore={handleLandingExplore} />
+  {:else}
+    {#if $uiStore.pendingShare}
+      <ConfigStagingBanner />
+    {:else if $uiStore.isSharedView && !$uiStore.sharedReportMode}
+      <SharedResultsBanner />
+    {/if}
+    <Layout onStart={handleStart} onStop={handleStop} />
+    {#if $uiStore.showSettings}
+      <SettingsDrawer />
+    {/if}
+    {#if $uiStore.showEndpoints}
+      <EndpointDrawer />
+    {/if}
+    {#if $uiStore.showShare}
+      <SharePopover />
+    {/if}
+    {#if $uiStore.showKeyboardHelp}
+      <KeyboardOverlay />
+    {/if}
   {/if}
 </div>
 

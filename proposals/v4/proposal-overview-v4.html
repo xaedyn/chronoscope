@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chronoscope — Overview (v4 · Vessel)</title>
+<meta name="description" content="Mission status. The verdict at hero scale; a live orbital diagram of the current window; conducting-voice event log. Cycle states with the bottom-right control.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@200;300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #03050A;
+    --bg-2: #080C14;
+    --bg-3: #11171F;
+    --fg: #F2EBDB;
+    --fg-2: #A39A87;
+    --fg-3: #5F594D;
+    --fg-4: #36322B;
+    --rule: rgba(242, 235, 219, 0.06);
+    --rule-strong: rgba(242, 235, 219, 0.14);
+    --rule-faint: rgba(242, 235, 219, 0.03);
+
+    --station-A: #B7D3EC;
+    --station-B: #8CD4C9;
+    --station-C: #E8D597;
+    --station-D: #D78E68;
+
+    --sev-warn: #E8C36F;
+    --sev-bad:  #D27258;
+    --sev-crit: #B14238;
+
+    --font: 'Hanken Grotesk', system-ui, sans-serif;
+    --font-mono: 'Space Mono', ui-monospace, SFMono-Regular, monospace;
+    --pad-x: clamp(20px, 3vw, 48px);
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--fg); }
+  body {
+    font-family: var(--font); font-size: 13px; font-weight: 400; line-height: 1.55;
+    overflow-x: hidden; min-height: 100vh;
+    -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+  }
+  a { color: inherit; text-decoration: none; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+  /* Subtle starfield body background */
+  body::before {
+    content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: 0.4;
+    background-image:
+      radial-gradient(circle 0.6px at 13% 17%, #F0EBE0 0.6px, transparent 1px),
+      radial-gradient(circle 0.5px at 71% 11%, #F0EBE0 0.5px, transparent 1px),
+      radial-gradient(circle 0.4px at 47% 36%, #C0B8A6 0.4px, transparent 1px),
+      radial-gradient(circle 0.8px at 89% 47%, #F0EBE0 0.8px, transparent 1px),
+      radial-gradient(circle 0.5px at 22% 71%, #F0EBE0 0.5px, transparent 1px),
+      radial-gradient(circle 0.6px at 61% 79%, #C0B8A6 0.6px, transparent 1px),
+      radial-gradient(circle 0.4px at 92% 88%, #F0EBE0 0.4px, transparent 1px);
+  }
+  .page-wrap { position: relative; z-index: 1; }
+
+  /* MASTHEAD */
+  .masthead {
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 14px var(--pad-x);
+    border-bottom: 1px solid var(--rule);
+    background: rgba(3, 5, 10, 0.92);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .brand { display: flex; align-items: baseline; gap: 12px;
+    font-family: var(--font-mono); font-weight: 700; font-size: 12px;
+    letter-spacing: 0.16em; text-transform: uppercase; }
+  .brand .crest {
+    display: inline-block; width: 12px; height: 12px;
+    border: 1.2px solid var(--fg); border-radius: 50%;
+    position: relative; transform: translateY(1px); flex-shrink: 0;
+  }
+  .brand .crest::after {
+    content: ''; position: absolute;
+    width: 1.2px; height: 5px; background: var(--fg);
+    top: 1.5px; left: calc(50% - 0.6px);
+    transform-origin: 50% 100%; transform: rotate(42deg);
+  }
+  .brand .tag {
+    font-family: var(--font); font-size: 11px; font-weight: 400; letter-spacing: 0.02em;
+    text-transform: none; color: var(--fg-2);
+    margin-left: 14px; padding-left: 14px;
+    border-left: 1px solid var(--rule);
+  }
+  .nav { display: flex; gap: 26px;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em;
+    text-transform: uppercase; font-weight: 700; }
+  .nav a { color: var(--fg-3); padding: 4px 0;
+    border-bottom: 1px solid transparent; transition: color 120ms, border-color 120ms; }
+  .nav a:hover { color: var(--fg); }
+  .nav a.active { color: var(--fg); border-bottom-color: var(--fg); }
+  .controls { display: flex; align-items: center; gap: 14px; justify-self: end;
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; }
+  .carrier-tag { display: flex; align-items: center; gap: 8px; color: var(--station-B); font-weight: 700; }
+  .carrier-tag .dot {
+    width: 6px; height: 6px; background: var(--station-B); border-radius: 50%;
+    box-shadow: 0 0 10px var(--station-B);
+    animation: carrierpulse 2000ms ease-in-out infinite;
+  }
+  @keyframes carrierpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .ctl-btn { border: 1px solid var(--rule-strong); padding: 7px 12px;
+    color: var(--fg); font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+    transition: background 120ms, border-color 120ms; cursor: pointer;
+  }
+  .ctl-btn:hover { background: var(--bg-2); border-color: var(--fg-3); }
+  .ctl-btn--stop { color: var(--sev-bad); border-color: rgba(210, 114, 88, 0.5); }
+  .ctl-btn--stop:hover { background: rgba(210, 114, 88, 0.1); border-color: var(--sev-bad); }
+  .ctl-btn.ctl-icon{padding:7px 10px;display:inline-flex;align-items:center;justify-content:center;color:var(--fg-2)}
+  .ctl-btn.ctl-icon:hover{color:var(--fg)}
+  .ctl-btn.ctl-icon svg{display:block}
+
+  .ctl-btn--primary { color: var(--bg); background: var(--fg); border-color: var(--fg); }
+  .ctl-btn--primary:hover { background: var(--station-A); border-color: var(--station-A); }
+
+  /* TITLE STRIP */
+  .titlestrip {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end; gap: 32px;
+    padding: 22px var(--pad-x) 18px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .titlestrip h2 {
+    font-size: 28px; font-weight: 300; letter-spacing: -0.02em; color: var(--fg); line-height: 1;
+  }
+  .titlestrip h2 .sub { margin-left: 18px; color: var(--fg-3); font-size: 16px; }
+  .titlestrip .coords {
+    display: inline-flex; gap: 22px; flex-wrap: wrap;
+    font-family: var(--font-mono); font-size: 10px;
+    letter-spacing: 0.16em; text-transform: uppercase; color: var(--fg-3);
+  }
+  .titlestrip .coords > span { white-space: nowrap; }
+  .titlestrip .coords .v { color: var(--fg); font-weight: 700; margin-left: 8px;
+    font-variant-numeric: tabular-nums; }
+
+  /* HERO */
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 56px;
+    padding: 56px var(--pad-x) 40px;
+    align-items: center;
+    min-height: calc(100vh - 130px);
+    position: relative;
+  }
+  .hero-text { min-width: 0; position: relative; z-index: 2; }
+  .v-kicker {
+    display: inline-flex; align-items: center; gap: 12px;
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--fg-3); margin-bottom: 28px;
+  }
+  .v-kicker .dot { width: 8px; height: 8px; }
+  .v-kicker .dot[data-s="stable"] { background: var(--station-B); box-shadow: 0 0 10px var(--station-B); }
+  .v-kicker .dot[data-s="warn"]   { background: var(--sev-warn);  box-shadow: 0 0 10px var(--sev-warn); }
+  .v-kicker .dot[data-s="bad"]    { background: var(--sev-bad);   box-shadow: 0 0 10px var(--sev-bad); }
+  .v-kicker .dot[data-s="crit"]   { background: var(--sev-crit);  box-shadow: 0 0 10px var(--sev-crit); }
+  .v-kicker .v-state { color: var(--fg); font-weight: 700; }
+  .hero h1 {
+    font-family: var(--font);
+    font-weight: 200;
+    font-size: clamp(48px, 6.6vw, 92px);
+    letter-spacing: -0.028em;
+    line-height: 1.02;
+    color: var(--fg);
+    margin-bottom: 32px;
+    text-shadow: 0 0 60px rgba(242,235,219,0.10), 0 0 120px rgba(140,212,201,0.06);
+    max-width: min(820px, 50vw);
+  }
+  .hero p.lede {
+    font-size: 17px; color: var(--fg-2); line-height: 1.5;
+    margin-bottom: 36px; max-width: 56ch;
+  }
+  .hero p.lede strong { color: var(--fg); font-weight: 500; }
+  .hero p.lede em {
+    font-style: normal; font-family: var(--font-mono); color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .hero .actions {
+    display: flex; gap: 20px; align-items: center;
+    font-family: var(--font-mono); font-size: 11px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+  }
+  .hero .actions a.primary {
+    color: var(--bg); background: var(--fg); border: 1px solid var(--fg);
+    padding: 10px 16px; transition: background 80ms, border-color 80ms;
+  }
+  .hero .actions a.primary:hover { background: var(--station-A); border-color: var(--station-A); }
+  .hero .actions a.ghost {
+    color: var(--fg-2); padding-bottom: 4px;
+    border-bottom: 1px solid var(--rule-strong);
+    transition: color 80ms, border-color 80ms;
+  }
+  .hero .actions a.ghost:hover { color: var(--fg); border-bottom-color: var(--fg); }
+
+  /* Orbital diagram (right side) */
+  .orbit-stage {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .orbit-stage canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+  }
+  .orbit-stage .label {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none; text-align: center;
+  }
+  .orbit-stage .label .k {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--fg-3); margin-bottom: 4px;
+  }
+  .orbit-stage .label .v {
+    font-family: var(--font); font-weight: 200;
+    font-size: clamp(40px, 5vw, 72px);
+    letter-spacing: -0.025em; line-height: 1;
+    color: var(--fg); font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 30px rgba(242,235,219,0.10);
+  }
+  .orbit-stage .label .v .u {
+    font-family: var(--font-mono); font-size: 0.32em;
+    color: var(--fg-3); margin-left: 4px;
+    letter-spacing: 0.05em; vertical-align: 0.8em;
+    text-shadow: none;
+  }
+  .orbit-stage .vignette {
+    position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 38%, rgba(3,5,10,0.45) 70%, rgba(3,5,10,0.92) 100%);
+  }
+
+  /* CARD ROW: stations + flight card */
+  .card-row {
+    padding: 40px var(--pad-x);
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 56px;
+  }
+  .stations {
+    display: flex; flex-direction: column; gap: 1px;
+    background: var(--rule); border: 1px solid var(--rule);
+  }
+  .stations .row {
+    background: var(--bg);
+    padding: 18px 22px;
+    display: grid;
+    grid-template-columns: 14px 1fr auto auto auto;
+    gap: 22px; align-items: center;
+  }
+  .stations .row .mk { width: 8px; height: 8px; }
+  .stations .row[data-ep="A"] .mk { background: var(--station-A); box-shadow: 0 0 10px var(--station-A); }
+  .stations .row[data-ep="B"] .mk { background: var(--station-B); box-shadow: 0 0 10px var(--station-B); }
+  .stations .row[data-ep="C"] .mk { background: var(--station-C); box-shadow: 0 0 10px var(--station-C); }
+  .stations .row[data-ep="D"] .mk { background: var(--station-D); box-shadow: 0 0 10px var(--station-D); }
+  .stations .row .nm {
+    font-size: 16px; font-weight: 500; color: var(--fg); letter-spacing: -0.005em;
+  }
+  .stations .row .nm .host {
+    display: block;
+    font-family: var(--font-mono); font-size: 10px; color: var(--fg-3);
+    letter-spacing: 0.02em; margin-top: 3px;
+    font-variant-numeric: tabular-nums;
+  }
+  .stations .row .state {
+    font-family: var(--font-mono);
+    font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+    font-weight: 700; color: var(--fg-3);
+    min-width: 130px; text-align: right;
+  }
+  .stations .row .state[data-s="stable"] { color: var(--station-B); }
+  .stations .row .state[data-s="warn"]   { color: var(--sev-warn); }
+  .stations .row .state[data-s="bad"]    { color: var(--sev-bad); }
+  .stations .row .state[data-s="crit"]   { color: var(--sev-crit); }
+  .stations .row .val {
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+    font-size: 22px; font-weight: 400; color: var(--fg);
+    letter-spacing: -0.01em; min-width: 80px; text-align: right;
+  }
+  .stations .row .val.bad  { color: var(--sev-bad); }
+  .stations .row .val.crit { color: var(--sev-crit); }
+  .stations .row .val .u { font-size: 11px; color: var(--fg-3); margin-left: 2px; }
+  .stations .row .drift {
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+    font-size: 11px; color: var(--fg-2); min-width: 80px; text-align: right;
+  }
+  .stations .row .drift .k { color: var(--fg-3); margin-right: 4px; }
+
+  .flight {
+    font-family: var(--font-mono);
+  }
+  .flight h3 {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--fg-3); font-weight: 700;
+    margin-bottom: 18px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .flight h3 .v { color: var(--fg); font-weight: 700; }
+  .flight .row {
+    display: grid; grid-template-columns: 130px 1fr;
+    gap: 6px 18px; padding: 8px 0;
+    border-bottom: 1px solid var(--rule-faint);
+    font-size: 11px;
+  }
+  .flight .row:last-child { border-bottom: 0; }
+  .flight .row .k {
+    color: var(--fg-3); letter-spacing: 0.18em; text-transform: uppercase;
+    font-size: 10px; white-space: nowrap; font-weight: 700;
+  }
+  .flight .row .v { color: var(--fg); font-variant-numeric: tabular-nums; }
+  .flight .marks {
+    display: flex; gap: 6px;
+    margin-top: 16px; padding-top: 14px;
+    border-top: 1px solid var(--rule);
+  }
+  .flight .marks .m { width: 10px; height: 10px; }
+  .flight .marks .m[data-s="stable"][data-ep="A"] { background: var(--station-A); box-shadow: 0 0 6px var(--station-A); }
+  .flight .marks .m[data-s="stable"][data-ep="B"] { background: var(--station-B); box-shadow: 0 0 6px var(--station-B); }
+  .flight .marks .m[data-s="stable"][data-ep="C"] { background: var(--station-C); box-shadow: 0 0 6px var(--station-C); }
+  .flight .marks .m[data-s="stable"][data-ep="D"] { background: var(--station-D); box-shadow: 0 0 6px var(--station-D); }
+  .flight .marks .m[data-s="warn"] { background: var(--sev-warn); box-shadow: 0 0 6px var(--sev-warn); }
+  .flight .marks .m[data-s="bad"]  { background: var(--sev-bad);  box-shadow: 0 0 6px var(--sev-bad); }
+  .flight .marks .m[data-s="crit"] { background: var(--sev-crit); box-shadow: 0 0 6px var(--sev-crit); }
+
+  /* TELEMETRY LOG + OBSERVER NOTES */
+  .log-section {
+    padding: 40px var(--pad-x) 48px;
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 56px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .log-section h3 {
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--fg-3); font-weight: 700;
+    margin-bottom: 18px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .log-section h3 .v { color: var(--fg); font-weight: 700; }
+  .events .event {
+    display: grid; grid-template-columns: 80px 1fr auto;
+    gap: 18px; padding: 12px 0;
+    border-bottom: 1px solid var(--rule-faint);
+    align-items: baseline; font-size: 13px;
+  }
+  .events .event .t {
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--fg-3); font-variant-numeric: tabular-nums;
+    letter-spacing: 0.04em; white-space: nowrap;
+  }
+  .events .event .b { color: var(--fg-2); line-height: 1.45; }
+  .events .event .b strong { color: var(--fg); font-weight: 500; }
+  .events .event .b em {
+    font-style: normal; font-family: var(--font-mono); color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .events .event .tag {
+    font-family: var(--font-mono);
+    font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--fg-3); font-weight: 700; white-space: nowrap;
+  }
+  .events .event .tag[data-s="stable"] { color: var(--station-B); }
+  .events .event .tag[data-s="warn"]   { color: var(--sev-warn); }
+  .events .event .tag[data-s="bad"]    { color: var(--sev-bad); }
+  .events .event .tag[data-s="crit"]   { color: var(--sev-crit); }
+
+  .notes p {
+    font-size: 14px; color: var(--fg-2); line-height: 1.55;
+    margin-bottom: 14px;
+  }
+  .notes p strong { color: var(--fg); font-weight: 500; }
+  .notes p em {
+    font-style: normal; font-family: var(--font-mono); color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .notes .field-stats {
+    display: grid; grid-template-columns: 1fr 1fr;
+    margin-top: 18px; padding-top: 16px;
+    border-top: 1px solid var(--rule);
+  }
+  .notes .field-stats .s { padding: 0 18px; }
+  .notes .field-stats .s:first-child { padding-left: 0; border-right: 1px solid var(--rule); }
+  .notes .field-stats .k {
+    font-family: var(--font-mono);
+    font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--fg-3); margin-bottom: 8px;
+  }
+  .notes .field-stats .v {
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+    font-size: 24px; font-weight: 400; color: var(--fg);
+    letter-spacing: -0.01em;
+  }
+  .notes .field-stats .v .u { font-size: 11px; color: var(--fg-3); margin-left: 2px; }
+
+  /* FOOTER */
+  .foot {
+    padding: 16px var(--pad-x);
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--fg-3);
+  }
+  .foot .v { color: var(--fg); margin-left: 6px; font-weight: 700; }
+  .foot .center { text-align: center; }
+  .foot .right { text-align: right; }
+
+  /* STATE SWITCHER (prototype-only) */
+  .switcher {
+    position: fixed; bottom: 22px; right: 22px;
+    background: rgba(11, 15, 24, 0.85);
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    border: 1px solid var(--rule-strong);
+    padding: 14px 16px;
+    font-family: var(--font-mono);
+    font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase;
+    z-index: 30;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+    max-width: 240px;
+  }
+  .switcher .h {
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 10px; border-bottom: 1px solid var(--rule);
+    margin-bottom: 10px; color: var(--fg-3);
+  }
+  .switcher .h .x { color: var(--fg); font-weight: 700; }
+  .switcher .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .switcher button {
+    padding: 7px 10px; color: var(--fg-3);
+    font-family: var(--font-mono); font-size: 9px;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    border: 1px solid var(--rule); text-align: left; font-weight: 700;
+    transition: color 120ms, border-color 120ms;
+  }
+  .switcher button:hover { color: var(--fg); border-color: var(--fg-3); }
+  .switcher button[aria-pressed="true"] {
+    background: var(--fg); color: var(--bg); border-color: var(--fg);
+  }
+  .switcher .n {
+    font-family: var(--font); font-size: 10px; letter-spacing: 0.02em;
+    text-transform: none; color: var(--fg-3); margin-top: 10px; line-height: 1.4;
+  }
+
+  @media (max-width: 1100px) {
+    .hero { grid-template-columns: 1fr; gap: 40px; min-height: auto; padding: 40px var(--pad-x); }
+    .hero h1 { max-width: min(720px, 90vw); }
+    .orbit-stage { max-width: 460px; margin-top: 12px; }
+    .card-row { grid-template-columns: 1fr; gap: 36px; }
+    .log-section { grid-template-columns: 1fr; gap: 36px; }
+  }
+  @media (max-width: 720px) {
+    .masthead { grid-template-columns: 1fr auto; }
+    .nav, .brand .tag { display: none; }
+    .stations .row { grid-template-columns: 14px 1fr auto; gap: 12px; }
+    .stations .row .val, .stations .row .drift { display: none; }
+    .foot { grid-template-columns: 1fr; gap: 4px; text-align: left; }
+    .foot .center, .foot .right { text-align: left; }
+    .switcher { right: 12px; bottom: 12px; max-width: 220px; }
+  }
+
+
+  /* ===== MOBILE FLOOR (375–480 px) ===== */
+  @media (max-width: 480px) {
+    :root { --pad-x: 14px; }
+    .masthead { padding: 10px var(--pad-x); }
+    .brand { font-size: 11px; gap: 8px; }
+    .controls { gap: 8px; }
+    .controls .ctl-btn { padding: 6px 8px; font-size: 9px; letter-spacing: 0.12em; }
+    .controls .ctl-btn.ctl-icon { padding: 6px 7px; }
+    .breadcrumb { padding: 10px var(--pad-x); font-size: 9px; letter-spacing: 0.14em; gap: 8px; }
+    .breadcrumb .meta { gap: 12px; }
+    .titlestrip { padding: 16px var(--pad-x) 14px; gap: 12px; }
+    .titlestrip h2 { font-size: 22px; }
+    .titlestrip h2 .sub { font-size: 12px; margin-left: 0; display: block; margin-top: 3px; }
+    .titlestrip .coords, .titlestrip .meta { font-size: 9px; letter-spacing: 0.12em; gap: 12px; }
+    .hero-meta, .hero-left, .hero-num { padding-left: var(--pad-x); padding-right: var(--pad-x); }
+    .hero-meta h1, .hud-title h1 { font-size: clamp(28px, 9vw, 48px); }
+    .hero-num .number, .hero-comp h1, .hero h1 { font-size: clamp(56px, 18vw, 120px); letter-spacing: -0.04em; }
+    .hero-num .number .u, .hero-comp .number .u { font-size: 14px; vertical-align: 0.65em; }
+    .stage { min-height: 600px; }
+    .scrub { padding: 10px var(--pad-x) 12px; gap: 10px; }
+    .scrub .lbl, .scrub .scrub-read { font-size: 9px; min-width: auto; }
+    .scrub .lbl { display: none; }
+    .below { padding: 48px var(--pad-x) 56px; }
+    .section-head, section .head { font-size: 9px; letter-spacing: 0.16em; }
+    .section-head .l, section .head .l { font-size: 24px; }
+    .foot { padding: 14px var(--pad-x); font-size: 9px; letter-spacing: 0.12em; }
+    .ladder .cell { padding: 8px 6px; }
+    .ladder .cell .v { font-size: 14px; }
+    .ladder .cell .k { font-size: 9px; letter-spacing: 0.16em; }
+    .phase-legend { grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 8px; }
+    .phase-legend .it .l { letter-spacing: 0.08em; }
+    .rank-row { grid-template-columns: 1fr; }
+    .station-tabs { padding: 130px var(--pad-x) 8px; gap: 6px; }
+    .station-tabs .tab { width: auto; min-width: 0; padding: 6px 10px; flex: 1; }
+    .station-tabs .tab .nm { font-size: 11px; }
+    .station-tabs .tab .v { font-size: 9px; }
+    .hud-stats .num { font-size: clamp(32px, 11vw, 56px); }
+    .hud-stats .num .u { font-size: 12px; }
+    /* Surface previews stack on small */
+    .surface-grid, .secondary-row .sec-grid { grid-template-columns: 1fr; }
+    .secondary-row .sec-card { padding: 18px 20px 22px; }
+    .secondary-row .sec-card .nm { font-size: 19px; }
+    /* Footer columns */
+    footer.foot, .foot-bar { grid-template-columns: 1fr; gap: 4px; }
+    .foot-bar .center, .foot-bar .right { text-align: left; }
+  }
+
+
+  /* ===== KEYBOARD HELP OVERLAY ===== */
+  .keyboard-help{position:fixed;inset:0;z-index:80;display:none;align-items:center;justify-content:center;background:rgba(3,5,10,0.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);opacity:0;transition:opacity 240ms ease-out}
+  .keyboard-help.visible{display:flex;opacity:1}
+  .keyboard-help .panel{background:var(--bg-2);border:1px solid var(--rule-strong);max-width:520px;width:90vw;padding:32px 36px;position:relative;box-shadow:0 24px 72px rgba(0,0,0,0.6)}
+  .keyboard-help .panel::before{content:'';position:absolute;top:0;left:0;width:36px;height:1px;background:var(--station-B);box-shadow:0 0 12px var(--station-B)}
+  .keyboard-help .head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:24px;padding-bottom:14px;border-bottom:1px solid var(--rule)}
+  .keyboard-help .head h3{font-family:var(--font);font-weight:300;font-size:24px;letter-spacing:-0.015em;color:var(--fg)}
+  .keyboard-help .head .esc{font-family:var(--font-mono);font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--fg-3);font-weight:700;padding:4px 8px;border:1px solid var(--rule-strong)}
+  .keyboard-help .grid{display:grid;grid-template-columns:auto 1fr;gap:14px 22px}
+  .keyboard-help .key{font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--fg);background:var(--bg-3);border:1px solid var(--rule-strong);padding:4px 10px;min-width:36px;text-align:center;letter-spacing:0.04em;white-space:nowrap}
+  .keyboard-help .label{font-size:13px;color:var(--fg-2);align-self:center;line-height:1.4}
+  .keyboard-help .label em{font-style:normal;font-family:var(--font-mono);color:var(--fg)}
+
+  /* ===== ENTRANCE CHOREOGRAPHY ===== */
+  @keyframes entranceFadeUp { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
+  @keyframes entranceKicker { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
+  body.is-loading .v-kicker { opacity:0 }
+  body.is-loading .hero h1 { opacity:0 }
+  body.is-loading .hero p.lede { opacity:0 }
+  body.is-loading .hero .actions { opacity:0 }
+  body.is-loading .orbit-stage { opacity:0; transform:scale(0.96) }
+  body.entered .v-kicker { animation: entranceKicker 600ms 100ms ease-out forwards }
+  body.entered .hero h1 { animation: entranceFadeUp 800ms 250ms cubic-bezier(0.16, 0.84, 0.42, 1) forwards }
+  body.entered .hero p.lede { animation: entranceFadeUp 700ms 500ms ease-out forwards }
+  body.entered .hero .actions { animation: entranceFadeUp 700ms 700ms ease-out forwards }
+  body.entered .orbit-stage { opacity:1; transform:scale(1); transition: opacity 900ms 300ms ease-out, transform 1200ms 300ms cubic-bezier(0.16, 0.84, 0.42, 1) }
+
+  /* ===== DEMO SWITCHER COLLAPSE ===== */
+  .switcher { transition: opacity 200ms, transform 200ms }
+  .switcher.minimized {
+    width: auto; max-width: none; padding: 8px 12px;
+    cursor: pointer;
+  }
+  .switcher.minimized .opts, .switcher.minimized .n { display: none }
+  .switcher.minimized .h { padding-bottom: 0; border-bottom: 0; margin-bottom: 0 }
+  .switcher.minimized .h::after { content: ' · click to expand'; color: var(--fg-4); font-weight: 400 }
+  @media (prefers-reduced-motion: reduce) {
+    body.entered .v-kicker, body.entered .hero h1, body.entered .hero p.lede, body.entered .hero .actions { animation: none; opacity: 1 }
+    body.entered .orbit-stage { transform: none; transition: opacity 100ms }
+  }
+
+</style>
+</head>
+<body class="is-loading">
+<div class="page-wrap">
+
+  <header class="masthead">
+    <div class="brand">
+      <span class="crest" aria-hidden="true"></span>
+      <span>Chronoscope</span>
+      <span class="tag">Synchronized HTTP latency observation</span>
+    </div>
+    <nav class="nav" aria-label="Primary">
+      <a href="#" class="active">Overview</a>
+      <a href="proposal-live-v4.html">Live</a>
+      <a href="proposal-investigate-v4.html">Investigate</a>
+      <a href="proposal-report-v4.html">Report</a>
+    </nav>
+    <div class="controls">
+      <span class="carrier-tag"><span class="dot"></span>Carrier acquired</span>
+        <a class="ctl-btn ctl-icon" href="proposal-settings-v4.html" aria-label="Settings" title="Settings"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><circle cx="7" cy="7" r="2"/><path d="M7 1.5 V3 M7 11 V12.5 M1.5 7 H3 M11 7 H12.5 M3.1 3.1 L4.1 4.1 M9.9 9.9 L10.9 10.9 M3.1 10.9 L4.1 9.9 M9.9 4.1 L10.9 3.1"/></svg></a>
+      <button class="ctl-btn ctl-btn--stop">End session</button>
+      <button class="ctl-btn">Share</button>
+    </div>
+  </header>
+
+  <div class="titlestrip">
+    <h2>Overview<span class="sub">Mission status</span></h2>
+    <div class="coords">
+      <span>Round<span class="v" id="hRound">247</span></span>
+      <span>T+<span class="v" id="hElapsed">04:09</span></span>
+      <span>Window<span class="v">60 s</span></span>
+      <span>R.A.<span class="v">06h 12m</span></span>
+      <span>Dec<span class="v">+04°09′</span></span>
+    </div>
+  </div>
+
+  <section class="hero">
+    <div class="hero-text">
+      <div class="v-kicker">
+        <span class="dot" id="vDot" data-s="bad"></span>
+        <span>Mission status</span>
+        <span style="color:var(--fg-4)">·</span>
+        <span class="v-state" id="vState">Doppler · AWS drifting</span>
+      </div>
+      <h1 id="vTitle">AWS station carrier is drifting.</h1>
+      <p class="lede" id="vBody">
+        <strong>Three stations are on transit.</strong> AWS pulses are arriving <em>+40 ms</em> past nominal across the last <em>12</em> rounds; Google, Edge, and Fastly remain steady on their bands. The drift is isolated — not a field-wide event.
+      </p>
+      <div class="actions">
+        <a class="primary" href="proposal-live-v4.html">Open tracker →</a>
+        <a class="ghost" href="proposal-report-v4.html">View session record</a>
+      </div>
+    </div>
+
+    <div class="orbit-stage">
+      <canvas id="orbital"></canvas>
+      <div class="vignette" aria-hidden="true"></div>
+      <div class="label">
+        <div>
+          <div class="k">Field p50</div>
+          <div class="v" id="miniField">31<span class="u">ms</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card-row">
+    <div class="stations" id="stations">
+      <!-- generated -->
+    </div>
+
+    <div class="flight">
+      <h3>Flight card · <span class="v">CHR–260518–1442–A7K</span></h3>
+      <div class="row"><span class="k">Started</span><span class="v">14:42:18 UTC</span></div>
+      <div class="row"><span class="k">Rounds</span><span class="v" id="vRoundCount">247 / 3600</span></div>
+      <div class="row"><span class="k">Cadence</span><span class="v">1 s · synchronized</span></div>
+      <div class="row"><span class="k">Vantage</span><span class="v">Chrome · macOS · US-W</span></div>
+      <div class="row"><span class="k">Trigger</span><span class="v">120 ms</span></div>
+      <div class="row"><span class="k">R.A. / Dec</span><span class="v">06h 12m / +04°09′</span></div>
+      <div class="marks" id="vMarks">
+        <span class="m" data-ep="A" data-s="stable"></span>
+        <span class="m" data-ep="B" data-s="stable"></span>
+        <span class="m" data-ep="C" data-s="bad"></span>
+        <span class="m" data-ep="D" data-s="stable"></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="log-section">
+    <div>
+      <h3>Telemetry log · <span class="v">current window</span></h3>
+      <div class="events" id="eventLog"></div>
+    </div>
+    <div class="notes">
+      <h3>Observer's notes</h3>
+      <p id="notesBody"><strong>AWS's tempo widened around round 234.</strong> The drift has not propagated to the other three stations, so the source is downstream of this browser — on AWS's own path.</p>
+      <p id="notesAction">The next move is to run an <strong>outside transit check</strong>. If a Cloudflare edge sees the same Doppler, it's AWS-side. If not, it's local to this network.</p>
+      <div class="field-stats">
+        <div class="s"><div class="k">Field p50</div><div class="v" id="fieldP50">31<span class="u">ms</span></div></div>
+        <div class="s"><div class="k">Field p95</div><div class="v" id="fieldP95">82<span class="u">ms</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div>Cert<span class="v">CHR–260518–1442–A7K</span></div>
+    <div class="center">Browser-resident observatory · no telemetry leaves this device</div>
+    <div class="right">Auto end at round <span class="v">3600</span></div>
+  </footer>
+
+  <aside class="switcher" aria-label="Verdict state">
+    <div class="h"><span>Verdict</span><span class="x">demo</span></div>
+    <div class="opts" role="radiogroup">
+      <button data-state="stable" aria-pressed="false">All transit</button>
+      <button data-state="warn"   aria-pressed="false">Wobble</button>
+      <button data-state="bad"    aria-pressed="true">Doppler</button>
+      <button data-state="crit"   aria-pressed="false">Carrier lost</button>
+    </div>
+    <p class="n">Switches the verdict, station states, log entries, and flight marks together.</p>
+  </aside>
+
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+// =================== MODEL ===================
+const STATION_LIST = ['A','B','C','D'];
+const STATION_NAMES = { A:'Google', B:'Edge', C:'AWS', D:'Fastly' };
+const HOSTS = { A:'www.google.com', B:'edge.akamai.net', C:'s3.us-west-2.amazonaws.com', D:'www.fastly.com' };
+const STATION_COLORS = {
+  A: new THREE.Color('#B7D3EC'),
+  B: new THREE.Color('#8CD4C9'),
+  C: new THREE.Color('#E8D597'),
+  D: new THREE.Color('#D78E68'),
+};
+const STATION_HEX = { A:'#B7D3EC', B:'#8CD4C9', C:'#E8D597', D:'#D78E68' };
+const SEV_WARN = new THREE.Color('#E8C36F');
+const SEV_BAD  = new THREE.Color('#D27258');
+const SEV_CRIT = new THREE.Color('#B14238');
+const PROFILE_RADIUS = { A: 6, B: 8, C: 10, D: 12 };
+const TRIGGER = 120;
+const ROUNDS = 60;
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function rng(seed){let s=seed>>>0;return()=>{s=(s*1664525+1013904223)>>>0;return s/4294967296};}
+function gen(profile, n, seed) {
+  const r = rng(seed);
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    let v = profile.base + (r() - 0.5) * 2 * profile.jitter;
+    if (r() < profile.spikeP) v = profile.base + profile.jitter + r() * profile.spikeMag;
+    if (profile.crit && i > 50) v = 5000;
+    out.push(Math.max(2, v));
+  }
+  return out;
+}
+function pct(arr, p) {
+  const filtered = arr.filter(v => v < 4000);
+  if (!filtered.length) return 0;
+  const s = [...filtered].sort((a,b)=>a-b);
+  return s[Math.min(s.length-1, Math.floor(s.length * p))];
+}
+function median(arr) { return pct(arr, 0.5); }
+function severityColor(v, defC) {
+  if (v >= 4000) return SEV_CRIT;
+  if (v > TRIGGER) return SEV_BAD;
+  if (v > TRIGGER * 0.7) return SEV_WARN;
+  return defC;
+}
+
+const STATES = {
+  stable: {
+    title: 'All four stations are on transit.',
+    state: 'In transit · 247 clean rounds',
+    sigil: 'stable',
+    body: `<strong>All four station carriers are nominal.</strong> Field p50 holds at <em>22 ms</em>; p95 at <em>27 ms</em>. No Doppler shift detected across the 60-second window.`,
+    marks: ['stable','stable','stable','stable'],
+    profiles: {
+      A: { base: 21, jitter: 4, spikeP: 0, spikeMag: 0, status: 'stable', last: 21, p50: 20, p95: 27 },
+      B: { base: 38, jitter: 5, spikeP: 0, spikeMag: 0, status: 'stable', last: 38, p50: 37, p95: 45 },
+      C: { base: 24, jitter: 4, spikeP: 0, spikeMag: 0, status: 'stable', last: 24, p50: 23, p95: 30 },
+      D: { base: 18, jitter: 3, spikeP: 0, spikeMag: 0, status: 'stable', last: 18, p50: 17, p95: 22 },
+    },
+    laneStates: ['stable','stable','stable','stable'],
+    events: [
+      { t:'T+04:09', tag:'TRANSIT', s:'stable', b:'Round <em>247</em> · all four stations on transit. Field p50 <em>22 ms</em>.' },
+      { t:'T+03:42', tag:'EDGE',    s:'stable', b:'<strong>Edge</strong> tempo holding at <em>38 ms</em>; drift ±5 ms.' },
+      { t:'T+02:58', tag:'GOOGLE',  s:'stable', b:'<strong>Google</strong> jitter tightened to <em>±3 ms</em>.' },
+      { t:'T+01:32', tag:'FIELD',   s:'stable', b:'No carrier loss in the last <em>96</em> rounds.' },
+      { t:'T+00:18', tag:'ACQ',     s:'',       b:'Session opened. Four stations acquired. Cadence <em>1 s</em>.' },
+    ],
+    notesBody: `The ensemble has held tempo for the entire window. All four stations show drift under <em>5 ms</em>; no carrier spikes above the trigger. This is a clean baseline.`,
+    notesAction: `Nothing to chase. If anything changes, the live tracker will surface it within one round.`,
+    field: { p50: 22, p95: 31 },
+  },
+  warn: {
+    title: 'Edge carrier is wobbling.',
+    state: 'Carrier wobble · Edge band widening',
+    sigil: 'warn',
+    body: `<strong>Edge's transit band has widened.</strong> p95 crossed <em>64 ms</em> three rounds ago while the other carriers held. The widening is early-stage — it could resolve, or it could develop into a real drift.`,
+    marks: ['stable','warn','stable','stable'],
+    profiles: {
+      A: { base: 21, jitter: 4,  spikeP: 0,    spikeMag: 0,  status: 'stable', last: 21, p50: 20, p95: 28 },
+      B: { base: 46, jitter: 12, spikeP: 0.15, spikeMag: 22, status: 'warn',   last: 56, p50: 46, p95: 72 },
+      C: { base: 24, jitter: 4,  spikeP: 0,    spikeMag: 0,  status: 'stable', last: 24, p50: 23, p95: 30 },
+      D: { base: 18, jitter: 3,  spikeP: 0,    spikeMag: 0,  status: 'stable', last: 18, p50: 17, p95: 22 },
+    },
+    laneStates: ['stable','warn','stable','stable'],
+    events: [
+      { t:'T+04:09', tag:'EDGE',  s:'warn',   b:'<strong>Edge</strong> p95 widening — now <em>72 ms</em>, was <em>46 ms</em>.' },
+      { t:'T+03:46', tag:'EDGE',  s:'warn',   b:'<strong>Edge</strong> drift doubled from <em>±5 ms</em> to <em>±12 ms</em>.' },
+      { t:'T+03:11', tag:'FIELD', s:'stable', b:'Google, AWS, Fastly — all on transit.' },
+      { t:'T+01:32', tag:'FIELD', s:'stable', b:'Field p50 still <em>27 ms</em>.' },
+      { t:'T+00:18', tag:'ACQ',   s:'',       b:'Session opened.' },
+    ],
+    notesBody: `Edge has loosened in the last <em>15</em> rounds. Other carriers unchanged. The shape is isolated, not field-wide — typical of a single-path issue.`,
+    notesAction: `Wait one window. If Edge stays loose, run an outside transit check. If it tightens back, no action.`,
+    field: { p50: 27, p95: 51 },
+  },
+  bad: {
+    title: 'AWS station carrier is drifting.',
+    state: 'Doppler · AWS drifting',
+    sigil: 'bad',
+    body: `<strong>Three stations are on transit.</strong> AWS pulses are arriving <em>+40 ms</em> past nominal across the last <em>12</em> rounds; Google, Edge, and Fastly remain steady on their bands. The drift is isolated — not a field-wide event.`,
+    marks: ['stable','stable','bad','stable'],
+    profiles: {
+      A: { base: 21, jitter: 4,  spikeP: 0,    spikeMag: 0,  status: 'stable', last: 22, p50: 20, p95: 28 },
+      B: { base: 39, jitter: 6,  spikeP: 0,    spikeMag: 0,  status: 'stable', last: 42, p50: 40, p95: 51 },
+      C: { base: 36, jitter: 18, spikeP: 0.32, spikeMag: 80, status: 'bad',    last: 74, p50: 36, p95: 92 },
+      D: { base: 24, jitter: 8,  spikeP: 0.08, spikeMag: 28, status: 'warn',   last: 30, p50: 25, p95: 48 },
+    },
+    laneStates: ['stable','stable','bad','warn'],
+    events: [
+      { t:'T+04:09', tag:'AWS',     s:'bad',    b:'<strong>AWS</strong> Doppler positive — p95 <em>92 ms</em>, p99 <em>142 ms</em>.' },
+      { t:'T+03:46', tag:'AWS',     s:'bad',    b:'<strong>AWS</strong> 3 carrier spikes over <em>60 ms</em> in <em>12</em> rounds.' },
+      { t:'T+03:11', tag:'PATTERN', s:'warn',   b:'Pattern: isolated to <strong>AWS</strong>; field otherwise coordinated.' },
+      { t:'T+02:18', tag:'FASTLY',  s:'warn',   b:'<strong>Fastly</strong> p95 elevated to <em>48 ms</em>; not yet over trigger.' },
+      { t:'T+01:32', tag:'GOOGLE',  s:'stable', b:'<strong>Google</strong> &amp; <strong>Edge</strong> on transit.' },
+      { t:'T+00:42', tag:'FIELD',   s:'',       b:'Field p50 rose from <em>21</em> to <em>34 ms</em> over <em>40</em> rounds.' },
+      { t:'T+00:18', tag:'ACQ',     s:'',       b:'Session opened.' },
+    ],
+    notesBody: `<strong>AWS's tempo widened around round 234.</strong> The drift has not propagated to the other three stations, so the source is downstream of this browser — on AWS's own path.`,
+    notesAction: `The next move is to run an <strong>outside transit check</strong>. If a Cloudflare edge sees the same Doppler, it's AWS-side. If not, it's local to this network.`,
+    field: { p50: 31, p95: 82 },
+  },
+  crit: {
+    title: 'Carrier lost from Fastly.',
+    state: 'Carrier lost · 4 missed pulses in 8 rounds',
+    sigil: 'crit',
+    body: `<strong>Fastly missed <em>4 of the last 8</em> pulses.</strong> The other three station carriers held tempo without interruption, so the silence is isolated to one path. If Fastly is reachable from another vantage, the problem is upstream of yours.`,
+    marks: ['stable','stable','stable','crit'],
+    profiles: {
+      A: { base: 21, jitter: 4,  spikeP: 0,    spikeMag: 0,    status: 'stable', last: 22, p50: 20, p95: 28 },
+      B: { base: 38, jitter: 5,  spikeP: 0,    spikeMag: 0,    status: 'stable', last: 39, p50: 38, p95: 47 },
+      C: { base: 24, jitter: 4,  spikeP: 0,    spikeMag: 0,    status: 'stable', last: 25, p50: 23, p95: 31 },
+      D: { base: 90, jitter: 30, spikeP: 0.5,  spikeMag: 4000, status: 'crit',   last: 5000, p50: 0, p95: 0, crit: true },
+    },
+    laneStates: ['stable','stable','stable','crit'],
+    events: [
+      { t:'T+04:09', tag:'FASTLY',  s:'crit',   b:'<strong>Fastly</strong> round <em>247</em> · carrier lost · timeout at <em>5000 ms</em>.' },
+      { t:'T+03:54', tag:'FASTLY',  s:'crit',   b:'<strong>Fastly</strong> 4th missed pulse in <em>8</em> rounds.' },
+      { t:'T+03:46', tag:'FIELD',   s:'stable', b:'Google, Edge, AWS held tempo — silence is isolated.' },
+      { t:'T+03:11', tag:'PATTERN', s:'bad',    b:'Failures clustered on one station. Not local.' },
+      { t:'T+00:18', tag:'ACQ',     s:'',       b:'Session opened.' },
+    ],
+    notesBody: `Three stations have continued without interruption; only Fastly has stopped responding. The pattern is endpoint-isolated.`,
+    notesAction: `Try reaching Fastly from another network, or run an <strong>outside transit check</strong>. If the outside vantage also fails, the upstream is down. If it succeeds, the path is broken from this network only.`,
+    field: { p50: 27, p95: 48 },
+  },
+};
+
+// =================== ORBITAL CANVAS ===================
+const canvas = document.getElementById('orbital');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 200);
+camera.position.set(0, 15, 24);
+camera.lookAt(0, 0, 0);
+
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+// Stars (small set, this canvas is smaller than Live)
+function buildStars() {
+  const N = 1200;
+  const positions = new Float32Array(N * 3);
+  const colors = new Float32Array(N * 3);
+  const sizes = new Float32Array(N);
+  for (let i = 0; i < N; i++) {
+    const r = 60 + Math.random() * 60;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    positions[i*3] = r * Math.sin(phi) * Math.cos(theta);
+    positions[i*3+1] = r * Math.sin(phi) * Math.sin(theta) - 8;
+    positions[i*3+2] = r * Math.cos(phi);
+    const w = 0.7 + Math.random() * 0.3;
+    colors[i*3] = w * 0.95; colors[i*3+1] = w * 0.92; colors[i*3+2] = w * 0.85;
+    sizes[i] = Math.random() < 0.04 ? 1.5 + Math.random() * 1.0 : 0.3 + Math.random() * 0.4;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  g.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
+    vertexShader: `attribute float size; varying vec3 vColor;
+      void main() { vColor = color;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = size * 200.0 / -mv.z;
+      }`,
+    fragmentShader: `varying vec3 vColor;
+      void main() { vec2 c = gl_PointCoord - 0.5; float d = length(c);
+        float a = smoothstep(0.5, 0.0, d);
+        float h = smoothstep(0.5, 0.15, d) * 0.35;
+        gl_FragColor = vec4(vColor, a * 0.95 + h);
+      }`,
+  });
+  return new THREE.Points(g, m);
+}
+scene.add(buildStars());
+
+// Orbital rings
+const ringMaterials = [];
+STATION_LIST.forEach(ep => {
+  const r = PROFILE_RADIUS[ep];
+  const ringG = new THREE.RingGeometry(r - 0.05, r + 0.05, 256);
+  const ringM = new THREE.MeshBasicMaterial({
+    color: 0xF2EBDB, transparent: true, opacity: 0.28, side: THREE.DoubleSide,
+  });
+  const ring = new THREE.Mesh(ringG, ringM);
+  ring.rotation.x = -Math.PI / 2;
+  scene.add(ring);
+  ringMaterials.push(ringM);
+
+  const triggerG = new THREE.RingGeometry(r + 0.55, r + 0.62, 128, 1, 0, Math.PI * 2);
+  const triggerM = new THREE.MeshBasicMaterial({
+    color: 0xD27258, transparent: true, opacity: 0.28, side: THREE.DoubleSide,
+  });
+  const triggerRing = new THREE.Mesh(triggerG, triggerM);
+  triggerRing.rotation.x = -Math.PI / 2;
+  scene.add(triggerRing);
+});
+
+// Home station
+const homeG = new THREE.SphereGeometry(0.16, 24, 24);
+const homeM = new THREE.MeshBasicMaterial({ color: 0xF2EBDB, transparent: true, opacity: 0.9 });
+scene.add(new THREE.Mesh(homeG, homeM));
+const homeHaloG = new THREE.SphereGeometry(0.7, 24, 24);
+const homeHaloM = new THREE.ShaderMaterial({
+  transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `varying vec3 vN; varying vec3 vEye;
+    void main() { vN = normalize(normalMatrix * normal);
+      vec4 mv = modelViewMatrix * vec4(position, 1.0); vEye = normalize(-mv.xyz);
+      gl_Position = projectionMatrix * mv; }`,
+  fragmentShader: `varying vec3 vN; varying vec3 vEye; uniform float uTime;
+    void main() { float rim = 1.0 - max(dot(vN, vEye), 0.0); rim = pow(rim, 2.0);
+      float p = 0.85 + 0.15 * sin(uTime * 0.0015);
+      gl_FragColor = vec4(0.95, 0.92, 0.85, rim * 0.6 * p); }`,
+});
+const homeHalo = new THREE.Mesh(homeHaloG, homeHaloM);
+scene.add(homeHalo);
+
+// Pulse system per station (60 points)
+const pulseGroups = {};
+const PULSE_VERT = `
+  attribute float aSize; varying vec3 vColor;
+  void main() { vColor = color;
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_Position = projectionMatrix * mv;
+    gl_PointSize = aSize * 3200.0 / max(0.1, -mv.z);
+  }`;
+const PULSE_FRAG = `
+  varying vec3 vColor;
+  void main() { vec2 c = gl_PointCoord - 0.5; float d = length(c);
+    if (d > 0.5) discard;
+    float core = smoothstep(0.10, 0.0, d) * 1.6;
+    float halo = exp(-d * 5.0) * 1.05;
+    float ring = smoothstep(0.34, 0.28, d) * smoothstep(0.44, 0.36, d) * 0.45;
+    gl_FragColor = vec4(vColor, core + halo + ring); }`;
+STATION_LIST.forEach(ep => {
+  const positions = new Float32Array(ROUNDS * 3);
+  const colors = new Float32Array(ROUNDS * 3);
+  const sizes = new Float32Array(ROUNDS);
+  for (let i = 0; i < ROUNDS; i++) {
+    positions[i*3] = 9999; sizes[i] = 0.075;
+    colors[i*3] = STATION_COLORS[ep].r; colors[i*3+1] = STATION_COLORS[ep].g; colors[i*3+2] = STATION_COLORS[ep].b;
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(positions, 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('color', new THREE.BufferAttribute(colors, 3).setUsage(THREE.DynamicDrawUsage));
+  g.setAttribute('aSize', new THREE.BufferAttribute(sizes, 1).setUsage(THREE.DynamicDrawUsage));
+  const m = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, vertexColors: true,
+    vertexShader: PULSE_VERT, fragmentShader: PULSE_FRAG,
+  });
+  const points = new THREE.Points(g, m);
+  points.frustumCulled = false;
+  scene.add(points);
+  pulseGroups[ep] = { points, positions, colors, sizes };
+});
+
+function updateStation(ep, profile, series) {
+  const baseline = median(series) || profile.base;
+  const b = pulseGroups[ep];
+  for (let i = 0; i < ROUNDS; i++) {
+    const v = series[i] || 0;
+    if (v === 0) { b.positions[i*3] = 9999; b.sizes[i] = 0; continue; }
+    const r = PROFILE_RADIUS[ep];
+    const angle = -Math.PI / 2 + (i / ROUNDS) * Math.PI * 2;
+    const ratio = (v - baseline) / Math.max(baseline, 10);
+    const offset = Math.max(-0.4, Math.min(0.8, ratio * 0.5));
+    const rr = r + offset;
+    b.positions[i*3] = rr * Math.cos(angle);
+    b.positions[i*3+1] = 0;
+    b.positions[i*3+2] = rr * Math.sin(angle);
+    const isSev = v > TRIGGER * 0.7;
+    const isCrit = v > TRIGGER;
+    b.sizes[i] = isCrit ? 0.13 : isSev ? 0.1 : 0.075;
+    const c = severityColor(v, STATION_COLORS[ep]);
+    b.colors[i*3] = c.r; b.colors[i*3+1] = c.g; b.colors[i*3+2] = c.b;
+  }
+  b.points.geometry.attributes.position.needsUpdate = true;
+  b.points.geometry.attributes.color.needsUpdate = true;
+  b.points.geometry.attributes.aSize.needsUpdate = true;
+}
+
+// Mouse parallax
+let cameraAngle = 0;
+let mTX = 0, mTY = 0, mX = 0, mY = 0;
+window.addEventListener('mousemove', (e) => {
+  const r = canvas.parentElement.getBoundingClientRect();
+  mTX = (((e.clientX - r.left) / r.width) - 0.5) * 2;
+  mTY = (((e.clientY - r.top)  / r.height) - 0.5) * 2;
+});
+
+function frame(now) {
+  if (!reducedMotion) {
+    cameraAngle += 0.00007;
+    mX += (mTX - mX) * 0.045;
+    mY += (mTY - mY) * 0.045;
+    camera.position.x = Math.sin(cameraAngle) * 3 + mX * 1.6;
+    camera.position.y = 15 - mY * 0.9;
+    camera.position.z = 24 + Math.cos(cameraAngle) * 1.8;
+    camera.lookAt(0, 0, 0);
+  }
+  homeHalo.material.uniforms.uTime.value = now;
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+// =================== STATE RENDER ===================
+function renderState(key) {
+  const s = STATES[key];
+  document.getElementById('vTitle').textContent = s.title;
+  document.getElementById('vBody').innerHTML = s.body;
+  document.getElementById('vState').textContent = s.state;
+  document.getElementById('vDot').setAttribute('data-s', s.sigil);
+  document.getElementById('notesBody').innerHTML = s.notesBody;
+  document.getElementById('notesAction').innerHTML = s.notesAction;
+  document.getElementById('fieldP50').innerHTML = `${s.field.p50}<span class="u">ms</span>`;
+  document.getElementById('fieldP95').innerHTML = `${s.field.p95}<span class="u">ms</span>`;
+  document.getElementById('miniField').innerHTML = `${s.field.p50}<span class="u">ms</span>`;
+
+  // Update orbital scene
+  STATION_LIST.forEach(ep => {
+    const p = s.profiles[ep];
+    const series = p.crit
+      ? gen(p, ROUNDS, ep.charCodeAt(0) * 1009 + 17).map((v, i) => i > 50 ? 5000 : v)
+      : gen(p, ROUNDS, ep.charCodeAt(0) * 1009 + 17);
+    updateStation(ep, p, series);
+  });
+
+  // Stations list
+  const c = document.getElementById('stations');
+  c.innerHTML = '';
+  STATION_LIST.forEach((ep, idx) => {
+    const p = s.profiles[ep];
+    const st = s.laneStates[idx];
+    const stateText = ({ stable: 'Carrier acquired', warn: 'Carrier wobble', bad: 'Doppler drift', crit: 'Carrier lost' })[st];
+    const vClass = p.last > TRIGGER * 1.5 ? ' crit' : p.last > TRIGGER ? ' bad' : '';
+    const valDisplay = p.crit
+      ? `<div class="val crit">timeout<span class="u"> · 5000</span></div>`
+      : `<div class="val${vClass}">${Math.round(p.last)}<span class="u">ms</span></div>`;
+    const driftDisplay = p.crit
+      ? `<div class="drift"><span class="k">drift</span>—</div>`
+      : `<div class="drift"><span class="k">drift</span>${(p.last - p.p50 >= 0 ? '+' : '')}${Math.round(p.last - p.p50)} ms</div>`;
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.setAttribute('data-ep', ep);
+    row.innerHTML = `
+      <span class="mk"></span>
+      <div class="nm">${STATION_NAMES[ep]}<span class="host">${HOSTS[ep]}</span></div>
+      <div class="state" data-s="${st}">${stateText}</div>
+      ${valDisplay}
+      ${driftDisplay}
+    `;
+    c.appendChild(row);
+  });
+
+  // Events
+  const log = document.getElementById('eventLog');
+  log.innerHTML = '';
+  s.events.forEach(ev => {
+    const e = document.createElement('div');
+    e.className = 'event';
+    e.innerHTML = `<span class="t">${ev.t}</span><span class="b">${ev.b}</span><span class="tag" data-s="${ev.s}">${ev.tag}</span>`;
+    log.appendChild(e);
+  });
+
+  // Flight marks
+  document.querySelectorAll('#vMarks .m').forEach((m, i) => m.setAttribute('data-s', s.marks[i]));
+
+  // Switcher buttons
+  document.querySelectorAll('.switcher button').forEach(b => {
+    b.setAttribute('aria-pressed', b.getAttribute('data-state') === key ? 'true' : 'false');
+  });
+}
+
+document.querySelectorAll('.switcher button').forEach(b => {
+  b.addEventListener('click', () => renderState(b.getAttribute('data-state')));
+});
+
+// Subtle round tick
+let round = 247;
+let elapsedMs = 4 * 60 * 1000 + 9 * 1000;
+setInterval(() => {
+  round++;
+  elapsedMs += 1000;
+  const mm = Math.floor(elapsedMs / 60000).toString().padStart(2, '0');
+  const ss = Math.floor((elapsedMs % 60000) / 1000).toString().padStart(2, '0');
+  document.getElementById('hRound').textContent = round;
+  document.getElementById('hElapsed').textContent = `${mm}:${ss}`;
+  const c = document.getElementById('vRoundCount');
+  if (c) c.textContent = `${round} / 3600`;
+}, 2400);
+
+function start() {
+  resize();
+  renderState('bad');
+  requestAnimationFrame(frame);
+}
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(start);
+else setTimeout(start, 100);
+
+
+  // Trigger entrance animation
+  requestAnimationFrame(() => {
+    document.body.classList.remove('is-loading');
+    document.body.classList.add('entered');
+  });
+
+  // Minimize the demo switcher by default
+  const switcher = document.querySelector('.switcher');
+  if (switcher) {
+    switcher.classList.add('minimized');
+    switcher.addEventListener('click', (e) => {
+      if (e.target.tagName !== 'BUTTON') {
+        switcher.classList.toggle('minimized');
+      }
+    });
+  }
+
+  // Keyboard shortcuts
+  const _kbHelp = document.getElementById('keyboardHelp');
+  function toggleHelp(force){
+    const willOpen = force !== undefined ? force : !_kbHelp.classList.contains('visible');
+    _kbHelp.classList.toggle('visible', willOpen);
+  }
+
+  const STATE_KEYS = ['stable','warn','bad','crit'];
+  function pressStateBtn(i){
+    const btns = document.querySelectorAll('.switcher button[data-state]');
+    if (btns[i]) btns[i].click();
+  }
+
+  window.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const k = e.key;
+    if (k === '?' || (e.shiftKey && k === '/')) { e.preventDefault(); toggleHelp(); }
+    else if (k === 'Escape') { if (_kbHelp.classList.contains('visible')) toggleHelp(false); }
+    else if (k === '1') pressStateBtn(0);
+    else if (k === '2') pressStateBtn(1);
+    else if (k === '3') pressStateBtn(2);
+    else if (k === '4') pressStateBtn(3);
+    else if (k === 'd' || k === 'D') { if (switcher) switcher.classList.toggle('minimized') }
+    else if (k === 'l' || k === 'L') { navigate('proposal-live-v4.html') }
+    else if (k === 'i' || k === 'I') { navigate('proposal-investigate-v4.html') }
+    else if (k === 'r' || k === 'R') { navigate('proposal-report-v4.html') }
+    else if (k === 's' || k === 'S') { navigate('proposal-settings-v4.html') }
+  });
+
+  // View Transitions API hook on nav clicks
+  function navigate(url) {
+    if (document.startViewTransition) {
+      document.startViewTransition(() => { window.location.href = url; });
+    } else {
+      window.location.href = url;
+    }
+  }
+  document.querySelectorAll('.hero .actions a, .nav a').forEach(a => {
+    const href = a.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('http')) return;
+    a.addEventListener('click', (e) => {
+      if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+      if (document.startViewTransition) {
+        e.preventDefault();
+        navigate(href);
+      }
+    });
+  });
+
+  </script>
+
+
+  <div class="keyboard-help" id="keyboardHelp" role="dialog" aria-label="Keyboard shortcuts">
+    <div class="panel">
+      <div class="head"><h3>Keyboard shortcuts</h3><span class="esc">Esc to close</span></div>
+      <div class="grid">
+        <span class="key">?</span><span class="label">Toggle this help</span>
+        <span class="key">L</span><span class="label">Open Live tracker</span>
+        <span class="key">I</span><span class="label">Open Investigate</span>
+        <span class="key">R</span><span class="label">Open Report</span>
+        <span class="key">S</span><span class="label">Open Settings</span>
+        <span class="key">1–4</span><span class="label">Cycle verdict state (demo)</span>
+        <span class="key">D</span><span class="label">Toggle demo panel</span>
+        <span class="key">Esc</span><span class="label">Close any overlay</span>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

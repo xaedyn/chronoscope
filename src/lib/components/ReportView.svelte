@@ -1,42 +1,47 @@
 <!-- src/lib/components/ReportView.svelte -->
-<!-- Read-only diagnostic report for shared result links.                      -->
+<!-- Vessel v4 Report surface — completed-session signature. Translates the
+     markup of proposals/v4/proposal-report-v4.html (the cinematic field
+     recording: orbital signature, hero readout, per-station roll-call,
+     observer's notes, scrub rail). Wires through chronoscope stores
+     (measurements / statistics / monitored endpoints / settings) and
+     preserves chronoscope-specific integrations: PNG export (canvas
+     toDataURL), CSV export, hosted-report sharing via remoteVantageStore.
+     Masthead is rendered by Layout.svelte — not duplicated here. -->
 <script lang="ts">
   import { get } from 'svelte/store';
-  import { endpointStore } from '$lib/stores/endpoints';
-  import { navigateTo } from '$lib/router';
-  import { historyStore } from '$lib/stores/history';
+  import { onMount } from 'svelte';
+  import { endpointStore, buildDefaultEndpoints } from '$lib/stores/endpoints';
   import { measurementStore } from '$lib/stores/measurements';
   import { settingsStore } from '$lib/stores/settings';
   import { statisticsStore } from '$lib/stores/statistics';
   import { uiStore } from '$lib/stores/ui';
   import { companionStore } from '$lib/stores/companion';
   import { remoteVantageStore } from '$lib/stores/remote-vantage';
-  import LocalProofPanel from './LocalProofPanel.svelte';
+  import { monitoredEndpointsStore } from '$lib/stores/derived';
   import { sanitizeCompanionProbeForReport } from '$lib/companion/sanitize';
   import { buildShareURL } from '$lib/share/share-manager';
-  import { buildResultsSharePayload, MAX_SHARE_URL_CHARS } from '$lib/share/share-payload-builder';
-  import { buildDiagnosticReport, formatReportMetric } from '$lib/utils/diagnostic-report';
-  import { buildEvidenceTrail } from '$lib/utils/evidence-trail';
-  import { buildHistoryBaselineInsight } from '$lib/utils/history-baseline';
   import {
-    buildProofActionState,
-    isProofStale,
-    summarizeLocalProof,
-    summarizeRemoteProof,
-  } from '$lib/utils/proof-flow';
+    buildResultsSharePayload,
+    MAX_SHARE_URL_CHARS,
+  } from '$lib/share/share-payload-builder';
+  import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
+  import { buildRunStoryline } from '$lib/utils/run-storyline';
+  import { deriveEndpointTone, type EndpointTone } from '$lib/utils/endpoint-tone';
   import { tokens } from '$lib/tokens';
-  import type { DiagnosticTriageAction } from '$lib/utils/diagnostic-narrative';
+  import type { MeasurementSample } from '$lib/types';
+  import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
+  import { REGION_SHORT_CODES } from '$lib/regional-defaults';
 
+  // ── Store reads ────────────────────────────────────────────────────────────
   const endpoints = $derived($endpointStore);
+  const monitored = $derived($monitoredEndpointsStore);
   const measurements = $derived($measurementStore);
-  const history = $derived($historyStore);
-  const remoteVantage = $derived($remoteVantageStore);
-  const companion = $derived($companionStore);
   const settings = $derived($settingsStore);
   const stats = $derived($statisticsStore);
   const context = $derived($uiStore.sharedReportContext);
-  const sharedLocalCompanion = $derived($uiStore.sharedLocalCompanion);
 
+  // The diagnostic report bundles primary answer + endpoint rows + threshold +
+  // sample counts. Used for the verdict band and per-station summary.
   const report = $derived(buildDiagnosticReport({
     endpoints,
     stats,
@@ -44,73 +49,473 @@
     settings,
     context,
   }));
-  const additionalLimitations = $derived(
-    report.diagnosis.limitations.filter((limit) => limit.id !== 'timing-visibility'),
-  );
-  const baselineInsight = $derived(buildHistoryBaselineInsight({
-    endpoints,
-    stats,
-    history: history.sessions,
-    currentStartedAt: measurements.startedAt,
-  }));
-  const baselineRows = $derived(
-    baselineInsight.comparisons
-      .filter((comparison) => comparison.status !== 'unready')
-      .slice(0, 4),
-  );
-  const evidenceTrail = $derived(buildEvidenceTrail({
-    report,
-    remoteVantage,
-    companion,
-    sharedLocalCompanion,
-  }));
-  const remoteBusy = $derived(remoteVantage.status === 'checking' || remoteVantage.status === 'probing');
-  const companionBusy = $derived(companion.status === 'checking' || companion.status === 'probing');
 
-  let copiedSummary = $state(false);
-  let copiedLink = $state(false);
-  let copyError = $state<'summary' | 'link' | null>(null);
-  let localProofOpen = $state(false);
-  let includeLocalProofInReport = $state(false);
-  let browserVisibilityPanel = $state<HTMLElement | null>(null);
-  const localProofExportAvailable = $derived(Boolean(companion.lastProbe));
-
-  interface TriageOutcome {
-    readonly label: string;
-    readonly tone: 'good' | 'watch' | 'bad' | 'neutral';
-    readonly disabled?: boolean;
-  }
-
-  function resetCopyState(): void {
-    copiedSummary = false;
-    copiedLink = false;
-    copyError = null;
-  }
-
-  function copyText(text: string, onDone: () => void, onError: () => void): void {
-    if (!navigator.clipboard) {
-      onError();
-      return;
+  // Storyline beats (event narrative) for the observer's-notes column.
+  const storylineSamplesByEndpoint = $derived.by<Record<string, readonly MeasurementSample[]>>(() => {
+    const out: Record<string, readonly MeasurementSample[]> = {};
+    for (const ep of monitored) {
+      const state = measurements.endpoints[ep.id];
+      out[ep.id] = state ? state.samples.slice(-5_000) : [];
     }
-    void navigator.clipboard.writeText(text).then(() => {
-      copyError = null;
-      onDone();
-      setTimeout(resetCopyState, 1800);
-    }).catch(() => {
-      onError();
-      setTimeout(resetCopyState, 1800);
-    });
+    return out;
+  });
+  const runStoryline = $derived(buildRunStoryline({
+    endpoints: monitored,
+    samplesByEndpoint: storylineSamplesByEndpoint,
+    threshold: settings.healthThreshold,
+    runStart: measurements.startedAt,
+    maxVisibleRows: Math.max(monitored.length, 4),
+  }));
+
+  // ── Orbital signature data ────────────────────────────────────────────────
+  // Map up to 4 monitored endpoints → A/B/C/D station slots, replay the
+  // entire session (rounded to the chart window) as the recorded signature.
+  const STATION_IDS = ['A', 'B', 'C', 'D'] as const;
+  const STATION_COLORS = [
+    tokens.color.station.A,
+    tokens.color.station.B,
+    tokens.color.station.C,
+    tokens.color.station.D,
+  ] as const;
+  const STATION_RADII = [6, 8, 10, 12] as const;
+
+  const stations = $derived<readonly OrbitalStation[]>(
+    monitored.slice(0, 4).map((ep, i) => ({
+      id: STATION_IDS[i],
+      color: STATION_COLORS[i],
+      radius: STATION_RADII[i],
+    })),
+  );
+  const epToStation = $derived<Record<string, string>>(
+    Object.fromEntries(monitored.slice(0, 4).map((ep, i) => [ep.id, STATION_IDS[i]])),
+  );
+
+  const WINDOW = tokens.lane.chartWindow;
+  const stationData = $derived.by<Record<string, readonly (number | null)[]>>(() => {
+    const out: Record<string, (number | null)[]> = {};
+    for (const ep of monitored.slice(0, 4)) {
+      const id = epToStation[ep.id];
+      const m = measurements.endpoints[ep.id];
+      if (!m) {
+        out[id] = new Array(WINDOW).fill(null);
+        continue;
+      }
+      const all = m.samples.toArray();
+      const tail = all.slice(-WINDOW);
+      const buf: (number | null)[] = new Array(WINDOW).fill(null);
+      const offset = WINDOW - tail.length;
+      for (let i = 0; i < tail.length; i++) {
+        const s = tail[i];
+        buf[offset + i] = s.status === 'ok' ? s.latency : null;
+      }
+      out[id] = buf;
+    }
+    return out;
+  });
+
+  // ── Session identity / coords ─────────────────────────────────────────────
+  const sessionStart = $derived(measurements.startedAt);
+  const sessionEnd = $derived(measurements.stoppedAt ?? Date.now());
+  const durationMs = $derived(sessionStart === null ? 0 : Math.max(0, sessionEnd - sessionStart));
+  const durationLabel = $derived(formatDuration(durationMs));
+  const durationLong = $derived(formatDurationLong(durationMs));
+
+  function formatDuration(ms: number): string {
+    const total = Math.floor(ms / 1000);
+    const mm = Math.floor(total / 60).toString().padStart(2, '0');
+    const ss = (total % 60).toString().padStart(2, '0');
+    return `${mm}:${ss}`;
+  }
+  function formatDurationLong(ms: number): string {
+    const total = Math.floor(ms / 1000);
+    const m = Math.floor(total / 60);
+    const s = total % 60;
+    if (m === 0) return `${s} s`;
+    return `${m} min ${s} s`;
+  }
+  function utcTimeLabel(ts: number | null): string {
+    if (ts === null) return '—';
+    const d = new Date(ts);
+    return `${d.toISOString().slice(11, 19)} UTC`;
+  }
+  function utcDateLabel(ts: number | null): string {
+    if (ts === null) return '—';
+    return new Date(ts).toUTCString().replace(/^[A-Za-z]+, /, '').slice(0, 11);
   }
 
-  function handleCopySummary(): void {
-    copyText(report.copySummary, () => {
-      copiedSummary = true;
-    }, () => {
-      copyError = 'summary';
-    });
+  // Deterministic session cert — CHR-YYMMDD-HHMM-XXX. Survives reruns of the
+  // same session ID. Falls back to a "pending" sigil before startedAt is set.
+  const flightCert = $derived.by(() => {
+    if (sessionStart === null) return 'CHR–pending';
+    const d = new Date(sessionStart);
+    const yy = d.getUTCFullYear().toString().slice(-2);
+    const mm = (d.getUTCMonth() + 1).toString().padStart(2, '0');
+    const dd = d.getUTCDate().toString().padStart(2, '0');
+    const HH = d.getUTCHours().toString().padStart(2, '0');
+    const MM = d.getUTCMinutes().toString().padStart(2, '0');
+    const seed = (d.getTime() % 4096).toString(16).toUpperCase().padStart(3, '0');
+    return `CHR–${yy}${mm}${dd}–${HH}${MM}–${seed}`;
+  });
+
+  // R.A. / Dec coords — decorative; derived from elapsed time, same convention
+  // as Overview so the two surfaces feel like one instrument.
+  const raCoord = $derived.by(() => {
+    const m = Math.floor(durationMs / 60000) % 24;
+    return `06h ${m.toString().padStart(2, '0')}m`;
+  });
+  const decCoord = $derived.by(() => {
+    const m = Math.floor(durationMs / 60000) % 90;
+    const s = Math.floor((durationMs % 60000) / 1000);
+    return `+${m.toString().padStart(2, '0')}°${s.toString().padStart(2, '0')}′`;
+  });
+
+  // ── Field-level p50/p95 (median across stations) ──────────────────────────
+  function median(values: number[]): number | null {
+    if (values.length === 0) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  }
+  const fieldP50 = $derived.by<number | null>(() => {
+    const vals: number[] = [];
+    for (const ep of monitored.slice(0, 4)) {
+      const v = stats[ep.id]?.p50;
+      if (typeof v === 'number' && Number.isFinite(v)) vals.push(v);
+    }
+    const m = median(vals);
+    return m === null ? null : Math.round(m);
+  });
+  const fieldP95 = $derived.by<number | null>(() => {
+    const vals: number[] = [];
+    for (const ep of monitored.slice(0, 4)) {
+      const v = stats[ep.id]?.p95;
+      if (typeof v === 'number' && Number.isFinite(v)) vals.push(v);
+    }
+    const m = median(vals);
+    return m === null ? null : Math.round(m);
+  });
+
+  // ── Per-station summary cards (4 slots, mapped to A/B/C/D) ────────────────
+  interface StationSummary {
+    readonly id: 'A' | 'B' | 'C' | 'D';
+    readonly endpointId: string;
+    readonly name: string;
+    readonly p50: number | null;
+    readonly p95: number | null;
+    readonly drift: number | null;
+    readonly sigil: 'stable' | 'warn' | 'bad' | 'crit';
+    readonly stateText: string;
+  }
+  const stationSummaries = $derived<readonly StationSummary[]>(
+    monitored.slice(0, 4).map((ep, i) => {
+      const s = stats[ep.id];
+      const m = measurements.endpoints[ep.id];
+      const samples = m?.samples.toArray() ?? [];
+      const ok = samples.filter((sample) => sample.status === 'ok').map((sample) => sample.latency);
+      const drift = ok.length > 1 && s?.ready
+        ? Math.round((Math.max(...ok) - Math.min(...ok)) / 2)
+        : null;
+      const threshold = settings.healthThreshold;
+      let sigil: StationSummary['sigil'] = 'stable';
+      let stateText = 'In transit';
+      if (s?.ready) {
+        if (s.p50 > threshold * 1.5) { sigil = 'crit'; stateText = 'Carrier lost'; }
+        else if (s.p50 > threshold) { sigil = 'bad'; stateText = 'Doppler'; }
+        else if (s.p95 > threshold) { sigil = 'warn'; stateText = 'Wobble'; }
+      } else {
+        stateText = 'Acquiring';
+      }
+      return {
+        id: STATION_IDS[i],
+        endpointId: ep.id,
+        name: ep.label,
+        p50: s?.ready ? Math.round(s.p50) : null,
+        p95: s?.ready ? Math.round(s.p95) : null,
+        drift,
+        sigil,
+        stateText,
+      };
+    }),
+  );
+
+  // ── Observer's notes — narrative beats from runStoryline ──────────────────
+  // The narrative reuses the diagnostic primary answer + supporting summary
+  // (already wired in OverviewView). Beats provide a per-event paragraph.
+  const verdictHeadline = $derived(report.diagnosis.primaryAnswer.text);
+  const verdictBody = $derived(report.diagnosis.supportingSummary);
+
+  // Diagnostic interpretation — second-paragraph context. Mirrors the
+  // OverviewView interpretation copy so the two surfaces speak with one
+  // voice. Each diagnostic kind gets a sentence that says what the headline
+  // means *for the user*, not a restated version of it.
+  const interpretation = $derived.by<string>(() => {
+    switch (report.diagnosis.kind) {
+      case 'collecting':
+        return 'Chronoscope needs a few successful checks before it can compare endpoints responsibly.';
+      case 'healthy':
+        return 'Chronoscope has not seen a meaningful slowdown or failure in this window.';
+      case 'isolated-endpoint':
+        return "That points to either your browser's route to that one endpoint, or the endpoint itself. An outside check can confirm whether the slowness follows the endpoint from other networks.";
+      case 'shared-network':
+        return 'Multiple endpoints slowing in the same window typically points to a shared link between your browser and them — most often local network or upstream ISP.';
+      case 'multiple-slow':
+        return 'Several endpoints over the threshold without a shared slow phase — likely either a shared upstream issue or coincident endpoint-side slowness. An outside check helps separate the two.';
+      case 'packet-loss':
+        return 'Failed requests in the browser can come from the endpoint, the route to it, or a CORS block. An outside check separates these without changing your local network.';
+      case 'jitter':
+        return "Bouncing latency without a clear failure pattern usually points to congestion somewhere on the path. The path's not down — it's noisy.";
+    }
+  });
+
+  // Per-endpoint tone lookup so we can render endpoint names as coloured
+  // chips inside the narrative. The same logic OverviewView ships.
+  interface EndpointToneEntry {
+    readonly label: string;
+    readonly tone: EndpointTone;
+  }
+  const endpointToneEntries = $derived<readonly EndpointToneEntry[]>(
+    monitored.map((ep) => {
+      const state = measurements.endpoints[ep.id];
+      const lastStatus = state?.lastStatus ?? null;
+      return {
+        label: ep.label,
+        tone: deriveEndpointTone({
+          stats: stats[ep.id] ?? null,
+          lastStatus,
+          healthThreshold: settings.healthThreshold,
+        }),
+      };
+    }),
+  );
+
+  // v4-style inline endpoint highlight. Splits prose on monitored endpoint
+  // labels (longest-first to avoid partial-overlap matches) and emits
+  // segments the template renders as styled chips. Returns a single
+  // tone-null segment for empty or label-free text.
+  type LedeSegment = { readonly text: string; readonly tone: EndpointTone | null };
+  function highlightEndpoints(text: string): readonly LedeSegment[] {
+    if (text.length === 0) return [{ text: '', tone: null }];
+    const matchable = endpointToneEntries
+      .filter(({ label }) => label.length >= 2)
+      .slice()
+      .sort((a, b) => b.label.length - a.label.length);
+    if (matchable.length === 0) return [{ text, tone: null }];
+
+    const segments: LedeSegment[] = [];
+    let cursor = 0;
+    while (cursor < text.length) {
+      let best: { label: string; tone: EndpointTone; index: number } | null = null;
+      for (const candidate of matchable) {
+        const index = text.indexOf(candidate.label, cursor);
+        if (index < 0) continue;
+        if (best === null || index < best.index) {
+          best = { label: candidate.label, tone: candidate.tone, index };
+        }
+      }
+      if (best === null) {
+        segments.push({ text: text.slice(cursor), tone: null });
+        break;
+      }
+      if (best.index > cursor) segments.push({ text: text.slice(cursor, best.index), tone: null });
+      segments.push({ text: best.label, tone: best.tone });
+      cursor = best.index + best.label.length;
+    }
+    return segments;
   }
 
-  async function handleCopyLink(): Promise<void> {
+  // Compose the three observer's-notes paragraphs:
+  //   ¶1 around-when / what happened — strong opening + most-significant beat
+  //   ¶2 what other stations did — supporting context (interpretation)
+  //   ¶3 what it means / what to do next — close-out + next-step prompt
+  // Falls back to supportingSummary + interpretation + a generic close when
+  // beats are sparse (e.g. healthy run with nothing to highlight).
+  interface NotesParagraph {
+    readonly opening?: string;     // bold lead-in (¶1 only)
+    readonly text: string;          // remainder of paragraph (run through highlightEndpoints)
+  }
+  const observerParagraphs = $derived.by<readonly NotesParagraph[]>(() => {
+    // Pick the most-significant beat — prefer worst-severity, then most-recent.
+    const severityRank: Record<string, number> = { bad: 3, watch: 2, info: 1, good: 0 };
+    const sortedBeats = [...runStoryline.beats].sort((a, b) => {
+      const rankDiff = (severityRank[b.severity] ?? 0) - (severityRank[a.severity] ?? 0);
+      if (rankDiff !== 0) return rankDiff;
+      return b.t - a.t;
+    });
+    const topBeat = sortedBeats[0] ?? null;
+
+    const stationCount = monitored.length;
+    const acquiredText = stationCount === 1
+      ? 'Session ended with 1 station acquired.'
+      : `Session ended with ${stationCount} stations acquired.`;
+    const nextStepText = ' If issues recur, run an outside transit check to separate your network from the endpoint.';
+
+    // Rich path — we have a beat to lead with.
+    if (topBeat !== null && verdictHeadline.length > 0) {
+      return [
+        { opening: verdictHeadline, text: ` ${topBeat.label}${topBeat.evidence ? ` ${topBeat.evidence}` : ''}` },
+        { text: verdictBody },
+        { text: `${interpretation} ${acquiredText}${nextStepText}` },
+      ];
+    }
+    // Fallback path — no beats worth surfacing.
+    return [
+      { text: verdictBody.length > 0 ? verdictBody : verdictHeadline },
+      { text: interpretation },
+      { text: `${acquiredText}${nextStepText}` },
+    ];
+  });
+
+  // ── Vantage + cadence (record column) ─────────────────────────────────────
+  const cadenceLabel = $derived(`${(settings.monitorDelay / 1000).toFixed(0)} s · synchronized`);
+  const roundsLabel = $derived(`${measurements.roundCounter} / ${settings.cap} cap`);
+  const triggerLabel = $derived(`${settings.healthThreshold} ms`);
+  const carrierLosses = $derived(measurements.errorCount + measurements.timeoutCount);
+
+  // Stations annotation: "N (default set)" when the user hasn't customized
+  // the endpoint set for the current region, otherwise "N (N configured)".
+  // Comparison is set-based on URL + enabled flag — order doesn't matter
+  // because the user can rearrange defaults without "customizing" them.
+  const stationsAnnotation = $derived.by(() => {
+    const monitoredCount = monitored.length;
+    const defaults = buildDefaultEndpoints(settings.region);
+    if (defaults.length !== endpoints.length) {
+      return `${monitoredCount} (${endpoints.length} configured)`;
+    }
+    const defaultKeys = new Set(defaults.map((d) => `${d.url}|${d.enabled}`));
+    const currentKeys = new Set(endpoints.map((e) => `${e.url}|${e.enabled}`));
+    if (defaultKeys.size !== currentKeys.size) {
+      return `${monitoredCount} (${endpoints.length} configured)`;
+    }
+    for (const k of defaultKeys) {
+      if (!currentKeys.has(k)) return `${monitoredCount} (${endpoints.length} configured)`;
+    }
+    return `${monitoredCount} (default set)`;
+  });
+
+  // Region short codes for the Vantage line come from regional-defaults
+  // (REGION_SHORT_CODES). Single source of truth shared with OverviewView so
+  // the v4 prototype's "US-W"/"EU" labelling stays consistent across surfaces.
+
+  const vantageLabel = $derived.by(() => {
+    if (typeof navigator === 'undefined') return 'Browser · — · —';
+    const ua = navigator.userAgent;
+    // Browser name + version. Firefox precedes "Chrome"/"Safari" because its
+    // UA can include "like Gecko" but never the literal Chrome token; Edge
+    // (Chromium) reports both Chrome and Edg/ — we report it as Chrome to
+    // match the v4 prototype's labelling.
+    let browser = 'Browser';
+    if (/Firefox\/(\d+)/.test(ua)) {
+      const v = ua.match(/Firefox\/(\d+)/)?.[1];
+      browser = v ? `Firefox ${v}` : 'Firefox';
+    } else if (/Chrome\/(\d+)/.test(ua)) {
+      const v = ua.match(/Chrome\/(\d+)/)?.[1];
+      browser = v ? `Chrome ${v}` : 'Chrome';
+    } else if (/Version\/(\d+(?:\.\d+)?).*Safari/.test(ua)) {
+      const v = ua.match(/Version\/(\d+(?:\.\d+)?)/)?.[1];
+      browser = v ? `Safari ${v}` : 'Safari';
+    }
+    // OS + version. macOS reports as "Mac OS X 14_5_0" → "macOS 14.5";
+    // Windows reports "Windows NT 10.0" → "Windows 10"; Linux has no
+    // reliable version in the UA so we keep it bare.
+    let os = 'OS';
+    const macMatch = ua.match(/Mac OS X (\d+(?:[._]\d+)?)/);
+    if (macMatch) {
+      os = `macOS ${macMatch[1].replace(/_/g, '.')}`;
+    } else {
+      const winMatch = ua.match(/Windows NT (\d+(?:\.\d+)?)/);
+      if (winMatch) {
+        // Translate NT version to marketing name where unambiguous.
+        const nt = winMatch[1];
+        os = nt === '10.0' ? 'Windows 10' : `Windows NT ${nt}`;
+      } else if (ua.includes('Linux')) {
+        os = 'Linux';
+      }
+    }
+    const region = settings.region ? (REGION_SHORT_CODES[settings.region] ?? settings.region.toUpperCase()) : 'US-W';
+    return `${browser} · ${os} · ${region}`;
+  });
+
+  // ── Scrub rail (purely visual progress indicator for the saved signature) ─
+  // The orbital signature is a static plot of the full session; the scrub
+  // rail communicates "you are looking at the whole recording, end-to-end".
+  // Interactive replay is a Phase D enhancement (see DIRECTION-v4.md); for
+  // now the handle parks at 100% (end of session).
+  let scrubT = $state(1);
+  const scrubRoundLabel = $derived(
+    `${Math.round(scrubT * measurements.roundCounter)} / ${measurements.roundCounter}`,
+  );
+  function onRailClick(e: MouseEvent | TouchEvent): void {
+    const rail = e.currentTarget as HTMLDivElement;
+    if (!rail) return;
+    const rect = rail.getBoundingClientRect();
+    const x = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    scrubT = Math.max(0, Math.min(1, (x - rect.left) / rect.width));
+  }
+  const railMarks = Array.from({ length: 60 }, (_, i) => i);
+
+  // ── Sharing / export hooks (preserved chronoscope behavior) ───────────────
+  // PNG export: capture the OrbitalScene canvas via toDataURL. The scene's
+  // canvas is a child of the .stage container; we query for it on click.
+  // The button is no-op when no scene has mounted (e.g. zero endpoints).
+  let stageEl: HTMLElement | null = null;
+  let copiedLink = $state(false);
+  let copyError = $state<'link' | null>(null);
+
+  function saveImage(): void {
+    if (!stageEl) return;
+    const canvas = stageEl.querySelector<HTMLCanvasElement>('canvas');
+    if (!canvas) return;
+    try {
+      const dataUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `chronoscope-signature-${flightCert.replace(/[^A-Za-z0-9-]/g, '-')}.png`;
+      a.click();
+    } catch {
+      // toDataURL throws if the WebGL context was lost or tainted; the
+      // OrbitalScene shaders are all local so taint shouldn't apply, but a
+      // belt-and-braces catch keeps the report surface from crashing.
+    }
+  }
+
+  function saveCsv(): void {
+    // Header + one row per (round × monitored endpoint). Matches the v4
+    // prototype's CSV layout — round, ISO timestamp, t-offset, endpoint id,
+    // endpoint label, host, latency_ms, severity.
+    const threshold = settings.healthThreshold;
+    const startMs = sessionStart ?? Date.now();
+    const sevName = (v: number, status: string): string => {
+      if (status !== 'ok') return status;
+      if (v >= 4000) return 'crit';
+      if (v > threshold) return 'bad';
+      if (v > threshold * 0.7) return 'warn';
+      return 'stable';
+    };
+    let csv = 'round,timestamp_utc,t_offset_s,endpoint_id,endpoint_label,host,latency_ms,severity\n';
+    for (const ep of monitored) {
+      const host = (() => {
+        try { return new URL(ep.url).host; } catch { return ep.url; }
+      })();
+      const samples = measurements.endpoints[ep.id]?.samples.toArray() ?? [];
+      for (const s of samples) {
+        const offsetS = ((s.timestamp - startMs) / 1000).toFixed(1);
+        const iso = new Date(s.timestamp).toISOString();
+        csv += `${s.round},${iso},${offsetS},${ep.id},"${ep.label.replace(/"/g, '""')}",${host},${s.latency.toFixed(2)},${sevName(s.latency, s.status)}\n`;
+      }
+    }
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chronoscope-session-${flightCert.replace(/[^A-Za-z0-9-]/g, '-')}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // Hosted-report link: re-uses the existing share/hash-router integration.
+  // remoteVantageStore.createHostedReport posts to the Pages Function and
+  // returns a short URL; if that fails (offline / disabled), we fall back to
+  // the long hash URL that hash-router decodes on the receiver side.
+  async function copyLink(): Promise<void> {
     const settingsForReport = {
       ...get(settingsStore),
       healthThreshold: report.threshold,
@@ -125,10 +530,10 @@
       truncated: report.truncated,
     };
     const liveCompanion = get(companionStore);
-    const localCompanion = includeLocalProofInReport && liveCompanion.lastProbe
+    const localCompanion = liveCompanion.lastProbe
       ? sanitizeCompanionProbeForReport(liveCompanion.lastProbe, { includePrivateWifi: false })
       : null;
-    const builtForHostedReport = buildResultsSharePayload(
+    const built = buildResultsSharePayload(
       get(endpointStore),
       settingsForReport,
       get(measurementStore),
@@ -138,8 +543,8 @@
       get(remoteVantageStore).lastProbe,
       localCompanion,
     );
-    const hostedUrl = await remoteVantageStore.createHostedReport(builtForHostedReport.payload);
-    const fallbackPayload = hostedUrl === null
+    const hosted = await remoteVantageStore.createHostedReport(built.payload);
+    const fallback = hosted === null
       ? buildResultsSharePayload(
           get(endpointStore),
           settingsForReport,
@@ -151,1204 +556,865 @@
           localCompanion,
         ).payload
       : null;
-    copyText(hostedUrl ?? buildShareURL(fallbackPayload ?? builtForHostedReport.payload), () => {
-      copiedLink = true;
-    }, () => {
+    const finalUrl = hosted ?? buildShareURL(fallback ?? built.payload);
+    if (!navigator.clipboard) {
       copyError = 'link';
-    });
-  }
-
-  function openInteractive(targetEndpointId = report.diagnosis.verdict.worstEpId): void {
-    // PR 9 of synthesis arc: route through the router so deep links update.
-    // If an endpoint is named (worst-offender or click target), land on
-    // /endpoint/:id; otherwise land on /.
-    uiStore.setSharedReportMode(false);
-    if (targetEndpointId) {
-      navigateTo({ name: 'endpoint', endpointId: targetEndpointId });
-    } else {
-      navigateTo({ name: 'overview', endpointId: null });
+      window.setTimeout(() => { copyError = null; }, 1800);
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(finalUrl);
+      copiedLink = true;
+      copyError = null;
+      window.setTimeout(() => { copiedLink = false; }, 1800);
+    } catch {
+      copyError = 'link';
+      window.setTimeout(() => { copyError = null; }, 1800);
     }
   }
 
-  function handleInteractive(): void {
-    openInteractive();
-  }
-
-  function handleRunOwn(): void {
-    uiStore.clearSharedView();
-    uiStore.setAutoStartSuppressionReason(null);
-    measurementStore.reset();
-  }
-
-  function scrollToBrowserVisibility(): void {
-    browserVisibilityPanel?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    browserVisibilityPanel?.focus({ preventScroll: true });
-  }
-
-  function openFullSettings(): void {
-    if (!get(uiStore).showSettings) uiStore.toggleSettings();
-  }
-
-  function localProofEndpointId(action: DiagnosticTriageAction): string | null {
-    return action.endpointId
-      ?? report.diagnosis.verdict.worstEpId
-      ?? report.endpointRows.find((row) => row.implicated)?.endpointId
-      ?? endpoints.find((endpoint) => endpoint.enabled)?.id
-      ?? endpoints[0]?.id
-      ?? null;
-  }
-
-  function openLocalProofWorkflow(action: DiagnosticTriageAction): void {
-    uiStore.setFocusedEndpoint(localProofEndpointId(action));
-    localProofOpen = true;
-  }
-
-  function openShareWorkflow(): void {
-    if (!get(uiStore).showShare) uiStore.toggleShare();
-  }
-
-  async function handleTriageAction(action: DiagnosticTriageAction): Promise<void> {
-    switch (action.id) {
-      case 'review-browser-visibility':
-        scrollToBrowserVisibility();
-        return;
-      case 'open-investigate':
-        openInteractive(action.endpointId);
-        return;
-      case 'run-remote-check':
-        await remoteVantageStore.runProbe(get(endpointStore));
-        return;
-      case 'run-local-agent':
-        openLocalProofWorkflow(action);
-        return;
-      case 'share-support-report':
-      case 'share-snapshot':
-      case 'compare-another-network':
-        openShareWorkflow();
-        return;
-      case 'collect-more-samples':
-      case 'keep-running':
-        handleRunOwn();
-        return;
+  // ── Keyboard scrubbing (←/→ + Home/End) ───────────────────────────────────
+  function onKeyDown(e: KeyboardEvent): void {
+    const tag = (e.target as HTMLElement | null)?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+    const rounds = Math.max(measurements.roundCounter, 1);
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      scrubT = Math.max(0, scrubT - (e.shiftKey ? 10 : 1) / rounds);
+    } else if (e.key === 'ArrowRight') {
+      e.preventDefault();
+      scrubT = Math.min(1, scrubT + (e.shiftKey ? 10 : 1) / rounds);
+    } else if (e.key === 'Home') {
+      e.preventDefault();
+      scrubT = 0;
+    } else if (e.key === 'End') {
+      e.preventDefault();
+      scrubT = 1;
+    } else if ((e.key === 'p' || e.key === 'P') && !e.metaKey && !e.ctrlKey) {
+      e.preventDefault();
+      saveImage();
+    } else if (e.key === 'e' || e.key === 'E') {
+      e.preventDefault();
+      saveCsv();
     }
   }
-
-  function remoteOutcome(): TriageOutcome {
-    const state = buildProofActionState({
-      kind: 'remote',
-      status: remoteVantage.status,
-      hasProof: Boolean(remoteVantage.lastProbe),
-      hasError: Boolean(remoteVantage.error),
-      isStale: isProofStale({
-        reportCreatedAt: report.createdAt,
-        proofGeneratedAt: remoteVantage.lastProbe?.generatedAt ?? null,
-      }),
-    });
-    if (remoteBusy || !remoteVantage.lastProbe || state.label === 'Stale') return state;
-    return { ...state, tone: summarizeRemoteProof(remoteVantage.lastProbe).tone };
-  }
-
-  function localAgentOutcome(): TriageOutcome {
-    const state = buildProofActionState({
-      kind: 'local',
-      status: companion.status,
-      hasProof: Boolean(companion.lastProbe),
-      hasError: Boolean(companion.error),
-      hasSecret: companion.hasSecret,
-      isStale: isProofStale({
-        reportCreatedAt: report.createdAt,
-        proofGeneratedAt: companion.lastProbe?.createdAt ?? null,
-      }),
-    });
-    if (companionBusy || !companion.lastProbe) {
-      if (companion.status === 'connected') return { label: 'Ready', tone: 'neutral' };
-      return state;
-    }
-    if (state.label === 'Stale') return state;
-    return { ...state, tone: summarizeLocalProof(companion.lastProbe).tone };
-  }
-
-  function triageOutcome(action: DiagnosticTriageAction): TriageOutcome {
-    switch (action.id) {
-      case 'review-browser-visibility':
-        return { label: report.diagnosis.timingVisibility.level === 'phase' ? 'Detailed' : 'Review', tone: 'neutral' };
-      case 'open-investigate':
-        return { label: action.endpointId ? 'Ready' : 'No target', tone: action.endpointId ? 'good' : 'watch' };
-      case 'run-remote-check':
-        return remoteOutcome();
-      case 'run-local-agent':
-        return localAgentOutcome();
-      case 'share-support-report':
-      case 'share-snapshot':
-        if (copiedLink) return { label: 'Link copied', tone: 'good' };
-        if (copyError === 'link') return { label: 'Copy failed', tone: 'watch' };
-        return { label: 'Share', tone: 'neutral' };
-      case 'compare-another-network':
-        return { label: 'Share config', tone: 'neutral' };
-      case 'collect-more-samples':
-      case 'keep-running':
-        return { label: 'Run locally', tone: 'neutral' };
-    }
-  }
+  onMount(() => {
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
 </script>
 
-<section
-  class="report report-surface"
-  aria-label="Diagnostic report"
-  style:--accent-cyan={tokens.color.accent.cyan}
-  style:--accent-green={tokens.color.accent.green}
-  style:--accent-amber={tokens.color.accent.amber}
-  style:--accent-pink={tokens.color.accent.pink}
->
-  <header class="report-hero" data-report-kind={report.reportKind}>
-    <div class="report-hero-grid">
-      <div class="report-copy">
-        <div class="report-kicker">{report.modeKicker}</div>
-        <div class="report-title-row">
-          <h1>{report.diagnosis.primaryAnswer.text}</h1>
-          <span
-            class="confidence"
-            class:low={report.diagnosis.confidence === 'low'}
-            class:medium={report.diagnosis.confidence === 'medium'}
-            class:high={report.diagnosis.confidence === 'high'}
-            title={report.diagnosis.confidenceReason}
-          >{report.diagnosis.confidenceLabel}</span>
-        </div>
-        <p class="report-lede">{report.modeLede}</p>
+<section class="report-surface" aria-label="Diagnostic report — completed session signature">
+  <!-- HERO STAGE — orbital signature + HUD readouts + scrub rail -->
+  <section class="stage" bind:this={stageEl}>
+    <div class="stage-scene" aria-hidden={stations.length === 0 ? 'true' : null}>
+      {#if stations.length > 0}
+        <OrbitalScene
+          {stations}
+          {stationData}
+          triggerMs={settings.healthThreshold}
+          windowSeconds={WINDOW}
+          windowRounds={WINDOW}
+          assemble={true}
+          revealProgress={scrubT}
+          showTooltip={false}
+        />
+      {/if}
+    </div>
+    <div class="vignette" aria-hidden="true"></div>
 
-        <div class="report-actions" aria-label="Report actions">
-          <button type="button" class="action action-primary" onclick={handleInteractive}>
-            Open Interactive Analysis
-          </button>
-          <button type="button" class="action" onclick={handleCopySummary}>
-            {copyError === 'summary' ? 'Copy Failed' : copiedSummary ? 'Summary Copied' : report.copySummaryLabel}
-          </button>
-          <button type="button" class="action" onclick={handleCopyLink}>
-            {copyError === 'link' ? 'Copy Failed' : copiedLink ? 'Link Copied' : 'Copy Report Link'}
-          </button>
-          <button type="button" class="action" onclick={handleRunOwn}>
-            Run Your Own Test
-          </button>
-        </div>
-
-        {#if localProofExportAvailable}
-          <label class="local-proof-export">
-            <input type="checkbox" bind:checked={includeLocalProofInReport} />
-            <span>
-              <strong>Include redacted local proof</strong>
-              <small>Shares local-agent status only. WiFi names and raw route details stay out.</small>
-            </span>
-          </label>
-        {/if}
+    <div class="hud-top">
+      <div class="coords">
+        <span>Session<span class="v">{flightCert}</span></span>
+        <span>Duration<span class="v">{durationLabel}</span></span>
+        <span>Rounds<span class="v">{measurements.roundCounter}</span></span>
+        <span>R.A.<span class="v">{raCoord}</span></span>
+        <span>Dec<span class="v">{decCoord}</span></span>
       </div>
+    </div>
 
-      <aside class="report-fact-card" aria-label="Report evidence summary">
-        <span>Measured facts</span>
-        <strong>{report.keptSampleCount} samples</strong>
-        <p>{report.endpointRows.length} endpoints, {report.roundCount} rounds, threshold {Math.round(report.threshold)} ms.</p>
-        <div class="fact-card-divider"></div>
-        <span>Browser visibility</span>
-        <p>{report.diagnosis.timingVisibility.headline}</p>
-      </aside>
-    </div>
-  </header>
-
-  <section class="report-strip" aria-label="Report metadata">
-    <div>
-      <span class="metric-label">Created</span>
-      <strong>{report.createdLabel}</strong>
-    </div>
-    <div>
-      <span class="metric-label">Threshold</span>
-      <strong>{Math.round(report.threshold)} ms</strong>
-      <span class="metric-note">{report.thresholdSource === 'shared' ? 'from sender' : 'local default'}</span>
-    </div>
-    <div>
-      <span class="metric-label">Samples</span>
-      <strong>{report.keptSampleCount}</strong>
-      <span class="metric-note">{report.truncated ? `trimmed from ${report.totalSampleCount}` : `${report.roundCount} rounds`}</span>
-    </div>
-    <div>
-      <span class="metric-label">Timing mode</span>
-      <strong>{report.corsMode}</strong>
-      <span class="metric-note">{report.corsModeSource === 'shared' ? 'from sender' : report.corsModeSource === 'payload-settings' ? 'legacy link' : 'local default'}</span>
-    </div>
-  </section>
-
-  <section class="evidence-trail" aria-label="Evidence trail">
-    <div class="section-kicker">Evidence trail</div>
-    <div class="trail-list">
-      {#each evidenceTrail as item (item.id)}
-        <article class="trail-item" class:good={item.tone === 'good'} class:watch={item.tone === 'watch'} class:bad={item.tone === 'bad'}>
-          <div class="trail-source">{item.source}</div>
-          <p>{item.fact}</p>
-          <span>{item.status}</span>
-        </article>
-      {/each}
-    </div>
-  </section>
-
-  <section class="report-panel timeline-panel" aria-label="Timeline summary">
-    <div class="section-kicker">Timeline summary</div>
-    <h2>{report.timelineSummary}</h2>
-    {#if report.timelineEvents.length > 0}
-      <div class="timeline-events">
-        {#each report.timelineEvents as event (event.id)}
-          <article
-            class="timeline-event"
-            class:good={event.severity === 'good'}
-            class:watch={event.severity === 'watch'}
-            class:bad={event.severity === 'bad'}
-          >
-            <span>{event.timeLabel}</span>
-            <strong>{event.label}</strong>
-            <p>{event.detail}</p>
-          </article>
-        {/each}
+    <div class="hud-title">
+      <div class="kicker">Field recording &nbsp;·&nbsp; <span class="v">{flightCert}</span></div>
+      <h1>{verdictHeadline}</h1>
+      <p class="body">{verdictBody}</p>
+      <div class="actions">
+        <button type="button" class="ctl-btn ctl-btn--primary" onclick={copyLink}>
+          {copyError === 'link' ? 'Copy failed' : copiedLink ? 'Link copied' : 'Copy link'}
+        </button>
+        <button type="button" class="ctl-btn" onclick={saveImage}>Save as image</button>
       </div>
-    {:else}
-      <p>No distinct event marker appeared in the captured window. Keep the run active if you need a stronger before-and-after timeline.</p>
-    {/if}
-  </section>
-
-  <section class="next-steps" aria-label="Recommended next steps">
-    <div class="section-kicker">What to try next</div>
-    <div class="triage-grid">
-      {#each report.diagnosis.triageActions as action, i (action.id)}
-        {@const outcome = triageOutcome(action)}
-        <article class="triage-card">
-          <div class="triage-index">{i + 1}</div>
-          <div class="triage-body">
-            <div class="triage-head">
-              <h2>{action.label}</h2>
-              <span class="triage-status" class:good={outcome.tone === 'good'} class:watch={outcome.tone === 'watch'} class:bad={outcome.tone === 'bad'}>{outcome.label}</span>
-            </div>
-            <p class="triage-action">{action.action}</p>
-            <p>{action.why}</p>
-            <p class="triage-watch"><strong>Watch for:</strong> {action.watchFor}</p>
-            <button
-              type="button"
-              class="triage-button"
-              disabled={outcome.disabled}
-              aria-disabled={outcome.disabled}
-              onclick={() => handleTriageAction(action)}
-            >{action.label}</button>
-          </div>
-        </article>
-      {/each}
     </div>
-  </section>
 
-  {#if localProofOpen}
-    <LocalProofPanel onOpenSettings={openFullSettings} onClose={() => { localProofOpen = false; }} />
-  {/if}
-
-  <div class="report-grid">
-    <section class="report-panel verdict-panel" aria-label="Verdict evidence">
-      <div class="section-kicker">Verdict evidence</div>
-      <div class="evidence-grid">
-        {#each report.diagnosis.evidence as item (item.label)}
-          <div class="evidence-item">
-            <span>{item.label}</span>
-            <strong>{item.value}</strong>
-            {#if item.detail}
-              <small>{item.detail}</small>
-            {/if}
-          </div>
-        {/each}
+    <div class="hud-stats">
+      <div class="label">Field p50</div>
+      <div class="num">
+        {#if fieldP50 === null}<span class="awaiting">—</span>{:else}{fieldP50}<span class="u">ms</span>{/if}
       </div>
-    </section>
+      <div class="row">
+        <span>p95<span class="v">{fieldP95 === null ? '—' : `${fieldP95} ms`}</span></span>
+        <span>Trigger<span class="v">{triggerLabel}</span></span>
+      </div>
+    </div>
 
-    <section
-      class="report-panel"
-      aria-label="Browser visibility"
-      bind:this={browserVisibilityPanel}
-      tabindex="-1"
+    <div
+      class="scrub"
+      role="slider"
+      aria-label="Scrub through session"
+      aria-valuemin="0"
+      aria-valuemax={measurements.roundCounter}
+      aria-valuenow={Math.round(scrubT * measurements.roundCounter)}
+      tabindex="0"
     >
-      <div class="section-kicker">Browser visibility</div>
-      <h2>{report.diagnosis.timingVisibility.headline}</h2>
-      <p>{report.diagnosis.timingVisibility.detail}</p>
-      {#if report.diagnosis.timingVisibility.action}
-        <p class="guidance">{report.diagnosis.timingVisibility.action}</p>
-      {/if}
-      {#if additionalLimitations.length > 0}
-        <div class="limitations">
-          {#each additionalLimitations as limit (limit.id)}
-            <div class="limitation">
-              <strong>{limit.headline}</strong>
-              <span>{limit.detail}</span>
-              {#if limit.action}
-                <small>{limit.action}</small>
-              {/if}
-            </div>
+      <span class="lbl">Replay</span>
+      <div
+        class="rail"
+        onmousedown={onRailClick}
+        ontouchstart={onRailClick}
+        role="presentation"
+      >
+        <div class="rail-bg"></div>
+        <div class="rail-fill" style:width="{scrubT * 100}%"></div>
+        <div class="marks">
+          {#each railMarks as i (i)}
+            <span class="m"></span>
           {/each}
         </div>
-      {/if}
-    </section>
-
-    <section class="report-panel baseline-panel" aria-label="Baseline context">
-      <div class="section-kicker">Baseline context</div>
-      <h2>{baselineInsight.headline}</h2>
-      <p>{baselineInsight.detail}</p>
-      <p class="privacy-note">{baselineInsight.privacyNote}</p>
-      {#if baselineRows.length > 0}
-        <div class="baseline-list">
-          {#each baselineRows as comparison (comparison.endpointId)}
-            <div
-              class="baseline-row"
-              class:hot={comparison.status === 'elevated' || comparison.status === 'severe'}
-            >
-              <strong>{comparison.label}</strong>
-              <span>{comparison.summary}</span>
-              <small>{comparison.priorSessionCount} prior local {comparison.priorSessionCount === 1 ? 'run' : 'runs'}</small>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </section>
-
-    <section class="report-panel remote-panel" aria-label="Remote vantage">
-      <div class="section-kicker">Remote vantage</div>
-      {#if remoteVantage.lastProbe}
-        <h2>{remoteVantage.lastProbe.edge.colo ?? 'Cloudflare edge'} outside check</h2>
-        <p>{remoteVantage.lastProbe.edge.city || remoteVantage.lastProbe.edge.country
-          ? [remoteVantage.lastProbe.edge.city, remoteVantage.lastProbe.edge.country].filter(Boolean).join(' · ')
-          : 'Cloudflare checked these endpoints from outside the browser network.'}</p>
-        <div class="remote-list">
-          {#each remoteVantage.lastProbe.results.slice(0, 4) as result (result.endpointId)}
-            <div class="remote-row" class:hot={result.verdict === 'slow' || result.verdict === 'http-error' || result.verdict === 'unreachable'}>
-              <strong>{result.label}</strong>
-              <span>{result.status ?? 'failed'} · {Math.round(result.durationMs)} ms</span>
-              <small>{result.verdict}</small>
-            </div>
-          {/each}
-        </div>
-      {:else}
-        <h2>Outside vantage not captured</h2>
-        <p>Run a remote check in Investigate before sharing when you need evidence from beyond the local browser path.</p>
-      {/if}
-    </section>
-  </div>
-
-  <section class="report-panel endpoint-panel" aria-label="Endpoint comparison">
-    <div class="section-kicker">Endpoint comparison</div>
-    <div class="endpoint-cards" role="region" aria-label="Compact endpoint comparison">
-      {#each report.endpointRows as row (row.endpointId)}
-        <article class="endpoint-card" class:implicated={row.implicated}>
-          <header>
-            <span class="endpoint-name compact">
-              <i style:background={row.color || tokens.color.endpoint[0]} aria-hidden="true"></i>
-              <span>
-                <strong>{row.label}</strong>
-                <small>{row.url}</small>
-              </span>
-            </span>
-            <span class="status-pill" class:ok={row.status === 'ok'} class:slow={row.status === 'slow'} class:loss={row.status === 'loss'} class:muted={row.status === 'unready' || row.status === 'disabled'}>
-              {row.statusLabel}
-            </span>
-          </header>
-          <div class="endpoint-card-metrics">
-            <span>
-              <small>Median</small>
-              <strong>{formatReportMetric(row.p50)}</strong>
-            </span>
-            <span>
-              <small>95% under</small>
-              <strong>{formatReportMetric(row.p95)}</strong>
-            </span>
-            <span>
-              <small>Failed</small>
-              <strong>{formatReportMetric(row.lossPercent, '%')}</strong>
-            </span>
-            <span>
-              <small>Success</small>
-              <strong>{row.okCount}/{row.sampleCount}</strong>
-            </span>
-          </div>
-        </article>
-      {/each}
-    </div>
-    <div class="endpoint-table" role="table" aria-label="Endpoint report table">
-      <div class="endpoint-head" role="row">
-        <span role="columnheader">Endpoint</span>
-        <span role="columnheader">Status</span>
-        <span role="columnheader">Median</span>
-        <span role="columnheader">95% under</span>
-        <span role="columnheader">Loss</span>
-        <span role="columnheader">Samples</span>
+        <div class="handle" style:left="{scrubT * 100}%"></div>
       </div>
-      {#each report.endpointRows as row (row.endpointId)}
-        <div class="endpoint-row" role="row" class:implicated={row.implicated}>
-          <span class="endpoint-name" role="cell">
-            <i style:background={row.color || tokens.color.endpoint[0]} aria-hidden="true"></i>
-            <span>
-              <strong>{row.label}</strong>
-              <small>{row.url}</small>
-            </span>
-          </span>
-          <span role="cell" class="status-pill" class:ok={row.status === 'ok'} class:slow={row.status === 'slow'} class:loss={row.status === 'loss'} class:muted={row.status === 'unready' || row.status === 'disabled'}>
-            {row.statusLabel}
-          </span>
-          <span role="cell">{formatReportMetric(row.p50)}</span>
-          <span role="cell">{formatReportMetric(row.p95)}</span>
-          <span role="cell">{formatReportMetric(row.lossPercent, '%')}</span>
-          <span role="cell">{row.okCount}/{row.sampleCount}</span>
-        </div>
-      {/each}
+      <span class="scrub-read">Round<span class="v">{scrubRoundLabel}</span></span>
     </div>
   </section>
 
+  <!-- BELOW — per-station summary + session record + observer's notes -->
+  <section class="below">
+    <div class="summary-head">
+      <span class="l">Per-station summary</span>
+      <span class="r">
+        <span>Window<span class="v">{durationLabel}</span></span>
+        <span>Cadence<span class="v">{(settings.monitorDelay / 1000).toFixed(0)} s</span></span>
+      </span>
+    </div>
+
+    <div class="stations-grid">
+      {#each stationSummaries as row (row.endpointId)}
+        <div class="station-card" data-ep={row.id}>
+          <div class="vh">
+            <span class="mk"></span>
+            <span class="name">{row.name}</span>
+            <span class="state" data-s={row.sigil}>{row.stateText}</span>
+          </div>
+          <div class="stats">
+            <div class="stat">
+              <div class="k">p50</div>
+              <div class="v">
+                {#if row.p50 === null}—{:else}{row.p50}<span class="u">ms</span>{/if}
+              </div>
+            </div>
+            <div class="stat">
+              <div class="k">p95</div>
+              <div class="v">
+                {#if row.p95 === null}—{:else}{row.p95}<span class="u">ms</span>{/if}
+              </div>
+            </div>
+            <div class="stat">
+              <div class="k">drift</div>
+              <div class="v">
+                {#if row.drift === null}—{:else}±{row.drift}<span class="u">ms</span>{/if}
+              </div>
+            </div>
+          </div>
+        </div>
+      {/each}
+    </div>
+
+    <div class="record-row">
+      <div>
+        <h3>Session record</h3>
+        <div class="row"><span class="k">Session ID</span><span class="v">{flightCert}</span></div>
+        <div class="row"><span class="k">Started</span><span class="v">{utcTimeLabel(sessionStart)} · {utcDateLabel(sessionStart)}</span></div>
+        <div class="row"><span class="k">Ended</span><span class="v">{utcTimeLabel(measurements.stoppedAt)}</span></div>
+        <div class="row"><span class="k">Duration</span><span class="v">{durationLong}</span></div>
+        <div class="row"><span class="k">Rounds</span><span class="v">{roundsLabel}</span></div>
+        <div class="row"><span class="k">Cadence</span><span class="v">{cadenceLabel}</span></div>
+        <div class="row"><span class="k">Vantage</span><span class="v">{vantageLabel}</span></div>
+        <div class="row"><span class="k">Stations</span><span class="v">{stationsAnnotation}</span></div>
+        <div class="row"><span class="k">Trigger</span><span class="v">{triggerLabel}</span></div>
+        <div class="row"><span class="k">Carrier losses</span><span class="v">{carrierLosses}</span></div>
+        <div class="row"><span class="k">Recorded by</span><span class="v">Chronoscope · browser-resident</span></div>
+      </div>
+
+      <div>
+        <h3>Observer's notes</h3>
+        {#each observerParagraphs as para, i (i)}
+          <p class="narrative">
+            {#if para.opening}<strong>{para.opening}</strong>{/if}
+            {#each highlightEndpoints(para.text) as segment, j (j)}{#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}{/each}
+          </p>
+        {/each}
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div>Cert<span class="v">{flightCert}</span></div>
+    <div class="center">Browser-resident observatory · session ended · no telemetry leaves this device</div>
+    <div class="right">Recording paused at <span class="v">{utcTimeLabel(measurements.stoppedAt)}</span></div>
+  </footer>
 </section>
 
 <style>
-  .report {
-    width: 100%;
-    max-width: min(1320px, calc(100vw - 32px));
-    margin: 0 auto;
-    padding: clamp(24px, 4vw, 48px) 0 44px;
-    color: var(--t1);
+  /* ── Surface ───────────────────────────────────────────────────────────── */
+  .report-surface {
+    color: var(--fg);
     font-family: var(--sans);
-  }
-
-  .report-hero {
-    position: relative;
-    overflow: hidden;
-    border: 1px solid var(--shell-border);
-    /* v2 alignment: 24 px radius, flat panel surface, soft shadow. Drops
-       the cyan radial-gradient that previously singled this surface out
-       and the cyan underline accent below the hero. */
-    border-radius: 24px;
-    background: var(--shell-panel);
-    box-shadow: 0 25px 50px -12px color-mix(in srgb, black 35%, transparent);
-  }
-  .report-hero-grid {
-    position: relative;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(260px, 340px);
-    gap: 24px;
-    padding: clamp(22px, 3vw, 34px);
-  }
-  .report-copy {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-  }
-
-  .report-kicker,
-  .section-kicker,
-  .metric-label,
-  .metric-note {
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    color: var(--t3);
-    letter-spacing: var(--tr-label);
-    text-transform: uppercase;
-  }
-
-  .report-title-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    flex-wrap: wrap;
-  }
-
-  h1 {
-    margin: 0;
-    max-width: 820px;
-    font-size: clamp(32px, 4.1vw, 52px);
-    line-height: 1.06;
-    letter-spacing: 0;
-  }
-
-  h2 {
-    margin: 8px 0 0;
-    font-size: var(--ts-xl);
-    letter-spacing: 0;
-  }
-
-  .report-lede {
-    margin: 0;
-    max-width: 820px;
-    color: var(--t2);
-    font-size: var(--ts-lg);
+    font-size: 13px;
     line-height: 1.55;
   }
 
-  .report-fact-card {
-    align-self: stretch;
-    min-width: 0;
+  /* ── Stage (orbital signature canvas) ──────────────────────────────────── */
+  /* Stage spans the viewport area below the masthead. min-height: 600px
+     gives a floor for very-short viewports without overshooting the bottom
+     of the visible area at typical desktop heights (~700-720px). v4 uses
+     min-height: 720px because its masthead is position: sticky and floats
+     over the stage from y=0; dev's masthead is a normal-flow Layout sibling
+     so the stage starts at y=61, and 720px would push the bottom HUD chrome
+     (replay scrub rail) 74px below the fold at 707px viewport. */
+  .stage {
+    position: relative;
+    height: calc(100vh - var(--topbar-height, 60px));
+    min-height: 600px;
+    background: var(--bg);
+    overflow: hidden;
+  }
+  .stage-scene {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .vignette {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    background: radial-gradient(
+      ellipse at center,
+      transparent 30%,
+      color-mix(in srgb, var(--bg) 55%, transparent) 70%,
+      color-mix(in srgb, var(--bg) 95%, transparent) 100%
+    );
+  }
+
+  /* HUD coords pill — top of hero */
+  .hud-top {
+    position: absolute;
+    top: 18px;
+    left: 0;
+    right: 0;
+    z-index: 4;
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 16px;
-    border: 1px solid var(--shell-border);
-    border-radius: 14px;
-    background: rgba(7,11,18,.62);
+    justify-content: center;
+    pointer-events: none;
   }
-  .report-fact-card span {
+  .hud-top .coords {
+    display: inline-flex;
+    gap: 26px;
+    flex-wrap: wrap;
     font-family: var(--mono);
-    font-size: var(--ts-xs);
-    color: var(--t3);
+    font-size: 10px;
+    letter-spacing: 0.16em;
     text-transform: uppercase;
-    letter-spacing: var(--tr-label);
+    color: var(--fg-3);
+    padding: 8px 18px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 55%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
-  .report-fact-card strong {
-    font-size: 30px;
-    line-height: 1;
-    color: var(--t1);
+  .hud-top .coords > span { white-space: nowrap; }
+  .hud-top .coords .v {
+    color: var(--fg);
+    font-weight: 700;
+    margin-left: 8px;
     font-variant-numeric: tabular-nums;
   }
-  .report-fact-card p {
-    margin: 0;
-    color: var(--t2);
-    line-height: 1.45;
-  }
-  .fact-card-divider {
-    height: 1px;
-    margin: 4px 0;
-    background: rgba(255,255,255,.08);
-  }
 
-  .confidence,
-  .status-pill {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 28px;
-    padding: 0 10px;
-    border-radius: 999px;
+  /* HUD title — left side, vertically centered */
+  .hud-title {
+    position: absolute;
+    left: clamp(20px, 3vw, 48px);
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 4;
+    max-width: min(720px, 50vw);
+    pointer-events: none;
+  }
+  .hud-title .kicker {
     font-family: var(--mono);
-    font-size: var(--ts-xs);
+    font-size: 10px;
+    letter-spacing: 0.32em;
     text-transform: uppercase;
-    white-space: nowrap;
+    color: var(--fg-3);
+    margin-bottom: 20px;
   }
-  .confidence.low { color: var(--accent-amber); border: 1px solid rgba(251,191,36,.34); background: rgba(251,191,36,.08); }
-  .confidence.medium { color: var(--accent-cyan); border: 1px solid rgba(103,232,249,.32); background: rgba(103,232,249,.08); }
-  .confidence.high { color: var(--accent-green); border: 1px solid rgba(74,222,128,.34); background: rgba(74,222,128,.08); }
-
-  .report-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-  }
-
-  .action {
-    min-height: 44px;
-    border-radius: 8px;
-    border: 1px solid var(--shell-border);
-    background: rgba(255,255,255,.025);
-    color: var(--t2);
-    padding: 0 13px;
+  .hud-title .kicker .v { color: var(--fg); font-weight: 700; }
+  .hud-title h1 {
     font-family: var(--sans);
-    font-size: var(--ts-sm);
-    cursor: pointer;
+    font-weight: 200;
+    font-size: clamp(40px, 4.8vw, 72px);
+    letter-spacing: -0.025em;
+    line-height: 1;
+    color: var(--fg);
+    margin: 0 0 22px;
+    text-shadow: 0 0 50px color-mix(in srgb, var(--fg) 10%, transparent);
   }
-  .action:hover {
-    color: var(--t1);
-    border-color: var(--shell-border-strong);
+  .hud-title .body {
+    font-size: 15px;
+    color: var(--fg-2);
+    line-height: 1.5;
+    margin: 0 0 28px;
+    max-width: 42ch;
   }
-  .action-primary {
-    color: var(--accent-cyan);
-    border-color: rgba(103,232,249,.35);
-    background: rgba(103,232,249,.08);
-  }
-
-  .local-proof-export {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: start;
-    gap: 10px;
-    max-width: 620px;
-    padding: 10px 12px;
-    border: 1px solid rgba(134,239,172,.22);
-    border-radius: 8px;
-    background: rgba(134,239,172,.055);
-    color: var(--t2);
-    font-size: var(--ts-sm);
-  }
-  .local-proof-export input {
-    margin-top: 2px;
-    accent-color: var(--accent-green);
-  }
-  .local-proof-export span {
+  .hud-title .actions {
     display: flex;
-    min-width: 0;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .local-proof-export strong {
-    color: var(--t1);
-    font-size: var(--ts-sm);
-    font-weight: 600;
-  }
-  .local-proof-export small {
-    color: var(--t3);
-    font-size: var(--ts-xs);
-    line-height: 1.45;
+    gap: 12px;
+    flex-wrap: wrap;
+    pointer-events: auto;
   }
 
-  .report-strip {
+  /* HUD stats — right side, bottom-anchored */
+  .hud-stats {
+    position: absolute;
+    right: clamp(20px, 3vw, 48px);
+    bottom: 88px;
+    z-index: 4;
+    text-align: right;
+    pointer-events: none;
+  }
+  .hud-stats .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    margin-bottom: 6px;
+  }
+  .hud-stats .num {
+    font-family: var(--sans);
+    font-weight: 200;
+    font-size: clamp(48px, 6vw, 84px);
+    letter-spacing: -0.04em;
+    color: var(--fg);
+    line-height: 0.85;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 30px color-mix(in srgb, var(--fg) 10%, transparent);
+  }
+  .hud-stats .num .u {
+    font-family: var(--mono);
+    font-size: 0.32em;
+    color: var(--fg-3);
+    margin-left: 6px;
+    letter-spacing: 0.05em;
+    vertical-align: 0.8em;
+    text-shadow: none;
+  }
+  .hud-stats .num .awaiting { color: var(--fg-3); }
+  .hud-stats .row {
+    margin-top: 14px;
+    display: flex;
+    gap: 24px;
+    justify-content: flex-end;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--fg-3);
+  }
+  .hud-stats .row .v {
+    color: var(--fg);
+    font-weight: 700;
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Buttons */
+  .ctl-btn {
+    border: 1px solid var(--rule-strong);
+    padding: 7px 12px;
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    transition: background 120ms, border-color 120ms;
+    cursor: pointer;
+    background: transparent;
+  }
+  .ctl-btn:hover {
+    background: var(--bg-2);
+    border-color: var(--fg-3);
+  }
+  .ctl-btn:focus-visible {
+    outline: 2px solid var(--station-b);
+    outline-offset: 2px;
+  }
+  .ctl-btn--primary {
+    color: var(--bg);
+    background: var(--fg);
+    border-color: var(--fg);
+  }
+  .ctl-btn--primary:hover {
+    background: var(--station-a);
+    border-color: var(--station-a);
+  }
+
+  /* Scrub rail — bottom edge */
+  .scrub {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 4;
+    padding: 14px clamp(20px, 3vw, 48px) 16px;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    border-top: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 55%, transparent);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .scrub:focus-visible {
+    outline: 2px solid var(--station-b);
+    outline-offset: -2px;
+  }
+  .scrub .lbl {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    min-width: 90px;
+  }
+  .scrub .rail {
+    flex: 1;
+    position: relative;
+    height: 28px;
+    cursor: ew-resize;
+  }
+  .scrub .rail-bg {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 50%;
+    height: 1px;
+    background: var(--rule-strong);
+    transform: translateY(-0.5px);
+  }
+  .scrub .rail-fill {
+    position: absolute;
+    left: 0;
+    top: 50%;
+    height: 1px;
+    background: var(--fg);
+    box-shadow: 0 0 10px var(--fg);
+    transform: translateY(-0.5px);
+  }
+  .scrub .marks {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    pointer-events: none;
+  }
+  .scrub .marks .m {
+    width: 1px;
+    height: 6px;
+    background: var(--rule-strong);
+  }
+  .scrub .marks .m:nth-child(8n + 1) {
+    height: 10px;
+    background: var(--fg-3);
+  }
+  .scrub .handle {
+    position: absolute;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 2px;
+    height: 18px;
+    background: var(--fg);
+    box-shadow: 0 0 12px var(--fg);
+    pointer-events: none;
+  }
+  .scrub .scrub-read {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    min-width: 90px;
+    text-align: right;
+  }
+  .scrub .scrub-read .v {
+    color: var(--fg);
+    font-weight: 700;
+    margin-left: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* ── BELOW: per-station summary + record + notes ───────────────────────── */
+  .below {
+    padding: 80px clamp(20px, 3vw, 48px) 96px;
+    border-top: 1px solid var(--rule);
+    background: linear-gradient(180deg, color-mix(in srgb, var(--bg) 92%, transparent) 0%, var(--bg) 24%);
+    position: relative;
+  }
+
+  .summary-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 24px;
+    padding-bottom: 18px;
+    margin-bottom: 24px;
+    border-bottom: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    flex-wrap: wrap;
+  }
+  .summary-head .l { color: var(--fg); font-weight: 700; }
+  .summary-head .r {
+    display: inline-flex;
+    gap: 22px;
+    flex-wrap: wrap;
+  }
+  .summary-head .r .v {
+    color: var(--fg);
+    margin-left: 6px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .stations-grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 1px;
-    margin: 18px 0;
-    border: 1px solid var(--shell-border);
-    border-radius: 14px;
-    overflow: hidden;
-    background: var(--shell-border);
+    background: var(--rule);
+    border: 1px solid var(--rule);
   }
-  .report-strip > div {
-    min-width: 0;
-    padding: 13px 14px;
-    background: var(--shell-panel);
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+  .station-card {
+    background: var(--bg);
+    padding: 22px 24px 24px;
   }
-  .report-strip strong {
-    font-size: var(--ts-lg);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .evidence-trail {
-    margin-bottom: 18px;
-    border: 1px solid var(--shell-border);
-    border-radius: 14px;
-    background: color-mix(in srgb, black 40%, transparent);
-    padding: 14px;
-  }
-
-  .timeline-panel {
-    margin-bottom: 18px;
-  }
-  .timeline-events {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 12px;
-  }
-  .timeline-event {
-    min-width: 0;
-    padding: 12px;
-    border: 1px solid rgba(255,255,255,.07);
-    border-radius: 7px;
-    background: rgba(255,255,255,.035);
-  }
-  .timeline-event.good {
-    border-color: rgba(74,222,128,.2);
-    background: rgba(74,222,128,.055);
-  }
-  .timeline-event.watch {
-    border-color: rgba(251,191,36,.2);
-    background: rgba(251,191,36,.055);
-  }
-  .timeline-event.bad {
-    border-color: rgba(249,168,212,.22);
-    background: rgba(249,168,212,.065);
-  }
-  .timeline-event span {
-    color: var(--t3);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    text-transform: uppercase;
-  }
-  .timeline-event strong {
-    display: block;
-    margin-top: 6px;
-    color: var(--t1);
-    font-size: var(--ts-base);
-  }
-  .timeline-event p {
-    margin: 6px 0 0;
-    color: var(--t3);
-    font-size: var(--ts-sm);
-    line-height: 1.4;
-  }
-  .trail-list {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 10px;
-  }
-  .trail-item {
-    min-width: 0;
-    display: grid;
-    grid-template-rows: auto minmax(42px, auto) auto;
-    gap: 6px;
-    padding: 10px;
-    border: 1px solid rgba(255,255,255,.07);
-    border-radius: 7px;
-    background: rgba(255,255,255,.03);
-  }
-  .trail-item.good {
-    border-color: rgba(74,222,128,.18);
-    background: rgba(74,222,128,.045);
-  }
-  .trail-item.watch {
-    border-color: rgba(251,191,36,.18);
-    background: rgba(251,191,36,.045);
-  }
-  .trail-item.bad {
-    border-color: rgba(249,168,212,.2);
-    background: rgba(249,168,212,.05);
-  }
-  .trail-source {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--t3);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    text-transform: uppercase;
-  }
-  .trail-item p {
-    margin: 0;
-    color: var(--t2);
-    font-size: var(--ts-sm);
-    line-height: 1.35;
-  }
-  .trail-item span {
-    justify-self: start;
-    padding: 3px 7px;
-    border: 1px solid rgba(255,255,255,.1);
-    border-radius: 999px;
-    color: var(--t3);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    white-space: nowrap;
-  }
-
-  .report-grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 18px;
-    margin-bottom: 18px;
-  }
-
-  .report-panel,
-  .next-steps {
-    border: 1px solid var(--shell-border);
-    border-radius: 14px;
-    background: rgba(8, 14, 24, 0.62);
-    padding: 16px;
-  }
-  .next-steps {
-    margin-bottom: 18px;
-  }
-
-  .evidence-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 12px;
-  }
-  .evidence-item {
-    min-width: 0;
-    padding: 11px;
-    border-radius: 7px;
-    background: rgba(255,255,255,.035);
-    border: 1px solid rgba(255,255,255,.055);
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-  }
-  .evidence-item span,
-  .evidence-item small,
-  .limitations small,
-  .endpoint-name small {
-    color: var(--t3);
-  }
-  .evidence-item strong {
-    font-size: var(--ts-xl);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .report-panel p {
-    color: var(--t2);
-    line-height: 1.5;
-  }
-  .baseline-panel {
-    grid-column: 1 / -1;
-  }
-  .privacy-note {
-    margin-top: 8px;
-    color: var(--t3) !important;
-    font-size: var(--ts-xs);
-  }
-  .baseline-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 12px;
-  }
-  .baseline-row {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    padding: 10px;
-    border: 1px solid rgba(255,255,255,.07);
-    border-radius: 7px;
-    background: rgba(255,255,255,.035);
-  }
-  .baseline-row.hot {
-    border-color: rgba(251,191,36,.2);
-    background: rgba(251,191,36,.06);
-  }
-  .baseline-row span,
-  .baseline-row small {
-    color: var(--t3);
-    line-height: 1.4;
-  }
-  .remote-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 12px;
-  }
-  .remote-row {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    padding: 10px;
-    border: 1px solid rgba(103,232,249,.16);
-    border-radius: 7px;
-    background: rgba(103,232,249,.045);
-  }
-  .remote-row.hot {
-    border-color: rgba(251,191,36,.22);
-    background: rgba(251,191,36,.06);
-  }
-  .remote-row span,
-  .remote-row small {
-    color: var(--t3);
-    line-height: 1.4;
-  }
-  .guidance {
-    padding-left: 10px;
-    border-left: 2px solid var(--accent-cyan);
-  }
-  .limitations {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 12px;
-  }
-  .limitation {
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
-    padding: 10px;
-    border-radius: 7px;
-    background: rgba(251,191,36,.06);
-    border: 1px solid rgba(251,191,36,.16);
-  }
-  .limitation span {
-    color: var(--t2);
-  }
-
-  .endpoint-panel {
-    margin-bottom: 18px;
-  }
-  .endpoint-cards {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 12px;
-  }
-  .endpoint-card {
-    /* Arc C C9: harmonise endpoint-card geometry with DiagnoseView's
-       landing cards — same border-radius family (12px here vs 14px on
-       Diagnose's larger card) and a stronger border so the cards read as
-       the same family across the three surfaces. Token sweep for the
-       remaining raw rgba values lands in the PR η tokenization pass. */
-    min-width: 0;
-    padding: 14px;
-    border: 1px solid rgba(255,255,255,.07);
-    border-radius: 12px;
-    background: rgba(255,255,255,.035);
-  }
-  .endpoint-card.implicated {
-    border-color: rgba(249,168,212,.23);
-    background:
-      linear-gradient(135deg, rgba(249,168,212,.08), transparent 58%),
-      rgba(255,255,255,.035);
-  }
-  .endpoint-card header {
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
-    align-items: flex-start;
-  }
-  .endpoint-name.compact {
-    flex: 1 1 auto;
-  }
-  .endpoint-card-metrics {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 12px;
-  }
-  .endpoint-card-metrics span {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(255,255,255,.06);
-  }
-  .endpoint-card-metrics small {
-    color: var(--t3);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    text-transform: uppercase;
-  }
-  .endpoint-card-metrics strong {
-    color: var(--t1);
-    font-size: var(--ts-base);
-    font-variant-numeric: tabular-nums;
-  }
-  .endpoint-table {
-    margin-top: 14px;
-    display: flex;
-    flex-direction: column;
-    border: 1px solid rgba(255,255,255,.06);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .endpoint-head,
-  .endpoint-row {
-    display: grid;
-    grid-template-columns: minmax(220px, 1.7fr) .8fr .55fr .55fr .55fr .55fr;
-    gap: 10px;
-    align-items: center;
-    min-width: 0;
-  }
-  .endpoint-head {
-    padding: 10px 12px;
-    background: rgba(255,255,255,.035);
-    color: var(--t3);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    text-transform: uppercase;
-  }
-  .endpoint-row {
-    padding: 12px;
-    border-top: 1px solid rgba(255,255,255,.055);
-    color: var(--t2);
-    font-variant-numeric: tabular-nums;
-  }
-  .endpoint-row.implicated {
-    background: rgba(249,168,212,.055);
-  }
-  .endpoint-name {
-    min-width: 0;
+  .station-card .vh {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    margin-bottom: 18px;
   }
-  .endpoint-name i {
-    width: 9px;
-    height: 9px;
-    border-radius: 50%;
-    flex-shrink: 0;
+  .station-card .mk {
+    width: 8px;
+    height: 8px;
   }
-  .endpoint-name span {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-  .endpoint-name strong,
-  .endpoint-name small {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .status-pill {
-    justify-self: start;
-    min-height: 24px;
-    padding: 0 8px;
-    border: 1px solid rgba(255,255,255,.12);
-    color: var(--t3);
-    background: rgba(255,255,255,.035);
-  }
-  .status-pill.ok { color: var(--accent-green); border-color: rgba(74,222,128,.25); background: rgba(74,222,128,.07); }
-  .status-pill.slow,
-  .endpoint-row.implicated .status-pill { color: var(--accent-pink); border-color: rgba(249,168,212,.28); background: rgba(249,168,212,.08); }
-  .status-pill.loss { color: var(--accent-amber); border-color: rgba(251,191,36,.28); background: rgba(251,191,36,.08); }
-  .status-pill.muted { opacity: .75; }
-
-  .triage-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 12px;
-  }
-  .triage-card {
-    min-width: 0;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 10px;
-    padding: 12px;
-    border-radius: 7px;
-    border: 1px solid rgba(255,255,255,.07);
-    background: rgba(255,255,255,.035);
-  }
-  .triage-body {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-  .triage-head {
-    min-width: 0;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 10px;
-  }
-  .triage-index {
-    width: 24px;
-    height: 24px;
-    border-radius: 999px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(103,232,249,.25);
-    color: var(--accent-cyan);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    font-variant-numeric: tabular-nums;
-  }
-  .triage-card h2 {
-    margin-top: 0;
-    font-size: var(--ts-base);
-  }
-  .triage-status {
-    flex: 0 0 auto;
-    padding: 3px 7px;
-    border-radius: 999px;
-    border: 1px solid rgba(255,255,255,.1);
-    color: var(--t3);
-    font-family: var(--mono);
-    font-size: var(--ts-xs);
-    white-space: nowrap;
-  }
-  .triage-status.good {
-    color: var(--accent-green);
-    border-color: rgba(74,222,128,.25);
-    background: rgba(74,222,128,.07);
-  }
-  .triage-status.watch {
-    color: var(--accent-amber);
-    border-color: rgba(251,191,36,.25);
-    background: rgba(251,191,36,.07);
-  }
-  .triage-status.bad {
-    color: var(--accent-pink);
-    border-color: rgba(249,168,212,.28);
-    background: rgba(249,168,212,.08);
-  }
-  .triage-card p {
-    margin: 6px 0 0;
-    color: var(--t3);
-    line-height: 1.45;
-  }
-  .triage-action {
-    color: var(--t1) !important;
-  }
-  .triage-watch strong {
-    color: var(--t2);
-  }
-  .triage-button {
-    align-self: flex-start;
-    min-height: 34px;
-    margin-top: 12px;
-    border-radius: 7px;
-    border: 1px solid rgba(103,232,249,.24);
-    background: rgba(103,232,249,.07);
-    color: var(--accent-cyan);
-    padding: 0 11px;
+  .station-card[data-ep="A"] .mk { background: var(--station-a); box-shadow: 0 0 10px var(--station-a); }
+  .station-card[data-ep="B"] .mk { background: var(--station-b); box-shadow: 0 0 10px var(--station-b); }
+  .station-card[data-ep="C"] .mk { background: var(--station-c); box-shadow: 0 0 10px var(--station-c); }
+  .station-card[data-ep="D"] .mk { background: var(--station-d); box-shadow: 0 0 10px var(--station-d); }
+  .station-card .name {
     font-family: var(--sans);
-    font-size: var(--ts-sm);
-    cursor: pointer;
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--fg);
+    letter-spacing: -0.005em;
   }
-  .triage-button:hover:not(:disabled) {
-    border-color: rgba(103,232,249,.42);
-    color: var(--t1);
+  .station-card .state {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--fg-3);
   }
-  .triage-button:disabled {
-    cursor: not-allowed;
-    opacity: .55;
+  .station-card .state[data-s="stable"] { color: var(--station-b); }
+  .station-card .state[data-s="warn"]   { color: var(--sev-warn); }
+  .station-card .state[data-s="bad"]    { color: var(--sev-bad); }
+  .station-card .state[data-s="crit"]   { color: var(--sev-crit); }
+  .station-card .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  .station-card .stat + .stat {
+    border-left: 1px solid var(--rule);
+    padding-left: 14px;
+    margin-left: 14px;
+  }
+  .station-card .stat .k {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    margin-bottom: 6px;
+  }
+  .station-card .stat .v {
+    font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--fg);
+    letter-spacing: -0.01em;
+  }
+  .station-card .stat .v .u {
+    font-size: 11px;
+    color: var(--fg-3);
+    margin-left: 2px;
   }
 
-  [aria-label="Browser visibility"]:focus {
-    outline: 1px solid rgba(103,232,249,.45);
-    outline-offset: 3px;
+  /* Record + narrative columns */
+  .record-row {
+    margin-top: 64px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: 64px;
+  }
+  .record-row h3 {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    margin: 0 0 18px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .record-row .row {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 6px 18px;
+    padding: 9px 0;
+    border-bottom: 1px solid var(--rule-faint);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  .record-row .row:last-child { border-bottom: 0; }
+  .record-row .row .k {
+    color: var(--fg-3);
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+    font-size: 10px;
+    white-space: nowrap;
+    font-weight: 700;
+  }
+  .record-row .row .v {
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .record-row .narrative {
+    font-family: var(--sans);
+    font-size: 16px;
+    color: var(--fg-2);
+    line-height: 1.55;
+    margin: 0 0 16px;
+  }
+  .record-row .narrative:last-child { margin-bottom: 0; }
+  .record-row .narrative strong {
+    color: var(--fg);
+    font-weight: 500;
+  }
+  /* Inline endpoint chip — mono pill carrying the endpoint's tone colour.
+     Same shape OverviewView uses so the two surfaces feel like one
+     instrument. Per-tone colour is set via [data-tone]. */
+  .record-row .narrative .ep-chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 0.85em;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    padding: 1px 6px;
+    margin: 0 1px;
+    border: 1px solid var(--rule-strong);
+    border-radius: 2px;
+    color: var(--fg);
+    vertical-align: baseline;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.3;
+  }
+  .record-row .narrative .ep-chip[data-tone="good"]       { border-color: var(--station-b); color: var(--station-b); }
+  .record-row .narrative .ep-chip[data-tone="watch"]      { border-color: var(--sev-warn);  color: var(--sev-warn); }
+  .record-row .narrative .ep-chip[data-tone="bad"]        { border-color: var(--sev-bad);   color: var(--sev-bad); }
+  .record-row .narrative .ep-chip[data-tone="collecting"] { border-color: var(--rule-strong); color: var(--fg-3); }
+
+  /* Footer */
+  .foot {
+    border-top: 1px solid var(--rule);
+    padding: 22px clamp(20px, 3vw, 48px);
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    gap: 16px;
+  }
+  .foot .v {
+    color: var(--fg);
+    margin-left: 6px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+  .foot .center { text-align: center; }
+  .foot .right { text-align: right; }
+
+  /* ── Reduced motion ────────────────────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    .ctl-btn { transition: none; }
   }
 
-  @media (max-width: 900px) {
-    .report {
-      max-width: calc(100vw - 24px);
-      padding-top: 16px;
+  /* ── Mobile ────────────────────────────────────────────────────────────── */
+  @media (max-width: 1100px) {
+    .hud-title { max-width: min(420px, 60vw); }
+    .stations-grid { grid-template-columns: repeat(2, 1fr); }
+    .record-row { grid-template-columns: 1fr; gap: 40px; }
+  }
+  @media (max-width: 720px) {
+    .hud-title {
+      left: 16px;
+      right: 16px;
+      max-width: none;
     }
-    .report-hero-grid {
+    .hud-stats {
+      left: 16px;
+      right: 16px;
+      bottom: 100px;
+      text-align: left;
+    }
+    .hud-stats .row { justify-content: flex-start; }
+    .scrub { padding: 12px 12px 14px; gap: 12px; }
+    .scrub .lbl { display: none; }
+    .stations-grid { grid-template-columns: 1fr; }
+    .foot {
       grid-template-columns: 1fr;
-      padding: 20px;
+      gap: 4px;
+      text-align: left;
     }
-    .report-title-row {
-      flex-direction: column;
+    .foot .center, .foot .right { text-align: left; }
+  }
+  @media (max-width: 480px) {
+    .stage { min-height: 600px; }
+    .hud-title h1 { font-size: clamp(28px, 9vw, 48px); }
+    .hud-stats .num { font-size: clamp(32px, 11vw, 56px); }
+    .hud-stats .num .u { font-size: 12px; }
+    .below { padding: 48px clamp(14px, 3vw, 24px) 56px; }
+    .scrub .scrub-read { font-size: 9px; min-width: auto; }
+    .station-card { padding: 18px 18px 20px; }
+  }
+
+  /* ── Print stylesheet ──────────────────────────────────────────────────── */
+  /* Publication layout: grayscale-friendly, no canvas, footnote-style record.
+     Triggered by Cmd-P / browser "Save as PDF". The signature canvas is
+     replaced with the title block + per-station summary as a printed page;
+     the masthead (rendered by Layout) hides itself for print under the same
+     rule that hides every chrome surface. */
+  @media print {
+    @page { size: A4 portrait; margin: 12mm; }
+    .report-surface {
+      color: black;
+      background: white;
     }
-    .report-strip,
-    .report-grid {
-      grid-template-columns: 1fr;
+    .stage {
+      position: static;
+      height: auto;
+      min-height: 0;
+      background: white;
     }
-    .trail-list {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-    .timeline-events,
-    .endpoint-cards {
-      grid-template-columns: 1fr;
-    }
-    .evidence-grid {
-      grid-template-columns: 1fr;
-    }
-    .baseline-list {
-      grid-template-columns: 1fr;
-    }
-    .triage-grid {
-      grid-template-columns: 1fr;
-    }
-    .endpoint-table {
+    .stage-scene,
+    .vignette,
+    .scrub,
+    .hud-top {
       display: none;
     }
-  }
-
-  @media (max-width: 520px) {
-    .report-hero-grid {
-      padding: 16px;
+    .hud-title {
+      position: static;
+      transform: none;
+      max-width: none;
+      pointer-events: auto;
     }
-    .report-actions {
-      flex-direction: column;
+    .hud-title h1,
+    .hud-title .body {
+      color: black;
+      text-shadow: none;
     }
-    .action {
-      width: 100%;
+    .hud-title .kicker,
+    .hud-title .kicker .v {
+      color: black;
     }
-    .trail-list {
-      grid-template-columns: 1fr;
+    .hud-title .actions { display: none; }
+    .hud-stats {
+      position: static;
+      text-align: left;
+      margin-top: 16px;
+      pointer-events: auto;
     }
-    .triage-head {
-      flex-direction: column;
+    .hud-stats .num,
+    .hud-stats .row .v {
+      color: black;
+      text-shadow: none;
     }
-    .triage-button {
-      width: 100%;
+    .hud-stats .label,
+    .hud-stats .row {
+      color: #444;
     }
-    h1 {
-      font-size: 32px;
+    .below {
+      padding: 16mm 0 0;
+      background: white;
+      page-break-before: always;
     }
+    .summary-head,
+    .summary-head .l,
+    .record-row h3 {
+      color: black;
+      border-color: #ccc;
+    }
+    .stations-grid {
+      background: white;
+      border-color: #ccc;
+      gap: 0;
+      border-collapse: collapse;
+    }
+    .station-card {
+      background: white;
+      border: 1px solid #ccc;
+    }
+    .station-card .name,
+    .station-card .stat .v,
+    .summary-head .r .v {
+      color: black;
+    }
+    .station-card .stat .k,
+    .summary-head,
+    .record-row .row .k {
+      color: #555;
+    }
+    .record-row .row .v,
+    .record-row .narrative,
+    .record-row .narrative strong {
+      color: black;
+    }
+    .record-row .narrative .ep-chip {
+      color: black;
+      border-color: #999;
+    }
+    .foot {
+      color: #444;
+      border-color: #ccc;
+    }
+    .foot .v { color: black; }
   }
 </style>

@@ -1063,74 +1063,156 @@ function supportingSummaryFor(input: {
   readonly monitoredEndpointCount: number;
   readonly timingVisibility: TimingVisibility;
   readonly readiness: ReturnType<typeof sampleReadiness>;
+  readonly verdict: Verdict;
 }): string {
-  const { kind, confidence, rows, threshold, monitoredEndpointCount, timingVisibility, readiness } = input;
+  const { kind, confidence, rows, threshold, monitoredEndpointCount, timingVisibility, readiness, verdict } = input;
   const sampleScope = sampleScopeFor(rows, monitoredEndpointCount, readiness);
 
+  // Each branch produces ~3 sentences in v4's narrative voice (target ~150–220
+  // chars). The body text feeds three surfaces — Overview hero, Live verdict-
+  // band, Report verdict-band — and one downloaded artifact (diagnostic-report
+  // "Trust:" line). Keeping all branches in the same length band stabilises
+  // hero vertical alignment across state transitions (grid align-items: center
+  // makes the kicker position a function of content height).
+
   if (kind === 'collecting') {
-    return `Collecting: ${sampleScope}.`;
+    if (rows.length === 0) {
+      const sitesNoun = plural(monitoredEndpointCount, 'site');
+      return `Chronoscope is acquiring the field. First checks are arriving from ${monitoredEndpointCount} configured ${sitesNoun}; the diagnosis appears once each has a few mature samples to compare. Watch the round counter — this usually resolves within a minute.`;
+    }
+    return `Chronoscope is acquiring the field. ${rows.length} of ${monitoredEndpointCount} sites have started reporting; the diagnosis sharpens once each has enough mature samples to compare against the ${threshold} ms trigger. Treat any spike as preliminary until then.`;
   }
 
-  if (kind === 'healthy' && confidence === 'high' && readiness.allEnabledMature && hasHealthyVariation(rows, threshold)) {
-    return `Good browser-visible run with variation: no site is consistently slow; ${sampleScope}.`;
-  }
+  // Shared per-row stats used by healthy + every degraded branch.
+  const stats = fieldStats(rows);
+  const { median, peakP95, peakName } = stats;
 
   if (kind === 'healthy' && confidence === 'high' && readiness.allEnabledMature) {
-    return `Clean browser-visible run: ${sampleScope}.`;
+    const subj = sitesAreSubject(rows.length);
+    const variation = hasHealthyVariation(rows, threshold);
+
+    const sent1 = `All ${subj} on transit.`;
+
+    // Plain-language wording (no "p50" / "p95" jargon): "median" for typical
+    // latency, "highest tail" for the worst-5%. Same factual content; the
+    // body is reused in diagnostic-report.ts copySummary, which is meant for
+    // non-technical sharing and asserts on the absence of percentile labels.
+    const peakUnderTrigger = peakP95 !== null && peakP95 < threshold;
+    const sent2 = median !== null && peakP95 !== null
+      ? (peakUnderTrigger
+          ? (peakName !== null
+              ? `Latency holds steady around ${median} ms across the field; ${peakName} has the highest tail at ${peakP95} ms — well under the ${threshold} ms trigger.`
+              : `Latency holds steady around ${median} ms across the field; the highest tail is ${peakP95} ms — well under the ${threshold} ms trigger.`)
+          : (peakName !== null
+              ? `Median latency is ${median} ms across the field; ${peakName} carries the highest tail at ${peakP95} ms.`
+              : `Median latency is ${median} ms across the field; the highest tail is ${peakP95} ms.`))
+      : `Latency is well under the ${threshold} ms trigger across the field.`;
+
+    const sent3 = variation
+      ? `Some natural variation in this window, but no site is consistently slow — the field is coordinated.`
+      : `The field is coordinated — no drift detected across ${readiness.minSamples}+ synchronized rounds.`;
+
+    return `${sent1} ${sent2} ${sent3}`;
   }
 
-  // Substantive Measured Fact for the degraded kinds (jitter, isolated-
-  // endpoint, shared-network, multiple-slow, packet-loss). The prior
-  // fallback ("Evidence: ${sampleScope}; ${timingSummary}.") was meta-count,
-  // not a fact about WHAT was measured — the synthesis design contract
-  // calls for the Measured Fact slot to carry the actual measurement.
   if (rows.length > 0) {
-    const medians = rows.map((r) => r.stats.p50).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
-    const median = medians.length > 0 ? Math.round(medians[Math.floor(medians.length / 2)] ?? 0) : null;
-    const p95s = rows.map((r) => r.stats.p95).filter((v) => Number.isFinite(v));
-    const peakP95 = p95s.length > 0 ? Math.round(Math.max(...p95s)) : null;
-    const peakRow = peakP95 !== null ? rows.find((r) => Math.round(r.stats.p95) === peakP95) : null;
-    const peakName = peakRow?.ep.label ?? null;
-
     if (kind === 'isolated-endpoint') {
-      // The slow endpoint is the one with the highest p95 — peakRow above
-      // already identifies it. Surface its name and p95 explicitly so the
-      // Measured Fact carries the actual measurement, not just a count.
-      const slowName = peakName ?? 'one site';
-      return median !== null && peakP95 !== null
-        ? `Median latency is ${median} ms across ${rows.length} ${plural(rows.length, 'site')}; ${slowName} is the slowest at p95 ${peakP95} ms.`
-        : `${slowName} is the slowest site in this window.`;
+      // Use verdict.worstEpId to identify the slow site — its p50 is what
+      // triggered the isolated-endpoint classification, not peakP95.
+      const slowRow = implicatedEndpointRow(kind, rows, verdict)
+        ?? rows.find((r) => r.stats.p50 > threshold)
+        ?? rows[0]
+        ?? null;
+      const slowName = slowRow?.ep.label ?? 'One site';
+      const slowP50 = slowRow !== null && Number.isFinite(slowRow.stats.p50) ? Math.round(slowRow.stats.p50) : null;
+      const slowP95 = slowRow !== null && Number.isFinite(slowRow.stats.p95) ? Math.round(slowRow.stats.p95) : null;
+      const othersCount = Math.max(0, rows.length - 1);
+      const others = othersCount === 1 ? '1 site is' : `${othersCount} sites are`;
+
+      const sent1 = `${others} on transit; ${slowName} is the outlier.`;
+      const sent2 = median !== null && slowP50 !== null
+        ? (slowP95 !== null
+            ? `The field's median latency is ${median} ms; ${slowName} runs at ${slowP50} ms with a tail reaching ${slowP95} ms — past the ${threshold} ms trigger.`
+            : `The field's median latency is ${median} ms; ${slowName} runs at ${slowP50} ms — past the ${threshold} ms trigger.`)
+        : `${slowName} is past the ${threshold} ms trigger; the others held under it.`;
+      const sent3 = `The other sites held tempo, so the slowness is path-isolated to ${slowName}.`;
+      return `${sent1} ${sent2} ${sent3}`;
     }
 
     if (kind === 'jitter') {
-      return median !== null && peakP95 !== null
-        ? `p50 is ${median} ms across ${rows.length} ${plural(rows.length, 'site')}, but p95 reaches ${peakP95} ms — latency is varying widely.`
+      const jitterRow = implicatedEndpointRow(kind, rows, verdict);
+      const worstName = jitterRow?.ep.label ?? null;
+      const sent1 = worstName !== null
+        ? `${worstName}'s latency is jumping around the field.`
+        : `Latency is jumping around the field.`;
+      const sent2 = median !== null && peakP95 !== null
+        ? `Typical latency is ${median} ms across ${rows.length} ${plural(rows.length, 'site')}, but spikes reach ${peakP95} ms — values are bouncing rather than holding steady.`
         : `Latencies are varying widely across ${rows.length} ${plural(rows.length, 'site')}.`;
+      const sent3 = `That pattern usually points to congestion somewhere on the path, not an outage.`;
+      return `${sent1} ${sent2} ${sent3}`;
     }
 
     if (kind === 'shared-network') {
-      return median !== null
-        ? `All ${rows.length} measured ${plural(rows.length, 'site')} are elevated: median is ${median} ms (threshold ${threshold} ms).`
-        : `All ${rows.length} measured ${plural(rows.length, 'site')} are over threshold.`;
+      const subj = sitesAreSubject(rows.length);
+      const sent1 = `All ${subj} elevated in the same window.`;
+      const sent2 = median !== null
+        ? `Median latency is ${median} ms across the field — over the ${threshold} ms trigger.`
+        : `Median latency is over the ${threshold} ms trigger across the field.`;
+      const sent3 = `When sites slow together like this, the shared cause is usually upstream of your browser, not the endpoints themselves.`;
+      return `${sent1} ${sent2} ${sent3}`;
     }
 
     if (kind === 'multiple-slow') {
       const over = rows.filter((r) => r.stats.p50 > threshold).length;
-      return median !== null
-        ? `${over} of ${rows.length} ${plural(rows.length, 'site')} are over the ${threshold} ms threshold; overall median is ${median} ms.`
-        : `${over} of ${rows.length} ${plural(rows.length, 'site')} are over the ${threshold} ms threshold.`;
+      const overSubj = over === 1 ? '1 site is' : `${over} sites are`;
+      const sent1 = `${overSubj} past the ${threshold} ms trigger; the rest hold steady.`;
+      const sent2 = median !== null
+        ? `Overall median is ${median} ms — the slow group is pulling the field average up.`
+        : `The slow group is pulling the field average up.`;
+      const sent3 = `An outside check can separate a shared upstream cause from coincident endpoint slowness.`;
+      return `${sent1} ${sent2} ${sent3}`;
     }
 
     if (kind === 'packet-loss') {
       const totalLoss = rows.reduce((sum, r) => sum + (r.stats.lossPercent ?? 0), 0) / rows.length;
-      return Number.isFinite(totalLoss)
-        ? `Some requests are failing — average loss across ${rows.length} ${plural(rows.length, 'site')} is ${totalLoss.toFixed(1)}%.`
-        : `Some requests are failing across ${rows.length} ${plural(rows.length, 'site')}.`;
+      const lossPct = Number.isFinite(totalLoss) ? totalLoss.toFixed(1) : null;
+      const sent1 = `Requests are failing across the field.`;
+      const sent2 = lossPct !== null
+        ? (peakName !== null
+            ? `Average loss is ${lossPct}% across ${rows.length} ${plural(rows.length, 'site')}; ${peakName} sees the most failures.`
+            : `Average loss is ${lossPct}% across ${rows.length} ${plural(rows.length, 'site')}.`)
+        : `Failures are spread across ${rows.length} ${plural(rows.length, 'site')}.`;
+      const sent3 = `Browser-side failures can come from the endpoint, the route to it, or a CORS block — an outside check separates them.`;
+      return `${sent1} ${sent2} ${sent3}`;
     }
   }
 
   // Final fallback (rare — handles edge cases where no rows are ready).
   return `Evidence: ${sampleScope}; ${timingSummaryFor(timingVisibility)}.`;
+}
+
+// Subject phrase that agrees with site count: "1 site is" or "N sites are".
+// Used to keep generated narrative grammatical when a session monitors a
+// single endpoint (uncommon but valid).
+function sitesAreSubject(count: number): string {
+  return count === 1 ? '1 site is' : `${count} sites are`;
+}
+
+// Shared per-row latency stats. Computed once per supportingSummary call so
+// the healthy + degraded branches don't duplicate the sort/median/peak math.
+function fieldStats(rows: readonly VerdictRow[]): {
+  readonly median: number | null;
+  readonly peakP95: number | null;
+  readonly peakName: string | null;
+  readonly peakRow: VerdictRow | null;
+} {
+  const sortedMedians = rows.map((r) => r.stats.p50).filter((v) => Number.isFinite(v)).sort((a, b) => a - b);
+  const median = sortedMedians.length > 0 ? Math.round(sortedMedians[Math.floor(sortedMedians.length / 2)] ?? 0) : null;
+  const p95s = rows.map((r) => r.stats.p95).filter((v) => Number.isFinite(v));
+  const peakP95 = p95s.length > 0 ? Math.round(Math.max(...p95s)) : null;
+  const peakRow = peakP95 !== null ? rows.find((r) => Math.round(r.stats.p95) === peakP95) ?? null : null;
+  const peakName = peakRow?.ep.label ?? null;
+  return { median, peakP95, peakName, peakRow };
 }
 
 export function buildDiagnosticNarrative(input: DiagnosticInput): DiagnosticNarrative {
@@ -1226,6 +1308,7 @@ export function buildDiagnosticNarrative(input: DiagnosticInput): DiagnosticNarr
       monitoredEndpointCount: input.monitoredEndpointCount,
       timingVisibility,
       readiness,
+      verdict,
     }),
     snapshotEligibility,
     explanation: primaryAnswer.text,

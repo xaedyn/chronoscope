@@ -31,10 +31,6 @@
   style:--glass-border={tokens.color.glass.border}
   style:--glass-highlight={tokens.color.glass.highlight}
   style:--topbar-bg={tokens.color.topbar.bg}
-  style:--t1={tokens.color.text.t1}
-  style:--t2={tokens.color.text.t2}
-  style:--t3={tokens.color.text.t3}
-  style:--accent-cyan={tokens.color.accent.cyan}
   style:--radius-sm="{tokens.radius.sm}px"
   style:--btn-radius="{tokens.radius.btn}px"
   style:--spacing-xs="{tokens.spacing.xs}px"
@@ -140,7 +136,7 @@
     background: var(--topbar-bg);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    color: var(--t2);
+    color: var(--fg-2);
     font-size: 11px;
     font-weight: 500;
     font-family: var(--sans);
@@ -154,7 +150,7 @@
   .add-btn:hover:not(:disabled) {
     background: var(--glass-highlight);
     border-color: var(--glass-highlight);
-    color: var(--t1);
+    color: var(--fg);
     transform: translateY(-1px);
     box-shadow: 0 2px 12px rgba(0,0,0,.2);
   }
@@ -176,14 +172,14 @@
   .edit-lock-note {
     font-size: 11px;
     font-family: var(--sans);
-    color: var(--accent-pink);
+    color: var(--station-d);
     text-align: right;
   }
 
   .browser-note {
     font-size: 11px;
     font-family: var(--mono);
-    color: var(--t3);
+    color: var(--fg-3);
     text-align: right;
   }
 </style>

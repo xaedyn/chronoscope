@@ -8,6 +8,7 @@ import type {
   RemoteVantageResult,
   RemoteVantageTarget,
   RemoteVantageVerdict,
+  TransitProbeResponse,
 } from '../../src/lib/remote-vantage/types';
 
 export interface ReportKV {
@@ -51,6 +52,10 @@ export interface TopologyOptions {
 }
 
 const MAX_TARGETS = 8;
+const DEFAULT_TRANSIT_PROBES = 10;
+const MIN_TRANSIT_PROBES = 1;
+const MAX_TRANSIT_PROBES = 20;
+const TRANSIT_PROBE_TIMEOUT_MS = 4000;
 const MAX_REPORT_BYTES = 120_000;
 const REPORT_TTL_SECONDS = 60 * 60 * 24 * 30;
 const REPORT_ID_PATTERN = /^[a-zA-Z0-9_-]{8,80}$/;
@@ -333,6 +338,137 @@ export async function handleRemoteProbe(request: Request, options: RemoteProbeOp
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+// ── Transit fanout (Phase D) ────────────────────────────────────────────────
+// One target, N sequential HEAD probes, returns aggregate stats. Sequential
+// rather than parallel so we measure independent round-trips, not connection
+// contention. Region reflects WHERE the Worker actually ran (cf.colo) — for
+// true multi-region fanout you need three separate Worker deployments.
+function parseTransitProbeCount(raw: unknown): number {
+  if (raw === undefined || raw === null) return DEFAULT_TRANSIT_PROBES;
+  const value = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+  if (!Number.isFinite(value)) return DEFAULT_TRANSIT_PROBES;
+  const rounded = Math.floor(value);
+  return Math.max(MIN_TRANSIT_PROBES, Math.min(MAX_TRANSIT_PROBES, rounded));
+}
+
+function percentile(values: readonly number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  // Linear-interpolation percentile (Excel/NumPy "linear" method) so small
+  // sample counts don't all collapse to the same value.
+  const rank = (p / 100) * (sorted.length - 1);
+  const lo = Math.floor(rank);
+  const hi = Math.ceil(rank);
+  const loValue = sorted[lo] ?? 0;
+  if (lo === hi) return Math.round(loValue);
+  const hiValue = sorted[hi] ?? loValue;
+  const frac = rank - lo;
+  return Math.round(loValue + (hiValue - loValue) * frac);
+}
+
+function stdDev(values: readonly number[]): number {
+  if (values.length <= 1) return 0;
+  const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
+  return Math.round(Math.sqrt(variance));
+}
+
+async function singleTransitProbe(
+  url: string,
+  fetcher: typeof fetch,
+): Promise<{ readonly durationMs: number; readonly ok: boolean }> {
+  const startedAt = performance.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TRANSIT_PROBE_TIMEOUT_MS);
+  try {
+    const response = await fetcher(url, {
+      method: 'HEAD',
+      redirect: 'manual',
+      signal: controller.signal,
+      headers: {
+        Accept: '*/*',
+        'Cache-Control': 'no-cache',
+        'User-Agent': 'Chronoscope-Transit-Probe/1.0',
+      },
+      cf: {
+        cacheTtl: 0,
+        cacheEverything: false,
+      },
+    } as RequestInit & { cf: Record<string, unknown> });
+    await response.body?.cancel().catch(() => undefined);
+    const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+    return { durationMs, ok: response.status < 500 };
+  } catch {
+    const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+    return { durationMs, ok: false };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export async function handleTransitProbe(request: Request, options: RemoteProbeOptions = {}): Promise<Response> {
+  if (request.method === 'OPTIONS') return json(204, {});
+  if (request.method !== 'POST') return json(405, { ok: false, error: 'Method not allowed.' });
+
+  let url: URL;
+  let probeCount: number;
+  try {
+    const body = await parseBody(request);
+    if (!isRecord(body)) throw new Error('Request body must be an object.');
+    url = parsePublicUrl(body.target);
+    probeCount = parseTransitProbeCount(body.probeCount);
+  } catch (error) {
+    const failure: TransitProbeResponse = {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+    return json(400, failure);
+  }
+
+  const fetcher = options.fetcher ?? globalThis.fetch.bind(globalThis);
+  const now = options.now ?? Date.now;
+  const target = url.toString();
+
+  // Sequential probes. Parallel would measure connection contention, not the
+  // independent round-trips the transit verdict relies on.
+  const samples: number[] = [];
+  let failures = 0;
+  for (let i = 0; i < probeCount; i++) {
+    const result = await singleTransitProbe(target, fetcher);
+    if (result.ok) {
+      samples.push(result.durationMs);
+    } else {
+      failures += 1;
+    }
+  }
+
+  if (samples.length === 0) {
+    const failure: TransitProbeResponse = {
+      ok: false,
+      error: `All ${probeCount} probes failed from the Cloudflare edge.`,
+    };
+    return json(502, failure);
+  }
+
+  const edge = edgeFrom(options.cf);
+  const region = edge.colo ?? 'cf-edge';
+  const lastSample = samples[samples.length - 1] ?? 0;
+  const success: TransitProbeResponse = {
+    ok: true,
+    vantage: 'cf-edge',
+    region,
+    edge,
+    last: lastSample,
+    p50: percentile(samples, 50),
+    p95: percentile(samples, 95),
+    sigma: stdDev(samples),
+    raw: samples,
+    failures,
+    checkedAt: now(),
+  };
+  return json(200, success);
 }
 
 function parseDohRecords(payload: unknown, recordType: DohDnsRecordType): string[] {

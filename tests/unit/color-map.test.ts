@@ -103,11 +103,11 @@ describe('latencyToColor', () => {
 });
 
 describe('STATUS_COLORS', () => {
-  it('has a timeout color', () => {
-    expect(STATUS_COLORS.timeout).toBe('#9b5de5');
+  it('has a timeout color (sev-crit)', () => {
+    expect(STATUS_COLORS.timeout).toBe('#B14238');
   });
 
-  it('has an error color', () => {
-    expect(STATUS_COLORS.error).toBe('#c77dff');
+  it('has an error color (sev-bad)', () => {
+    expect(STATUS_COLORS.error).toBe('#D27258');
   });
 });
