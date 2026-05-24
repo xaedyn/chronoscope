@@ -981,8 +981,8 @@
     outline-offset: -2px;
   }
   .mk {
-    width: 10px;
-    height: 10px;
+    width: 8px;
+    height: 8px;
     border-radius: 0;
     align-self: center;
     justify-self: start;
@@ -993,12 +993,12 @@
     font-size: 14px;
     color: var(--fg);
     letter-spacing: -0.005em;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
   }
   .ident .meta {
     font-family: var(--mono);
     font-size: 9px;
-    letter-spacing: 0.22em;
+    letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--fg-3);
     font-weight: 700;
@@ -1025,16 +1025,22 @@
   .telem .lat .awaiting { color: var(--fg-3); }
   .station-row[data-severity="bad"] .telem .lat,
   .station-row[data-severity="crit"] .telem .lat { color: var(--sev-bad); }
+  /* v4 renders the drift label as lowercase "drift" with tight tracking;
+     the value is bolded in mono. Matches proposals/v4/proposal-live-v4.html
+     .stations .row .telem .drift. */
   .telem .drift {
     font-family: var(--mono);
     font-size: 9px;
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
+    letter-spacing: 0.04em;
     color: var(--fg-3);
-    font-weight: 700;
     margin-top: 4px;
   }
-  .telem .drift .v { color: var(--fg-2); margin-left: 4px; }
+  .telem .drift .v {
+    color: var(--fg-2);
+    font-weight: 700;
+    font-size: 9px;
+    margin-left: 4px;
+  }
 
   /* ── Audio toggle — bottom-right (left of trigger) ──────────────────────── */
   .audio-toggle {
