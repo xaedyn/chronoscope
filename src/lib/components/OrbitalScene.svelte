@@ -337,6 +337,11 @@
   }
 
   function syncSelectionOverlay(): void {
+    if (!selectedPulse && peerPulses.length === 0) {
+      if (selectedPulsePosition !== null) selectedPulsePosition = null;
+      if (peerPulsePositions.length > 0) peerPulsePositions = [];
+      return;
+    }
     if (!canvas || !camera) return;
     selectedPulsePosition = selectedPulse
       ? visiblePulsePosition(selectedPulse.stationId, selectedPulse.slot)
