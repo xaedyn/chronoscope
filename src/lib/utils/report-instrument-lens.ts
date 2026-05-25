@@ -140,7 +140,6 @@ function sourceAndPulse(input: BuildReportInstrumentLensInput): {
     return { source: 'significant', pulse: input.replayPulse ?? input.significantPulse };
   }
   if (input.replayPulse) return { source: input.selectionSource, pulse: input.replayPulse };
-  if (input.significantPulse) return { source: 'significant', pulse: input.significantPulse };
   return { source: 'none', pulse: null };
 }
 

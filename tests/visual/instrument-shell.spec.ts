@@ -202,7 +202,9 @@ test.describe('Instrument shell hardening', () => {
     await expect(page.locator('.report-surface')).toBeVisible();
     await expect(page.locator('.report-surface')).toContainText(/Live session draft|Recording in progress/i);
     await expect(page.locator('.report-surface')).not.toContainText(/Session ended|Recording paused/i);
-    await expect(page.locator('.report-surface .pulse-evidence')).toContainText('Significant sample');
+    await expect(page.locator('.report-surface .pulse-evidence')).toContainText('Replay sample');
+    await expect(page.locator('.report-instrument-lens')).toContainText('Replay moment selected by the scrubber.');
+    await expect(page.locator('.report-instrument-lens')).not.toContainText('most significant detected moment');
   });
 
   test('overview event log does not ask users to start a running session', async ({ page }) => {
