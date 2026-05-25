@@ -316,11 +316,22 @@ test.describe('Instrument shell hardening', () => {
     await seedRunningSession(page, { roundCount: 72, stopped: true, spikeRound: 36 });
 
     await expect(page.locator('.overview-surface h1')).toContainText('Currently healthy; notable');
+    await expect(page.locator('.command-center')).toBeVisible();
+    await expect(page.locator('.field-console')).toContainText('Field map');
+    await expect(page.locator('.field-console')).toContainText('Trigger');
     const overviewContract = page.locator('.diagnostic-contract-strip');
     await expect(overviewContract).toBeVisible();
     await expect(overviewContract).toContainText('Current status: healthy');
     await expect(overviewContract).toContainText('Notable event:');
+    await expect(overviewContract).toContainText('Peer behavior');
+    await expect(overviewContract).toContainText('Confidence');
+    await expect(overviewContract).toContainText('Limit');
     await expect(overviewContract).toContainText('Next validation:');
+    const commandActions = page.locator('.action-rail button');
+    await expect(commandActions).toHaveCount(3);
+    await expect(commandActions.nth(0)).toContainText('Inspect');
+    await expect(commandActions.nth(1)).toContainText('Watch recurrence');
+    await expect(commandActions.nth(2)).toContainText('Share proof');
 
     await page.getByRole('button', { name: 'Live', exact: true }).click();
     const liveContract = page.locator('.live-contract-strip');
@@ -339,6 +350,40 @@ test.describe('Instrument shell hardening', () => {
     await expect(page.locator('.hud-title h1')).toContainText('Currently healthy');
     await expect(page.locator('.hud-title h1')).toContainText('spiked during the recording');
     await expect(page.locator('.hud-title .body')).toContainText('separates the current verdict');
+  });
+
+  test('overview command actions stay visible on mobile and drill into the event endpoint', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openInstrument(page);
+    await seedRunningSession(page, { roundCount: 72, stopped: true, spikeRound: 36 });
+
+    const actionRail = page.locator('.action-rail');
+    const evidenceGrid = page.locator('.diagnostic-contract-strip');
+    const lede = page.locator('.verdict-console .lede');
+    await expect(actionRail).toBeVisible();
+    await expect(actionRail).toContainText('Inspect');
+    await expect(actionRail).toBeInViewport({ ratio: 0.95 });
+    await expect(evidenceGrid).toBeVisible();
+
+    const railBox = await actionRail.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom };
+    });
+    const evidenceBox = await evidenceGrid.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { top: rect.top };
+    });
+    const ledeBox = await lede.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return { top: rect.top };
+    });
+    expect(railBox.bottom).toBeLessThanOrEqual(844);
+    expect(railBox.top).toBeLessThan(evidenceBox.top);
+    expect(evidenceBox.top).toBeLessThan(ledeBox.top);
+
+    await page.locator('.action-rail button').first().click();
+    await expect(page).toHaveURL(/\/endpoint\//);
+    await expect(page.locator('.endpoint-surface')).toBeVisible();
   });
 
   test('pinned pulse evidence follows the station from live inspection into report output', async ({ page }) => {
