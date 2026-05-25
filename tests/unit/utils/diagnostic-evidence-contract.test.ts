@@ -162,11 +162,24 @@ describe('buildDiagnosticEvidenceContract', () => {
     }, pulse());
 
     expect(contract.current.headline).toBe('Current status: healthy');
-    expect(contract.notableEvent?.roundLabel).toBe('Round #54');
+    expect(contract.notableEvent?.roundLabel).toBe('Round 55');
     expect(contract.notableEvent?.kind).toBe('threshold');
     expect(contract.overview.notableLine).toContain('AWS crossed the trigger by 85 ms');
     expect(contract.report.headline).toContain('Currently healthy');
     expect(contract.report.headline).toContain('AWS spiked');
+  });
+
+  it('uses initial-sample language instead of exposing round zero', () => {
+    const contract = contractFor({
+      google: [ok(0, 35), ok(1, 35), ok(2, 36)],
+      edge: [ok(0, 240), ok(1, 42), ok(2, 40)],
+      aws: [ok(0, 45), ok(1, 45), ok(2, 45)],
+    });
+
+    expect(contract.notableEvent?.roundLabel).toBe('Initial sample');
+    expect(contract.notableEvent?.summary).toBe('Edge crossed the trigger by 120 ms at the initial sample.');
+    expect(contract.overview.notableLine).not.toContain('round #0');
+    expect(contract.live.eventLine).not.toContain('round #0');
   });
 
   it('can promote timeout samples to the notable event', () => {

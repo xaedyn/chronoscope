@@ -582,6 +582,64 @@
 
   const compareOverlay = $derived<CompareOverlay | null>(buildCompareOverlay());
 
+  type InvestigationAction = {
+    readonly title: string;
+    readonly tag: string;
+    readonly tagTone: 'ready' | 'watch' | 'baseline';
+    readonly body: string;
+    readonly button: string;
+    readonly action: 'transit' | 'report';
+    readonly detailRows: readonly { readonly k: string; readonly v: string }[];
+  };
+  const primaryInvestigationAction = $derived.by<InvestigationAction>(() => {
+    const event = evidenceContract.notableEvent;
+    if (!event) {
+      return {
+        title: 'Snapshot the clean baseline',
+        tag: 'Baseline',
+        tagTone: 'baseline',
+        body: 'No threshold crossing, failed request, or large drift stands out in this window. Preserve the clean field first; outside transit is optional until a station separates from peers.',
+        button: 'Open report →',
+        action: 'report',
+        detailRows: [
+          { k: 'Evidence', v: 'No notable event' },
+          { k: 'Best next read', v: 'Baseline report' },
+          { k: 'Transit need', v: 'Optional' },
+        ],
+      };
+    }
+
+    if (event.kind === 'drift') {
+      return {
+        title: 'Watch recurrence, then validate outside',
+        tag: 'Watch',
+        tagTone: 'watch',
+        body: `${event.endpointLabel} moved sharply but did not cross the trigger. If the wobble repeats, run global transit to separate browser-path variance from upstream behavior.`,
+        button: 'Run global transit →',
+        action: 'transit',
+        detailRows: [
+          { k: 'Event', v: event.roundLabel },
+          { k: 'Station', v: event.endpointLabel },
+          { k: 'Transit need', v: 'If repeated' },
+        ],
+      };
+    }
+
+    return {
+      title: 'Probe from outside vantages',
+      tag: 'Recommended',
+      tagTone: 'ready',
+      body: `${event.endpointLabel} produced ${event.kind === 'failure' ? 'a failed request' : 'a threshold event'} in browser evidence. Ask outside vantages whether they hear the same shape before assigning cause.`,
+      button: 'Run global transit →',
+      action: 'transit',
+      detailRows: [
+        { k: 'Event', v: event.roundLabel },
+        { k: 'Station', v: event.endpointLabel },
+        { k: 'Regions', v: 'IAD · LHR · NRT' },
+      ],
+    };
+  });
+
   // ── Titlestrip coords ───────────────────────────────────────────────────
   const totalSamples = $derived.by<number>(() => {
     let n = 0;
@@ -610,11 +668,14 @@
 
   // ── Actions ─────────────────────────────────────────────────────────────
   function openTransit(): void {
-    // /transit is the outside-vantage probe surface (Phase C). The probe
-    // backend (Cloudflare Workers for IAD/LHR/NRT) is not yet wired, so the
-    // view currently renders placeholder probe results. Wiring real probes
-    // is Phase D.
     navigateTo({ name: 'transit', endpointId: null });
+  }
+  function runPrimaryInvestigationAction(): void {
+    if (primaryInvestigationAction.action === 'report') {
+      navigateTo({ name: 'report', endpointId: null });
+      return;
+    }
+    openTransit();
   }
   function focusEndpoint(endpointId: string): void {
     navigateTo({ name: 'endpoint', endpointId });
@@ -937,15 +998,15 @@
 
         <div class="card">
           <div class="card-head">
-            <h4>Probe from outside vantages</h4>
-            <span class="tag" data-s="ready">Ready</span>
+            <h4>{primaryInvestigationAction.title}</h4>
+            <span class="tag" data-s={primaryInvestigationAction.tagTone}>{primaryInvestigationAction.tag}</span>
           </div>
-          <p>Probe each station from a Cloudflare edge in three regions simultaneously. If they hear what your browser hears, the source is upstream. If they don't, it's local to this network.</p>
-          <button type="button" class="action" onclick={openTransit}>Run global transit →</button>
+          <p>{primaryInvestigationAction.body}</p>
+          <button type="button" class="action" onclick={runPrimaryInvestigationAction}>{primaryInvestigationAction.button}</button>
           <div class="detail">
-            <span class="k">Regions</span><span class="v">IAD · LHR · NRT</span>
-            <span class="k">Last run</span><span class="v">— never this session —</span>
-            <span class="k">Latency</span><span class="v">~3 s round-trip</span>
+            {#each primaryInvestigationAction.detailRows as row (row.k)}
+              <span class="k">{row.k}</span><span class="v">{row.v}</span>
+            {/each}
           </div>
         </div>
 
@@ -1630,6 +1691,8 @@
     white-space: nowrap;
   }
   aside.outside .card .tag[data-s="ready"]   { color: var(--station-b); border-color: var(--station-b); }
+  aside.outside .card .tag[data-s="watch"]   { color: var(--sev-warn); border-color: var(--sev-warn); }
+  aside.outside .card .tag[data-s="baseline"] { color: var(--fg); border-color: var(--fg-3); }
   aside.outside .card .tag[data-s="absent"]  { color: var(--fg-3); }
   aside.outside .card p {
     font-size: 14px;

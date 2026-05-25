@@ -54,6 +54,7 @@
   const stats = $derived($statisticsStore);
   const context = $derived($uiStore.sharedReportContext);
   const pinnedPulse = $derived($uiStore.pinnedPulse);
+  const sharedReportMode = $derived($uiStore.isSharedView && $uiStore.sharedReportMode);
   const isRecording = $derived(
     measurements.lifecycle === 'starting'
       || measurements.lifecycle === 'running'
@@ -211,7 +212,37 @@
   const durationMs = $derived(sessionStart === null ? 0 : Math.max(0, sessionEnd - sessionStart));
   const durationLabel = $derived(formatDuration(durationMs));
   const durationLong = $derived(formatDurationLong(durationMs));
-  const reportModeLabel = $derived(isRecording ? 'Live session draft' : 'Field recording');
+  const reportModeLabel = $derived(
+    isRecording
+      ? 'Live session draft'
+      : sharedReportMode
+        ? 'Shared proof artifact'
+        : 'Completed local proof',
+  );
+  const proofState = $derived.by(() => {
+    if (isRecording) {
+      return {
+        tone: 'draft',
+        label: 'Provisional draft',
+        detail: 'This report is still recording; links and exports may change as new samples arrive.',
+        action: 'Copy draft link',
+      };
+    }
+    if (sharedReportMode) {
+      return {
+        tone: 'shared',
+        label: 'Shared artifact',
+        detail: 'This is a shared report snapshot. It reflects the captured evidence, not a live session.',
+        action: 'Copy shared link',
+      };
+    }
+    return {
+      tone: 'complete',
+      label: 'Completed proof',
+      detail: 'This local report is final for the recorded session and ready to export or share.',
+      action: 'Copy proof link',
+    };
+  });
   const reportAriaLabel = $derived(
     isRecording
       ? 'Diagnostic report — live session draft'
@@ -895,9 +926,13 @@
       <div class="kicker">{reportModeLabel} &nbsp;·&nbsp; <span class="v">{flightCert}</span></div>
       <h1>{verdictHeadline}</h1>
       <p class="body">{verdictBody}</p>
+      <div class="proof-state" data-tone={proofState.tone}>
+        <span class="state-label">{proofState.label}</span>
+        <span class="state-detail">{proofState.detail}</span>
+      </div>
       <div class="actions">
         <button type="button" class="ctl-btn ctl-btn--primary" onclick={copyLink}>
-          {copyError === 'link' ? 'Copy failed' : copiedLink ? 'Link copied' : 'Copy link'}
+          {copyError === 'link' ? 'Copy failed' : copiedLink ? 'Link copied' : proofState.action}
         </button>
         <button type="button" class="ctl-btn" onclick={saveImage}>Save as image</button>
       </div>
@@ -1163,9 +1198,40 @@
     font-size: 15px;
     color: var(--fg-2);
     line-height: 1.5;
-    margin: 0 0 28px;
+    margin: 0 0 18px;
     max-width: 42ch;
   }
+  .proof-state {
+    display: grid;
+    gap: 5px;
+    max-width: 44ch;
+    margin: 0 0 22px;
+    padding: 11px 13px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 68%, transparent);
+    font-family: var(--mono);
+  }
+  .proof-state .state-label {
+    color: var(--fg);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .proof-state .state-detail {
+    color: var(--fg-2);
+    font-size: 11px;
+    line-height: 1.35;
+  }
+  .proof-state[data-tone="draft"] {
+    border-color: color-mix(in srgb, var(--sev-warn) 65%, var(--rule));
+  }
+  .proof-state[data-tone="draft"] .state-label { color: var(--sev-warn); }
+  .proof-state[data-tone="complete"] {
+    border-color: color-mix(in srgb, var(--station-b) 60%, var(--rule));
+  }
+  .proof-state[data-tone="complete"] .state-label,
+  .proof-state[data-tone="shared"] .state-label { color: var(--station-b); }
   .hud-title .actions {
     display: flex;
     gap: 12px;

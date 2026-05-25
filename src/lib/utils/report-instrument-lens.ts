@@ -4,7 +4,7 @@ import type {
   MeasurementState,
   PulseInspection,
 } from '$lib/types';
-import { driftLabel, thresholdDeltaLabel } from './pulse-inspection';
+import { displayRoundLabel, driftLabel, thresholdDeltaLabel } from './pulse-inspection';
 
 export type ReportLensSource = 'significant' | 'scrub' | 'clicked' | 'pinned' | 'none';
 export type ReportPeerMovement = 'selected' | 'co-elevated' | 'wobble' | 'steady' | 'missing';
@@ -264,7 +264,10 @@ function proofFor(
   peers: readonly ReportLensPeer[],
 ): ReportInstrumentLens['proof'] {
   const coElevatedCount = peers.filter((peer) => peer.movement === 'co-elevated').length;
-  const selectedRound = selected.roundNumber === null ? 'this round' : `round #${selected.roundNumber}`;
+  const displayRound = displayRoundLabel(selected.roundNumber);
+  const selectedRound = displayRound === 'Initial sample'
+    ? 'the initial sample'
+    : displayRound;
   let suggests: string;
   if (coElevatedCount > 0) {
     suggests = `Multiple stations were elevated in ${selectedRound}, so this looks like shared field movement in browser evidence.`;
@@ -325,7 +328,7 @@ export function buildReportInstrumentLens(input: BuildReportInstrumentLensInput)
     selectionReason: reasonFor(source),
     canReturnToReplay: source === 'pinned',
     moment: {
-      roundLabel: `Round #${selected.roundNumber}`,
+      roundLabel: displayRoundLabel(selected.roundNumber),
       timeLabel: selected.timeLabel ?? 'Replay position',
       endpointLabel: selected.endpointLabel,
       thresholdLabel: `${thresholdMs} ms trigger`,

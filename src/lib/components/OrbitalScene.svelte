@@ -68,6 +68,7 @@
   import haloVert from '$lib/shaders/halo.vert.glsl?raw';
   import haloFrag from '$lib/shaders/halo.frag.glsl?raw';
   import { orbitalRadiusForLatency, triggerRadiusFor } from '$lib/utils/orbital-encoding';
+  import { displayRoundLabel } from '$lib/utils/pulse-inspection';
 
   let {
     stations,
@@ -1012,7 +1013,7 @@
         <span class="t-name">{h.stationLabel}</span>
       </div>
       {#if h.roundNumber !== null}
-        <div class="t-row"><span class="t-k">Round</span><span class="t-v">#{h.roundNumber}</span></div>
+        <div class="t-row"><span class="t-k">Sample</span><span class="t-v">{displayRoundLabel(h.roundNumber)}</span></div>
       {/if}
       <div class="t-row"><span class="t-k">Latency</span><span class="t-v">{Math.round(h.latency)} ms</span></div>
       {#if h.drift !== null}
