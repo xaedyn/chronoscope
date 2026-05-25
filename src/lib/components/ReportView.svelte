@@ -168,7 +168,6 @@
   const reportLens = $derived(buildReportInstrumentLens({
     endpoints: monitored,
     measurements,
-    stats,
     thresholdMs: settings.healthThreshold,
     pinnedPulse,
     replayPulse: replaySelectedPulse,

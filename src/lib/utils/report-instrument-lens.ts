@@ -3,7 +3,6 @@ import type {
   MeasurementSample,
   MeasurementState,
   PulseInspection,
-  StatisticsState,
 } from '$lib/types';
 import { driftLabel, thresholdDeltaLabel } from './pulse-inspection';
 
@@ -61,7 +60,6 @@ export interface ReportInstrumentLens {
 export interface BuildReportInstrumentLensInput {
   readonly endpoints: readonly Endpoint[];
   readonly measurements: MeasurementState;
-  readonly stats: StatisticsState;
   readonly thresholdMs: number;
   readonly pinnedPulse: PulseInspection | null;
   readonly replayPulse: PulseInspection | null;
@@ -316,7 +314,6 @@ function orbitalSelectionFor(
 }
 
 export function buildReportInstrumentLens(input: BuildReportInstrumentLensInput): ReportInstrumentLens {
-  void input.stats;
   const thresholdMs = Math.round(input.thresholdMs);
   const { source, pulse: selected } = sourceAndPulse(input);
   if (!selected || selected.roundNumber === null) return emptyLens(source);

@@ -5,7 +5,6 @@ import type {
   MeasurementSample,
   MeasurementState,
   PulseInspection,
-  StatisticsState,
 } from '../../../src/lib/types';
 
 function endpoint(id: string, label: string): Endpoint {
@@ -87,8 +86,6 @@ const endpoints = [
   endpoint('delta', 'Delta'),
 ] as const;
 
-const stats: StatisticsState = {};
-
 describe('buildReportInstrumentLens', () => {
   it('uses the replay pulse when there is no pinned pulse', () => {
     const lens = buildReportInstrumentLens({
@@ -97,7 +94,6 @@ describe('buildReportInstrumentLens', () => {
         alpha: [ok(9, 100), ok(10, 180)],
         bravo: [ok(9, 88), ok(10, 91)],
       }),
-      stats,
       thresholdMs: 120,
       pinnedPulse: null,
       replayPulse: pulse(),
@@ -127,7 +123,6 @@ describe('buildReportInstrumentLens', () => {
         alpha: [ok(9, 100), ok(10, 180)],
         bravo: [ok(9, 100), ok(10, 190)],
       }),
-      stats,
       thresholdMs: 120,
       pinnedPulse: pulse({
         stationId: 'B',
@@ -157,7 +152,6 @@ describe('buildReportInstrumentLens', () => {
         charlie: [ok(9, 90), timeout(10)],
         delta: [ok(9, 86), ok(10, 88)],
       }),
-      stats,
       thresholdMs: 120,
       pinnedPulse: null,
       replayPulse: pulse(),
@@ -175,7 +169,6 @@ describe('buildReportInstrumentLens', () => {
     const lens = buildReportInstrumentLens({
       endpoints,
       measurements: measurements({ alpha: [ok(9, 100), ok(10, 180)] }),
-      stats,
       thresholdMs: 120,
       pinnedPulse: null,
       replayPulse: pulse({ slot: 359 }),
@@ -193,7 +186,6 @@ describe('buildReportInstrumentLens', () => {
     const lens = buildReportInstrumentLens({
       endpoints,
       measurements: measurements({ alpha: [ok(9, 100), ok(10, 180)] }),
-      stats,
       thresholdMs: 120,
       pinnedPulse: null,
       replayPulse: null,
@@ -215,7 +207,6 @@ describe('buildReportInstrumentLens', () => {
         alpha: [ok(9, 100), ok(10, 180)],
         bravo: [ok(8, 100), ok(9, 110), ok(10, 160)],
       }),
-      stats,
       thresholdMs: 120,
       pinnedPulse: null,
       replayPulse: pulse({ slot: 358 }),
