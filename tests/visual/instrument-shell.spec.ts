@@ -280,6 +280,8 @@ test.describe('Instrument shell hardening', () => {
 
     const overviewCalibration = page.locator('.overview-surface .instrument-calibration');
     await expect(overviewCalibration).toBeVisible();
+    await expect(page.locator('.overview-surface .field-console .instrument-calibration')).toHaveCount(0);
+    await expect(page.locator('.overview-surface .field-legend')).toContainText('Angle time');
     await expect(overviewCalibration).toContainText('Instrument key');
     await expect(overviewCalibration).toContainText('Angle');
     await expect(overviewCalibration).toContainText('Radius');
@@ -319,6 +321,7 @@ test.describe('Instrument shell hardening', () => {
     await expect(page.locator('.command-center')).toBeVisible();
     await expect(page.locator('.field-console')).toContainText('Field map');
     await expect(page.locator('.field-console')).toContainText('Trigger');
+    await expect(page.locator('.field-console')).not.toContainText('Instrument key');
     const overviewContract = page.locator('.diagnostic-contract-strip');
     await expect(overviewContract).toBeVisible();
     await expect(overviewContract).toContainText('Current status: healthy');
@@ -332,6 +335,7 @@ test.describe('Instrument shell hardening', () => {
     await expect(commandActions.nth(0)).toContainText('Inspect');
     await expect(commandActions.nth(1)).toContainText('Watch recurrence');
     await expect(commandActions.nth(2)).toContainText('Share proof');
+    await expect(page.locator('.next-command')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Live', exact: true }).click();
     const liveContract = page.locator('.live-contract-strip');
@@ -379,6 +383,7 @@ test.describe('Instrument shell hardening', () => {
     });
     expect(railBox.bottom).toBeLessThanOrEqual(844);
     expect(railBox.top).toBeLessThan(evidenceBox.top);
+    expect(evidenceBox.top - railBox.bottom).toBeGreaterThanOrEqual(8);
     expect(evidenceBox.top).toBeLessThan(ledeBox.top);
 
     await page.locator('.action-rail button').first().click();

@@ -516,13 +516,17 @@
         {/each}
       </p>
       <div class="diagnostic-contract-strip command-evidence" aria-label="Diagnostic evidence summary">
-        <div class="contract-item current">
+        <div class="contract-item current primary">
           <span class="k">Current</span>
           <span class="v">{evidenceContract.current.headline}</span>
         </div>
-        <div class="contract-item" data-tone={evidenceContract.notableEvent?.tone ?? 'info'}>
+        <div class="contract-item notable primary" data-tone={evidenceContract.notableEvent?.tone ?? 'info'}>
           <span class="k">Notable</span>
           <span class="v">{evidenceContract.overview.notableLine}</span>
+        </div>
+        <div class="contract-item next primary">
+          <span class="k">Next</span>
+          <span class="v">{evidenceContract.overview.nextLine}</span>
         </div>
         <div class="contract-item">
           <span class="k">Peer behavior</span>
@@ -535,10 +539,6 @@
         <div class="contract-item">
           <span class="k">Limit</span>
           <span class="v">{limitationLine}</span>
-        </div>
-        <div class="contract-item">
-          <span class="k">Next</span>
-          <span class="v">{evidenceContract.overview.nextLine}</span>
         </div>
       </div>
       <div class="action-rail" aria-label="Recommended actions">
@@ -593,16 +593,11 @@
           <span class="v">{WINDOW}<em>s</em></span>
         </div>
       </div>
-      <InstrumentCalibration
-        mode="overview"
-        thresholdMs={threshold}
-        windowSeconds={WINDOW}
-        sampleSlots={WINDOW}
-        baselineMs={fieldP50}
-        stationCount={stations.length}
-        cadenceMs={settings.monitorDelay}
-        compact={true}
-      />
+      <div class="field-legend" aria-label="Field map encoding summary">
+        <span><i class="angle"></i>Angle time</span>
+        <span><i class="radius"></i>Radius latency</span>
+        <span><i class="pulse"></i>Pulse severity</span>
+      </div>
     </div>
   </section>
 
@@ -632,6 +627,19 @@
     </div>
   </section>
 
+  <section class="calibration-band">
+    <InstrumentCalibration
+      mode="overview"
+      thresholdMs={threshold}
+      windowSeconds={WINDOW}
+      sampleSlots={WINDOW}
+      baselineMs={fieldP50}
+      stationCount={stations.length}
+      cadenceMs={settings.monitorDelay}
+      compact={true}
+    />
+  </section>
+
   <section class="record-command">
     <div class="flight">
       <h3>Flight card · <span class="v">{flightCert}</span></h3>
@@ -648,19 +656,6 @@
       </div>
     </div>
 
-    <div class="next-command">
-      <h3>Next action</h3>
-      {#each commandActions as action (action.label)}
-        <button
-          type="button"
-          class:primary={action.primary}
-          onclick={() => runCommandAction(action)}
-        >
-          <span class="label">{action.label}</span>
-          <span class="detail">{action.detail}</span>
-        </button>
-      {/each}
-    </div>
   </section>
 
   <section class="log-section">
@@ -864,6 +859,9 @@
     padding: 10px 12px 12px;
   }
   .contract-item.current { background: var(--bg); }
+  .contract-item.primary {
+    background: color-mix(in srgb, var(--bg) 86%, var(--fg) 2%);
+  }
   .contract-item .k {
     display: block;
     font-family: var(--mono);
@@ -880,17 +878,16 @@
     font-size: 11.5px;
     line-height: 1.36;
   }
+  .contract-item.primary .v { color: var(--fg); }
   .contract-item[data-tone="watch"] .v { color: var(--sev-warn); }
   .contract-item[data-tone="degraded"] .v { color: var(--sev-bad); }
 
-  .action-rail,
-  .next-command {
+  .action-rail {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
   }
-  .action-rail button,
-  .next-command button {
+  .action-rail button {
     text-align: left;
     color: var(--fg-2);
     background: transparent;
@@ -899,25 +896,21 @@
     cursor: pointer;
     transition: background 80ms, border-color 80ms, color 80ms;
   }
-  .action-rail button:hover,
-  .next-command button:hover {
+  .action-rail button:hover {
     border-color: var(--rule-strong);
     background: var(--bg-2);
     color: var(--fg);
   }
-  .action-rail button.primary,
-  .next-command button.primary {
+  .action-rail button.primary {
     background: var(--fg);
     color: var(--bg);
     border-color: var(--fg);
   }
-  .action-rail button:focus-visible,
-  .next-command button:focus-visible {
+  .action-rail button:focus-visible {
     outline: 2px solid var(--station-b);
     outline-offset: 2px;
   }
-  .action-rail .label,
-  .next-command .label {
+  .action-rail .label {
     display: block;
     font-family: var(--mono);
     font-size: 10px;
@@ -926,8 +919,7 @@
     font-weight: 700;
     margin-bottom: 6px;
   }
-  .action-rail .detail,
-  .next-command .detail {
+  .action-rail .detail {
     display: block;
     font-size: 12px;
     line-height: 1.32;
@@ -939,7 +931,7 @@
   .field-console {
     position: relative;
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto auto auto;
     gap: 10px;
     width: 100%;
     min-width: 0;
@@ -1045,6 +1037,69 @@
     font-size: 10px;
     margin-left: 2px;
   }
+  .field-legend {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+  }
+  .field-legend span {
+    min-width: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 10px;
+    background: color-mix(in srgb, var(--bg) 80%, transparent);
+    color: var(--fg-3);
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .field-legend i {
+    display: inline-block;
+    width: 11px;
+    height: 11px;
+    position: relative;
+    flex: 0 0 auto;
+  }
+  .field-legend i.angle::before {
+    content: '';
+    position: absolute;
+    inset: 2px;
+    border: 1px solid var(--fg-3);
+    border-right-color: var(--station-b);
+    border-radius: 50%;
+  }
+  .field-legend i.radius::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 5px;
+    height: 1px;
+    background: var(--station-a);
+  }
+  .field-legend i.pulse::before {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    background: var(--sev-warn);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--sev-warn);
+  }
+
+  .calibration-band {
+    padding: 20px clamp(20px, 3vw, 48px) 0;
+  }
+  .calibration-band :global(.instrument-calibration) {
+    max-width: none;
+    box-shadow: none;
+    background: color-mix(in srgb, var(--bg-2) 48%, var(--bg));
+  }
 
   /* ── Station board + record row ─────────────────────────────────────────── */
   .station-command {
@@ -1076,9 +1131,7 @@
   }
   .record-command {
     padding: 30px clamp(20px, 3vw, 48px) 36px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.8fr);
-    gap: 34px;
+    display: block;
     border-bottom: 1px solid var(--rule);
   }
   .stations {
@@ -1203,24 +1256,6 @@
   .flight .marks .m[data-s="warn"] { background: var(--sev-warn); box-shadow: 0 0 6px var(--sev-warn); }
   .flight .marks .m[data-s="bad"]  { background: var(--sev-bad);  box-shadow: 0 0 6px var(--sev-bad); }
   .flight .marks .m[data-s="crit"] { background: var(--sev-crit); box-shadow: 0 0 6px var(--sev-crit); }
-  .next-command {
-    align-content: start;
-    grid-template-columns: 1fr;
-    gap: 8px;
-    font-family: var(--sans);
-  }
-  .next-command h3 {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.22em;
-    text-transform: uppercase;
-    color: var(--fg-3);
-    font-weight: 700;
-    margin: 0 0 10px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid var(--rule);
-  }
-
   /* ── Log section ────────────────────────────────────────────────────────── */
   .log-section {
     padding: 40px clamp(20px, 3vw, 48px) 48px;
@@ -1342,7 +1377,6 @@
     }
     .field-console { grid-template-columns: minmax(0, 1fr); }
     .orbit-stage { max-width: 380px; }
-    .record-command { grid-template-columns: 1fr; gap: 30px; }
     .log-section { grid-template-columns: 1fr; gap: 36px; }
   }
   @media (max-width: 720px) {
@@ -1354,7 +1388,7 @@
     .titlestrip .coords {
       width: 100%;
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 8px 14px;
     }
     .srow { grid-template-columns: 14px 1fr auto; gap: 12px; }
@@ -1371,8 +1405,12 @@
     }
     .action-rail {
       order: 1;
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
+      margin-bottom: 10px;
+    }
+    .action-rail button.primary {
+      grid-column: 1 / -1;
     }
     .diagnostic-contract-strip {
       order: 2;
@@ -1381,18 +1419,14 @@
       order: 3;
     }
     .diagnostic-contract-strip {
-      grid-template-columns: 1fr;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 1px;
     }
-    .field-readouts { grid-template-columns: 1fr; }
-    .field-readouts > div,
-    .field-readouts > div:first-child {
-      border-left: 0;
-      border-top: 1px solid var(--rule);
-    }
-    .field-readouts > div:first-child { border-top: 0; }
     .field-console {
       padding: 12px;
+    }
+    .field-legend {
+      grid-template-columns: 1fr;
     }
     .orbit-stage {
       max-width: min(320px, 82vw);
@@ -1431,20 +1465,27 @@
     .contract-item {
       padding: 9px 10px 10px;
     }
-    .diagnostic-contract-strip {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
     .contract-item .v {
       font-size: 10.5px;
       line-height: 1.34;
     }
-    .action-rail button,
-    .next-command button {
+    .action-rail button {
       padding: 9px 10px;
     }
-    .action-rail .detail,
-    .next-command .detail {
+    .action-rail .detail {
       font-size: 11px;
+    }
+    .action-rail button:not(.primary) .detail {
+      display: none;
+    }
+    .action-rail button:not(.primary) {
+      background: color-mix(in srgb, var(--bg-2) 52%, transparent);
+    }
+    .action-rail button:not(.primary) .label {
+      margin-bottom: 0;
+    }
+    .calibration-band {
+      padding-top: 14px;
     }
   }
 </style>
