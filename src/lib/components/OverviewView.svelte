@@ -1,8 +1,6 @@
 <!-- src/lib/components/OverviewView.svelte -->
-<!-- Vessel v4 Overview surface — mission status. Translates the markup of
-     proposals/v4/proposal-overview-v4.html into Svelte, wired to existing
-     chronoscope stores (measurements, statistics, monitored endpoints,
-     diagnostic narrative, run storyline). -->
+<!-- Vessel v4 Overview surface — command center. Translates live measurement
+     evidence into the shared diagnostic instrument shell. -->
 <script lang="ts">
   import { measurementStore } from '$lib/stores/measurements';
   import { statisticsStore } from '$lib/stores/statistics';
@@ -383,18 +381,118 @@
   }
   const eventBeats = $derived(runStoryline.beats.slice(-7));
 
+  // ── Command-center evidence model ─────────────────────────────────────────
+  function sampleAtRound(endpointId: string, roundNumber: number): MeasurementSample | null {
+    const samples = measurements.endpoints[endpointId]?.samples.toArray() ?? [];
+    return samples.find((sample) => Math.round(sample.round) === roundNumber) ?? null;
+  }
+  const peerBehaviorLine = $derived.by<string>(() => {
+    const event = evidenceContract.notableEvent;
+    if (event === null) return 'No standout event to compare against peers.';
+    const peers = monitored.filter((ep) => ep.enabled && ep.id !== event.endpointId).slice(0, 3);
+    let movedPeers = 0;
+    let cleanPeers = 0;
+    for (const peer of peers) {
+      const sample = sampleAtRound(peer.id, event.roundNumber);
+      if (!sample) continue;
+      if (sample.status !== 'ok' || sample.latency > threshold) movedPeers++;
+      else cleanPeers++;
+    }
+    if (movedPeers === 0 && cleanPeers > 0) return `Peers stayed clean at ${event.roundLabel}; this reads as endpoint-local evidence.`;
+    if (movedPeers > 0) return `${movedPeers} peer${movedPeers === 1 ? '' : 's'} moved in the same round; validate shared path before blaming one endpoint.`;
+    return `No same-round peer samples were available for ${event.roundLabel}.`;
+  });
+  const limitationLine = $derived(
+    diagnosticNarrative.limitations[0]?.headline ?? diagnosticNarrative.timingVisibility.headline,
+  );
+
+  type CommandActionKind = 'live' | 'investigate' | 'endpoint' | 'report' | 'transit';
+  interface CommandAction {
+    readonly kind: CommandActionKind;
+    readonly label: string;
+    readonly detail: string;
+    readonly endpointId?: string;
+    readonly primary?: boolean;
+  }
+  const commandActions = $derived.by<readonly CommandAction[]>(() => {
+    const event = evidenceContract.notableEvent;
+    const firstTriage = diagnosticNarrative.triageActions[0];
+    if (event) {
+      return [
+        {
+          kind: 'endpoint',
+          endpointId: event.endpointId,
+          label: `Inspect ${event.endpointLabel}`,
+          detail: `${event.roundLabel} is the strongest event in this window.`,
+          primary: true,
+        },
+        {
+          kind: 'live',
+          label: 'Watch recurrence',
+          detail: 'Open the live instrument and pin the next matching pulse.',
+        },
+        {
+          kind: 'report',
+          label: 'Share proof',
+          detail: 'Open the recorded artifact with the event separated from current health.',
+        },
+      ];
+    }
+    return [
+      {
+        kind: firstTriage?.id === 'share-snapshot' ? 'report' : 'live',
+        label: firstTriage?.label ?? 'Keep watching',
+        detail: firstTriage?.action ?? 'Continue the run until a decision point appears.',
+        primary: true,
+      },
+      {
+        kind: 'investigate',
+        label: 'Compare stations',
+        detail: 'Open the forensic view if the field starts to drift.',
+      },
+      {
+        kind: 'report',
+        label: 'Capture baseline',
+        detail: 'Save this clean window as proof for later comparison.',
+      },
+    ];
+  });
+
   // ── Actions ────────────────────────────────────────────────────────────────
   function openLive(): void {
     navigateTo({ name: 'live', endpointId: null });
   }
+  function openInvestigate(): void {
+    navigateTo({ name: 'investigate', endpointId: null });
+  }
   function openReport(): void {
     navigateTo({ name: 'report', endpointId: null });
+  }
+  function runCommandAction(action: CommandAction): void {
+    switch (action.kind) {
+      case 'live':
+        openLive();
+        break;
+      case 'investigate':
+        openInvestigate();
+        break;
+      case 'endpoint':
+        if (action.endpointId) navigateTo({ name: 'endpoint', endpointId: action.endpointId });
+        else openInvestigate();
+        break;
+      case 'report':
+        openReport();
+        break;
+      case 'transit':
+        navigateTo({ name: 'transit', endpointId: null });
+        break;
+    }
   }
 </script>
 
 <div class="overview-surface">
   <div class="titlestrip">
-    <h2>Overview<span class="sub">Mission status</span></h2>
+    <h2>Overview<span class="sub">Command center</span></h2>
     <div class="coords">
       <span>Round<span class="v">{measurements.roundCounter}</span></span>
       <span>T+<span class="v">{elapsedLabel}</span></span>
@@ -404,12 +502,12 @@
     </div>
   </div>
 
-  <section class="hero">
-    <div class="hero-text">
-      <div class="v-kicker">
-        <span class="dot" data-s={sigil}></span>
-        <span>Mission status</span>
-        <span class="v-state">{verdictKickerText}</span>
+  <section class="command-center" data-sigil={sigil}>
+    <div class="verdict-console">
+      <div class="console-topline">
+        <span class="signal" data-s={sigil}></span>
+        <span>{verdictKickerText}</span>
+        <span class="confidence">{diagnosticNarrative.confidenceLabel}</span>
       </div>
       <h1>{verdictHeadline}</h1>
       <p class="lede">
@@ -417,8 +515,8 @@
           {#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}
         {/each}
       </p>
-      <div class="diagnostic-contract-strip" aria-label="Diagnostic evidence summary">
-        <div class="contract-item">
+      <div class="diagnostic-contract-strip command-evidence" aria-label="Diagnostic evidence summary">
+        <div class="contract-item current">
           <span class="k">Current</span>
           <span class="v">{evidenceContract.current.headline}</span>
         </div>
@@ -427,17 +525,41 @@
           <span class="v">{evidenceContract.overview.notableLine}</span>
         </div>
         <div class="contract-item">
+          <span class="k">Peer behavior</span>
+          <span class="v">{peerBehaviorLine}</span>
+        </div>
+        <div class="contract-item">
+          <span class="k">Confidence</span>
+          <span class="v">{diagnosticNarrative.confidenceReason}</span>
+        </div>
+        <div class="contract-item">
+          <span class="k">Limit</span>
+          <span class="v">{limitationLine}</span>
+        </div>
+        <div class="contract-item">
           <span class="k">Next</span>
           <span class="v">{evidenceContract.overview.nextLine}</span>
         </div>
       </div>
-      <div class="actions">
-        <button type="button" class="primary" onclick={openLive}>Open tracker →</button>
-        <button type="button" class="ghost" onclick={openReport}>View session record</button>
+      <div class="action-rail" aria-label="Recommended actions">
+        {#each commandActions as action (action.label)}
+          <button
+            type="button"
+            class:primary={action.primary}
+            onclick={() => runCommandAction(action)}
+          >
+            <span class="label">{action.label}</span>
+            <span class="detail">{action.detail}</span>
+          </button>
+        {/each}
       </div>
     </div>
 
-    <div class="instrument-column">
+    <div class="field-console">
+      <div class="field-head">
+        <span>Field map</span>
+        <strong>{stationRows.length} stations</strong>
+      </div>
       <div class="orbit-stage">
         {#if stations.length > 0}
           <OrbitalScene
@@ -457,6 +579,20 @@
           </div>
         </div>
       </div>
+      <div class="field-readouts">
+        <div>
+          <span class="k">p95</span>
+          <span class="v">{#if fieldP95 === null}—{:else}{fieldP95}<em>ms</em>{/if}</span>
+        </div>
+        <div>
+          <span class="k">Trigger</span>
+          <span class="v">{threshold}<em>ms</em></span>
+        </div>
+        <div>
+          <span class="k">Window</span>
+          <span class="v">{WINDOW}<em>s</em></span>
+        </div>
+      </div>
       <InstrumentCalibration
         mode="overview"
         thresholdMs={threshold}
@@ -470,7 +606,11 @@
     </div>
   </section>
 
-  <section class="card-row">
+  <section class="station-command">
+    <div class="section-head">
+      <h3>Station board</h3>
+      <span>{evidenceContract.current.headline}</span>
+    </div>
     <div class="stations">
       {#each stationRows as row (row.endpointId)}
         <div class="srow" data-ep={row.stationId}>
@@ -490,7 +630,9 @@
         </div>
       {/each}
     </div>
+  </section>
 
+  <section class="record-command">
     <div class="flight">
       <h3>Flight card · <span class="v">{flightCert}</span></h3>
       <div class="frow"><span class="k">Started</span><span class="v">{startedLabel}</span></div>
@@ -504,6 +646,20 @@
           <span class="m" data-ep={row.stationId} data-s={row.sigil}></span>
         {/each}
       </div>
+    </div>
+
+    <div class="next-command">
+      <h3>Next action</h3>
+      {#each commandActions as action (action.label)}
+        <button
+          type="button"
+          class:primary={action.primary}
+          onclick={() => runCommandAction(action)}
+        >
+          <span class="label">{action.label}</span>
+          <span class="detail">{action.detail}</span>
+        </button>
+      {/each}
     </div>
   </section>
 
@@ -604,52 +760,72 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* ── Hero ───────────────────────────────────────────────────────────────── */
-  .hero {
+  /* ── Command center ─────────────────────────────────────────────────────── */
+  .command-center {
     display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
-    gap: 56px;
-    padding: 56px clamp(20px, 3vw, 48px) 40px;
-    align-items: center;
-    min-height: calc(100vh - 130px);
+    grid-template-columns: minmax(0, 1.16fr) minmax(330px, 0.84fr);
+    gap: 28px;
+    padding: 24px clamp(20px, 3vw, 48px) 28px;
+    align-items: start;
+    min-height: auto;
     position: relative;
+    border-bottom: 1px solid var(--rule);
   }
-  .hero-text { min-width: 0; position: relative; z-index: 2; }
-  .v-kicker {
-    display: inline-flex;
+  .verdict-console {
+    min-width: 0;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    justify-content: start;
+    border-top: 1px solid var(--rule-strong);
+    border-bottom: 1px solid var(--rule);
+    padding: 22px 0;
+  }
+  .console-topline {
+    display: flex;
     align-items: center;
     gap: 12px;
     font-family: var(--mono);
     font-size: 10px;
-    letter-spacing: 0.28em;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--fg-3);
-    margin-bottom: 28px;
+    margin-bottom: 16px;
+    font-weight: 700;
   }
-  .v-kicker .dot { width: 8px; height: 8px; }
-  .v-kicker .dot[data-s="stable"] { background: var(--station-b); box-shadow: 0 0 10px var(--station-b); }
-  .v-kicker .dot[data-s="warn"]   { background: var(--sev-warn);  box-shadow: 0 0 10px var(--sev-warn); }
-  .v-kicker .dot[data-s="bad"]    { background: var(--sev-bad);   box-shadow: 0 0 10px var(--sev-bad); }
-  .v-kicker .dot[data-s="crit"]   { background: var(--sev-crit);  box-shadow: 0 0 10px var(--sev-crit); }
-  .v-kicker .v-state { color: var(--fg); font-weight: 700; }
-  .hero h1 {
+  .console-topline .signal {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+  }
+  .console-topline .signal[data-s="stable"] { background: var(--station-b); box-shadow: 0 0 10px var(--station-b); }
+  .console-topline .signal[data-s="warn"]   { background: var(--sev-warn);  box-shadow: 0 0 10px var(--sev-warn); }
+  .console-topline .signal[data-s="bad"]    { background: var(--sev-bad);   box-shadow: 0 0 10px var(--sev-bad); }
+  .console-topline .signal[data-s="crit"]   { background: var(--sev-crit);  box-shadow: 0 0 10px var(--sev-crit); }
+  .console-topline .confidence {
+    color: var(--fg);
+    margin-left: auto;
+    letter-spacing: 0.16em;
+  }
+  .verdict-console h1 {
     font-family: var(--sans);
     font-weight: 200;
-    font-size: clamp(48px, 6.6vw, 92px);
-    letter-spacing: -0.028em;
+    font-size: clamp(36px, 4.5vw, 64px);
+    letter-spacing: -0.024em;
     line-height: 1.02;
     color: var(--fg);
-    margin-bottom: 32px;
+    margin: 0 0 18px;
     text-shadow: 0 0 60px color-mix(in srgb, var(--fg) 10%, transparent),
                  0 0 120px color-mix(in srgb, var(--station-b) 6%, transparent);
-    max-width: min(820px, 50vw);
+    max-width: 17ch;
   }
-  .hero p.lede {
-    font-size: 17px;
+  .verdict-console .lede {
+    font-size: 15px;
     color: var(--fg-2);
-    line-height: 1.5;
-    margin-bottom: 36px;
-    max-width: 56ch;
+    line-height: 1.45;
+    margin: 0 0 16px;
+    max-width: 68ch;
   }
   /* Inline endpoint-name chip — small monospace pill with a station-coloured
      border. Per-tone colour is set via [data-tone] so each chip carries the
@@ -677,19 +853,17 @@
   .diagnostic-contract-strip {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 18px;
-    max-width: min(820px, 58vw);
-    padding: 16px 0;
-    margin: 0 0 34px;
-    border-top: 1px solid var(--rule);
-    border-bottom: 1px solid var(--rule);
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    margin: 0 0 12px;
   }
   .contract-item {
     min-width: 0;
-    border-left: 1px solid var(--rule);
-    padding-left: 14px;
+    background: color-mix(in srgb, var(--bg-2) 72%, var(--bg));
+    padding: 10px 12px 12px;
   }
-  .contract-item:first-child { border-left: 0; padding-left: 0; }
+  .contract-item.current { background: var(--bg); }
   .contract-item .k {
     display: block;
     font-family: var(--mono);
@@ -698,85 +872,104 @@
     text-transform: uppercase;
     color: var(--fg-3);
     font-weight: 700;
-    margin-bottom: 7px;
+    margin-bottom: 6px;
   }
   .contract-item .v {
     display: block;
     color: var(--fg-2);
-    font-size: 13px;
-    line-height: 1.45;
+    font-size: 11.5px;
+    line-height: 1.36;
   }
   .contract-item[data-tone="watch"] .v { color: var(--sev-warn); }
   .contract-item[data-tone="degraded"] .v { color: var(--sev-bad); }
-  .hero .actions {
-    display: flex;
-    gap: 20px;
-    align-items: center;
-    font-family: var(--mono);
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+
+  .action-rail,
+  .next-command {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
   }
-  .hero .actions .primary {
-    color: var(--bg);
-    background: var(--fg);
-    border: 1px solid var(--fg);
-    padding: 10px 16px;
-    font-weight: 700;
-    cursor: pointer;
-    transition: background 80ms, border-color 80ms;
-  }
-  .hero .actions .primary:hover {
-    background: var(--station-a);
-    border-color: var(--station-a);
-  }
-  .hero .actions .ghost {
+  .action-rail button,
+  .next-command button {
+    text-align: left;
     color: var(--fg-2);
-    padding: 0 0 4px;
-    background: none;
-    border: 0;
-    border-bottom: 1px solid var(--rule-strong);
-    font-weight: 700;
+    background: transparent;
+    border: 1px solid var(--rule);
+    padding: 10px 12px;
     cursor: pointer;
-    font-family: inherit;
-    font-size: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
-    transition: color 80ms, border-color 80ms;
+    transition: background 80ms, border-color 80ms, color 80ms;
   }
-  .hero .actions .ghost:hover {
+  .action-rail button:hover,
+  .next-command button:hover {
+    border-color: var(--rule-strong);
+    background: var(--bg-2);
     color: var(--fg);
-    border-bottom-color: var(--fg);
   }
-  .hero .actions .primary:focus-visible,
-  .hero .actions .ghost:focus-visible {
+  .action-rail button.primary,
+  .next-command button.primary {
+    background: var(--fg);
+    color: var(--bg);
+    border-color: var(--fg);
+  }
+  .action-rail button:focus-visible,
+  .next-command button:focus-visible {
     outline: 2px solid var(--station-b);
     outline-offset: 2px;
   }
+  .action-rail .label,
+  .next-command .label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+  .action-rail .detail,
+  .next-command .detail {
+    display: block;
+    font-size: 12px;
+    line-height: 1.32;
+    color: inherit;
+    opacity: 0.78;
+  }
 
-  /* Orbital stage */
-  .instrument-column {
+  /* Field map */
+  .field-console {
     position: relative;
     display: grid;
-    gap: 18px;
-    align-items: center;
-    justify-items: center;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    gap: 10px;
     width: 100%;
     min-width: 0;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg-2) 58%, var(--bg));
+    padding: 14px;
   }
-  .instrument-column :global(.instrument-calibration) {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    max-width: 620px;
-    margin: 0 auto;
+  .field-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 12px;
+  }
+  .field-head strong {
+    color: var(--fg);
+    font-weight: 700;
   }
   .orbit-stage {
     position: relative;
     aspect-ratio: 1 / 1;
     width: 100%;
-    max-width: 640px;
+    max-width: 360px;
     margin: 0 auto;
   }
   .orbit-stage .label {
@@ -816,15 +1009,77 @@
     text-shadow: none;
   }
   .orbit-stage .label .v .awaiting { color: var(--fg-3); }
-
-  /* ── Card row: stations + flight card ───────────────────────────────────── */
-  .card-row {
-    padding: 40px clamp(20px, 3vw, 48px);
+  .field-readouts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     border-top: 1px solid var(--rule);
     border-bottom: 1px solid var(--rule);
+  }
+  .field-readouts > div {
+    padding: 9px 10px;
+    border-left: 1px solid var(--rule);
+  }
+  .field-readouts > div:first-child { border-left: 0; }
+  .field-readouts .k,
+  .field-readouts .v {
+    display: block;
+  }
+  .field-readouts .k {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    margin-bottom: 5px;
+  }
+  .field-readouts .v {
+    font-family: var(--mono);
+    font-size: 16px;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .field-readouts .v em {
+    font-style: normal;
+    color: var(--fg-3);
+    font-size: 10px;
+    margin-left: 2px;
+  }
+
+  /* ── Station board + record row ─────────────────────────────────────────── */
+  .station-command {
+    padding: 30px clamp(20px, 3vw, 48px) 0;
+  }
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 14px;
+  }
+  .section-head h3 {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    margin: 0;
+  }
+  .section-head span {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    text-align: right;
+  }
+  .record-command {
+    padding: 30px clamp(20px, 3vw, 48px) 36px;
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    gap: 56px;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 0.8fr);
+    gap: 34px;
+    border-bottom: 1px solid var(--rule);
   }
   .stations {
     display: flex;
@@ -948,6 +1203,23 @@
   .flight .marks .m[data-s="warn"] { background: var(--sev-warn); box-shadow: 0 0 6px var(--sev-warn); }
   .flight .marks .m[data-s="bad"]  { background: var(--sev-bad);  box-shadow: 0 0 6px var(--sev-bad); }
   .flight .marks .m[data-s="crit"] { background: var(--sev-crit); box-shadow: 0 0 6px var(--sev-crit); }
+  .next-command {
+    align-content: start;
+    grid-template-columns: 1fr;
+    gap: 8px;
+    font-family: var(--sans);
+  }
+  .next-command h3 {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    margin: 0 0 10px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
 
   /* ── Log section ────────────────────────────────────────────────────────── */
   .log-section {
@@ -1055,20 +1327,22 @@
 
   /* ── Mobile ─────────────────────────────────────────────────────────────── */
   @media (max-width: 1100px) {
-    .hero {
+    .command-center {
       grid-template-columns: 1fr;
-      gap: 40px;
+      gap: 24px;
       min-height: auto;
-      padding: 40px clamp(20px, 3vw, 48px);
+      padding: 24px clamp(20px, 3vw, 48px) 30px;
     }
-    .hero h1 { max-width: min(720px, 90vw); }
-    .diagnostic-contract-strip { max-width: min(720px, 90vw); }
-    .orbit-stage { max-width: 460px; margin-top: 12px; }
-    .instrument-column :global(.instrument-calibration) {
-      position: relative;
-      max-width: 640px;
+    .verdict-console {
+      padding: 20px 0;
     }
-    .card-row { grid-template-columns: 1fr; gap: 36px; }
+    .verdict-console h1 {
+      max-width: min(720px, 90vw);
+      font-size: clamp(34px, 8vw, 58px);
+    }
+    .field-console { grid-template-columns: minmax(0, 1fr); }
+    .orbit-stage { max-width: 380px; }
+    .record-command { grid-template-columns: 1fr; gap: 30px; }
     .log-section { grid-template-columns: 1fr; gap: 36px; }
   }
   @media (max-width: 720px) {
@@ -1085,15 +1359,49 @@
     }
     .srow { grid-template-columns: 14px 1fr auto; gap: 12px; }
     .srow .val, .srow .drift { display: none; }
+    .console-topline {
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .console-topline .confidence {
+      margin-left: 0;
+      width: 100%;
+    }
+    .action-rail {
+      order: 1;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .diagnostic-contract-strip {
+      order: 2;
+    }
+    .verdict-console .lede {
+      order: 3;
+    }
     .diagnostic-contract-strip {
       grid-template-columns: 1fr;
-      gap: 12px;
+      gap: 1px;
     }
-    .contract-item,
-    .contract-item:first-child {
+    .field-readouts { grid-template-columns: 1fr; }
+    .field-readouts > div,
+    .field-readouts > div:first-child {
       border-left: 0;
-      padding-left: 0;
+      border-top: 1px solid var(--rule);
     }
+    .field-readouts > div:first-child { border-top: 0; }
+    .field-console {
+      padding: 12px;
+    }
+    .orbit-stage {
+      max-width: min(320px, 82vw);
+    }
+    .section-head {
+      display: grid;
+      gap: 6px;
+    }
+    .section-head span { text-align: left; }
     .foot { grid-template-columns: 1fr; gap: 4px; text-align: left; }
     .foot .center, .foot .right { text-align: left; }
   }
@@ -1102,5 +1410,41 @@
     .titlestrip h2 { font-size: 22px; }
     .titlestrip h2 .sub { font-size: 12px; margin-left: 0; display: block; margin-top: 3px; }
     .titlestrip .coords { font-size: 9px; letter-spacing: 0.12em; gap: 12px; }
+    .command-center {
+      gap: 16px;
+      padding-top: 18px;
+      padding-bottom: 24px;
+    }
+    .verdict-console {
+      padding: 16px 0;
+    }
+    .verdict-console h1 {
+      font-size: clamp(30px, 10vw, 40px);
+      line-height: 1.04;
+      margin-bottom: 12px;
+    }
+    .verdict-console .lede {
+      font-size: 13px;
+      line-height: 1.42;
+      margin-bottom: 12px;
+    }
+    .contract-item {
+      padding: 9px 10px 10px;
+    }
+    .diagnostic-contract-strip {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .contract-item .v {
+      font-size: 10.5px;
+      line-height: 1.34;
+    }
+    .action-rail button,
+    .next-command button {
+      padding: 9px 10px;
+    }
+    .action-rail .detail,
+    .next-command .detail {
+      font-size: 11px;
+    }
   }
 </style>
