@@ -13,8 +13,11 @@
   import { tokens } from '$lib/tokens';
   import { navigateTo } from '$lib/router';
   import { buildRunStoryline, type StoryBeatSeverity } from '$lib/utils/run-storyline';
+  import { buildPulseInspection } from '$lib/utils/pulse-inspection';
   import type { MeasurementSample } from '$lib/types';
-  import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
+  import OrbitalScene, { type OrbitalStation, type PulseHover } from './OrbitalScene.svelte';
+  import InstrumentCalibration from './InstrumentCalibration.svelte';
+  import PulseEvidence from './PulseEvidence.svelte';
   import EndpointErrorView from './EndpointErrorView.svelte';
 
   const monitored = $derived($monitoredEndpointsStore);
@@ -48,6 +51,10 @@
   const stationLabelsForScene = $derived<Record<string, string>>(
     Object.fromEntries(monitored.slice(0, 4).map((ep, i) => [STATION_IDS[i], ep.label])),
   );
+  const stationToEndpoint = $derived<Record<string, string>>(
+    Object.fromEntries(monitored.slice(0, 4).map((ep, i) => [STATION_IDS[i], ep.id])),
+  );
+  const pinnedPulse = $derived($uiStore.pinnedPulse);
 
   // ── Sample windowing for OrbitalScene ──────────────────────────────────────
   const WINDOW = tokens.lane.chartWindow;
@@ -75,6 +82,14 @@
 
   const focusedStation = $derived<string | null>(
     focusedId === null ? null : (epToStation[focusedId] ?? null),
+  );
+  const focusedPinnedPulse = $derived(
+    pinnedPulse !== null && (
+      (pinnedPulse.endpointId !== null && pinnedPulse.endpointId === focusedId)
+      || (focusedStation !== null && pinnedPulse.stationId === focusedStation)
+    )
+      ? pinnedPulse
+      : null,
   );
   const focusedIndex = $derived<number>(
     focusedStation === null ? -1 : STATION_IDS.indexOf(focusedStation as typeof STATION_IDS[number]),
@@ -537,6 +552,19 @@
     uiStore.setFocusedEndpoint(epId);
     navigateTo({ name: 'endpoint', endpointId: epId });
   }
+  function inspectPulse(pulse: PulseHover): void {
+    const evidence = buildPulseInspection({
+      source: 'endpoint',
+      pulse,
+      endpointIdByStation: stationToEndpoint,
+      thresholdMs: threshold,
+    });
+    uiStore.setPinnedPulse(evidence);
+    if (evidence.endpointId !== null) uiStore.setFocusedEndpoint(evidence.endpointId);
+  }
+  function clearPinnedPulse(): void {
+    uiStore.clearPinnedPulse();
+  }
   function backToLive(): void {
     navigateTo({ name: 'live', endpointId: null });
   }
@@ -602,6 +630,7 @@
           stationLabels={stationLabelsForScene}
           currentRound={measurements.roundCounter}
           cadenceMs={settings.monitorDelay}
+          onPulseInspect={inspectPulse}
         />
       {/if}
     </div>
@@ -641,6 +670,25 @@
         </button>
       {/each}
     </div>
+
+    {#if focusedPinnedPulse}
+      <div class="endpoint-evidence">
+        <PulseEvidence evidence={focusedPinnedPulse} title="Selected sample" onClear={clearPinnedPulse} />
+      </div>
+    {:else}
+      <div class="endpoint-calibration">
+        <InstrumentCalibration
+          mode="endpoint"
+          thresholdMs={threshold}
+          windowSeconds={WINDOW}
+          sampleSlots={WINDOW}
+          baselineMs={heroP50 ?? fieldP50}
+          stationCount={stations.length}
+          cadenceMs={settings.monitorDelay}
+          compact={true}
+        />
+      </div>
+    {/if}
 
     <div class="hero-meta">
       <div class="kicker"><span class="pip"></span><span>Focused station · ground truth</span></div>
@@ -897,7 +945,7 @@
         {#if eventBeats.length === 0}
           <div class="event">
             <span class="t">T+00:00</span>
-            <span class="b">No station events yet. As samples arrive, drift and threshold-crossings will appear here.</span>
+            <span class="b">No notable station events in the current window yet.</span>
             <span class="tag">{focusedTag}</span>
           </div>
         {:else}
@@ -1092,6 +1140,21 @@
   }
   .station-tabs .tab.active .v { color: var(--focus); }
   .station-tabs .tab .v.bad { color: var(--sev-bad); }
+
+  .endpoint-calibration {
+    position: absolute;
+    top: 312px;
+    left: clamp(20px, 3vw, 48px);
+    z-index: 4;
+    width: min(360px, calc(100vw - 40px));
+  }
+  .endpoint-evidence {
+    position: absolute;
+    top: 312px;
+    left: clamp(20px, 3vw, 48px);
+    z-index: 4;
+    width: min(360px, calc(100vw - 40px));
+  }
 
   /* ── HERO META (right side) ─────────────────────────────────────────────── */
   .hero-meta {
@@ -1742,6 +1805,24 @@
     }
     .station-tabs .label { display: none; }
     .station-tabs .tab { width: auto; }
+    .endpoint-calibration {
+      position: static;
+      width: auto;
+      max-width: 720px;
+      padding: 0 clamp(20px, 3vw, 48px) 20px;
+    }
+    .endpoint-calibration :global(.instrument-calibration) {
+      max-width: 720px;
+    }
+    .endpoint-evidence {
+      position: static;
+      width: auto;
+      max-width: 720px;
+      padding: 0 clamp(20px, 3vw, 48px) 20px;
+    }
+    .endpoint-evidence :global(.pulse-evidence) {
+      max-width: 720px;
+    }
     .hero-left { position: static; padding: 24px clamp(20px, 3vw, 48px) 80px; }
     .analysis { grid-template-columns: 1fr; gap: 36px; }
     .rank-row { grid-template-columns: repeat(2, 1fr); }

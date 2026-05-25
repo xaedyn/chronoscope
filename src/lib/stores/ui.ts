@@ -10,6 +10,7 @@ import type {
   SharedReportContext,
   TerminalEventType,
   UIState,
+  PulseInspection,
 } from '../types';
 
 function normalizeActiveView(view: UIState['activeView']): UIState['activeView'] {
@@ -41,6 +42,7 @@ const initialState = (): UIState => ({
   terminalFilters: new Set<TerminalEventType>(),
   overviewSubtab: 'racing',
   autoStartSuppressionReason: null,
+  pinnedPulse: null,
 });
 
 function createUiStore() {
@@ -131,6 +133,12 @@ function createUiStore() {
     },
     setAutoStartSuppressionReason(reason: UIState['autoStartSuppressionReason']): void {
       update((s) => ({ ...s, autoStartSuppressionReason: reason }));
+    },
+    setPinnedPulse(pulse: PulseInspection): void {
+      update((s) => ({ ...s, pinnedPulse: pulse }));
+    },
+    clearPinnedPulse(): void {
+      update((s) => ({ ...s, pinnedPulse: null }));
     },
     reset(): void {
       set(initialState());
