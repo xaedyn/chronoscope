@@ -177,13 +177,14 @@ describe('buildReportInstrumentLens', () => {
       stats,
       thresholdMs: 120,
       pinnedPulse: null,
-      replayPulse: pulse(),
-      significantPulse: pulse(),
+      replayPulse: pulse({ slot: 359 }),
+      significantPulse: pulse({ slot: 120 }),
       selectionSource: 'significant',
       windowSlots: 360,
     });
 
     expect(lens.source).toBe('significant');
     expect(lens.selectionReason).toContain('most significant');
+    expect(lens.orbitalSelection?.selected.slot).toBe(359);
   });
 });

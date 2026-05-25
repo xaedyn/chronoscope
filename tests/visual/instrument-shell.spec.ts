@@ -12,12 +12,13 @@ async function openInstrument(page: Page, path = '/'): Promise<void> {
 
 async function seedRunningSession(
   page: Page,
-  options: { roundCount?: number; stopped?: boolean } = {},
+  options: { roundCount?: number; stopped?: boolean; spikeRound?: number } = {},
 ): Promise<void> {
   const roundCount = options.roundCount ?? 48;
   const stopped = options.stopped ?? false;
+  const spikeRound = options.spikeRound ?? null;
 
-  await page.evaluate(({ count, isStopped }) => {
+  await page.evaluate(({ count, isStopped, spikeAt }) => {
     return Promise.all([
       import('/src/lib/stores/endpoints.ts'),
       import('/src/lib/stores/measurements.ts'),
@@ -32,9 +33,36 @@ async function seedRunningSession(
       const now = Date.now();
       const startedAt = now - Math.max(1, count) * 1000;
       const samplesFor = (endpointIndex) => Array.from({ length: count }, (_, sampleIndex) => {
+        const round = sampleIndex + 1;
+        if (spikeAt !== null && round === spikeAt) {
+          if (endpointIndex === 0) {
+            return {
+              round,
+              latency: 180,
+              status: 'ok',
+              timestamp: startedAt + sampleIndex * 1000,
+            };
+          }
+          if (endpointIndex === 1) {
+            return {
+              round,
+              latency: 164,
+              status: 'ok',
+              timestamp: startedAt + sampleIndex * 1000,
+            };
+          }
+          if (endpointIndex === 2) {
+            return {
+              round,
+              latency: 0,
+              status: 'timeout',
+              timestamp: startedAt + sampleIndex * 1000,
+            };
+          }
+        }
         const latency = 30 + endpointIndex * 6 + (sampleIndex % 5 === 0 ? 8 : 0);
         return {
-          round: sampleIndex + 1,
+          round,
           latency,
           status: 'ok',
           timestamp: startedAt + sampleIndex * 1000,
@@ -68,7 +96,7 @@ async function seedRunningSession(
       uiStore.setSharedView(false);
       uiStore.setSharedReportMode(false);
     });
-  }, { count: roundCount, isStopped: stopped });
+  }, { count: roundCount, isStopped: stopped, spikeAt: spikeRound });
 }
 
 function boxesOverlap(page: Page, aSelector: string, bSelector: string): Promise<boolean> {
@@ -274,7 +302,7 @@ test.describe('Instrument shell hardening', () => {
     await expect(endpointCalibration).toContainText('Drift');
 
     await page.getByRole('button', { name: 'Report', exact: true }).click();
-    await expect(page.getByRole('img', { name: 'Orbital tracker', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Orbital tracker. Click a pulse to pin evidence.', exact: true })).toBeVisible();
     const reportCalibration = page.locator('.report-surface .instrument-calibration');
     await expect(reportCalibration).toBeVisible();
     await expect(reportCalibration).toContainText('Live report draft');
@@ -311,7 +339,7 @@ test.describe('Instrument shell hardening', () => {
   test('report image export downloads a composed artifact', async ({ page }) => {
     await openInstrument(page, '/report');
     await seedRunningSession(page, { roundCount: 72, stopped: true });
-    await expect(page.locator('.report-surface .pulse-evidence')).toContainText('Replay sample');
+    await expect(page.locator('.report-surface .pulse-evidence')).toContainText('Significant sample');
 
     const [download] = await Promise.all([
       page.waitForEvent('download'),
@@ -324,6 +352,23 @@ test.describe('Instrument shell hardening', () => {
     expect(statSync(path as string).size).toBeGreaterThan(10_000);
   });
 
+  test('completed report opens on the most significant replay moment', async ({ page }) => {
+    await openInstrument(page, '/report');
+    await seedRunningSession(page, { roundCount: 72, stopped: true, spikeRound: 36 });
+
+    const lens = page.locator('.report-instrument-lens');
+    await expect(lens).toBeVisible();
+    await expect(lens).toContainText('Replay lens');
+    await expect(lens).toContainText('Round #36');
+    await expect(lens).toContainText('most significant detected moment');
+    await expect(lens).toContainText('Multiple stations');
+    await expect(page.locator('.scrub-read')).toContainText('36 / 72');
+    await expect(page.locator('.selected-pulse-marker')).toBeVisible();
+    await expect(page.locator('.peer-pulse-marker').first()).toBeVisible();
+    await expect(page.locator('.selected-angle-guide')).toBeVisible();
+    await expect(page.locator('.station-card[data-selected="true"]')).toBeVisible();
+  });
+
   test('report replay scrub updates the evidence sample and inspector', async ({ page }) => {
     await openInstrument(page, '/report');
     await seedRunningSession(page, { roundCount: 72, stopped: true });
@@ -331,11 +376,41 @@ test.describe('Instrument shell hardening', () => {
     const rail = page.locator('.scrub .rail');
     const box = await rail.boundingBox();
     expect(box).not.toBeNull();
-    await page.mouse.click((box?.x ?? 0) + (box?.width ?? 0) * 0.5, (box?.y ?? 0) + (box?.height ?? 0) * 0.5);
+    await rail.click({ position: { x: (box?.width ?? 0) * 0.5, y: (box?.height ?? 0) * 0.5 } });
 
     await expect(page.locator('.scrub-read')).toContainText('36 / 72');
     await expect(page.locator('.report-surface .pulse-evidence')).toContainText('Round #36');
+    await expect(page.locator('.report-instrument-lens')).toContainText('Replay moment selected by the scrubber.');
+    await expect(page.locator('.report-instrument-lens')).toContainText('Round #36');
+    await expect(page.locator('.selected-pulse-marker')).toBeVisible();
+    await expect(page.locator('.selected-angle-guide')).toBeVisible();
     await expect(page.locator('.sample-inspector')).toBeVisible();
     await expect(page.locator('.sample-inspector')).toContainText('Round #36');
+  });
+
+  test('report lens distinguishes pinned pulse and can return to replay', async ({ page }) => {
+    await openInstrument(page, '/report');
+    await seedRunningSession(page, { roundCount: 72, stopped: true });
+    await pinPulseEvidence(page);
+
+    const lens = page.locator('.report-instrument-lens');
+    await expect(lens).toBeVisible();
+    await expect(lens).toContainText('pinned');
+    await expect(lens).toContainText('Pinned pulse carried into the report.');
+    await expect(page.locator('.station-card[data-selected="true"]')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Return to replay' }).click();
+    await expect(lens).not.toContainText('Pinned pulse carried into the report.');
+    await expect(lens).toContainText('Replay moment selected by the scrubber.');
+  });
+
+  test('mobile report keeps replay lens readable', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openInstrument(page, '/report');
+    await seedRunningSession(page, { roundCount: 72, stopped: true, spikeRound: 36 });
+
+    await expect(page.locator('.report-instrument-lens')).toBeVisible();
+    await expect(page.locator('.report-instrument-lens .peer-row').first()).toBeVisible();
+    expect(await boxesOverlap(page, '.report-instrument-lens', '.scrub')).toBe(false);
   });
 });

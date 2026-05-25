@@ -30,13 +30,18 @@
   import { buildSampleInspector } from '$lib/utils/sample-inspector';
   import { buildRunStoryline } from '$lib/utils/run-storyline';
   import { buildMostSignificantPulseInspection } from '$lib/utils/significant-pulse';
-  import { driftLabel, pulseInspectionSummary, thresholdDeltaLabel } from '$lib/utils/pulse-inspection';
+  import { buildPulseInspection, driftLabel, pulseInspectionSummary, thresholdDeltaLabel } from '$lib/utils/pulse-inspection';
+  import {
+    buildReportInstrumentLens,
+    type ReportLensSource,
+  } from '$lib/utils/report-instrument-lens';
   import { deriveEndpointTone, type EndpointTone } from '$lib/utils/endpoint-tone';
   import { tokens } from '$lib/tokens';
-  import type { MeasurementSample } from '$lib/types';
-  import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
+  import type { MeasurementSample, PulseInspection } from '$lib/types';
+  import OrbitalScene, { type OrbitalStation, type PulseHover } from './OrbitalScene.svelte';
   import InstrumentCalibration from './InstrumentCalibration.svelte';
   import PulseEvidence from './PulseEvidence.svelte';
+  import ReportInstrumentLens from './ReportInstrumentLens.svelte';
   import SampleInspector from './SampleInspector.svelte';
   import { REGION_SHORT_CODES } from '$lib/regional-defaults';
 
@@ -100,6 +105,16 @@
       radius: STATION_RADII[i],
     })),
   );
+  const endpointIdByStation = $derived<Record<string, string>>(
+    Object.fromEntries(
+      monitored.slice(0, 4).map((ep, i) => [STATION_IDS[i], ep.id]),
+    ),
+  );
+  const stationLabelsForScene = $derived<Record<string, string>>(
+    Object.fromEntries(
+      monitored.slice(0, 4).map((ep, i) => [STATION_IDS[i], ep.label]),
+    ),
+  );
   // Report is a session-signature plot, not a rolling-window live view. WINDOW
   // here is the number of pulse slots allocated per station, sized for typical
   // session lengths (1-6 minutes at 1Hz typically resolves to <360 rounds).
@@ -108,6 +123,9 @@
   // hard-coded 247-round demo; this is the same anatomy generalised.
   const WINDOW = 360;
   let scrubT = $state(1);
+  let selectionSource = $state<Exclude<ReportLensSource, 'pinned' | 'none'>>('significant');
+  let clickedPulse = $state<PulseInspection | null>(null);
+  let didSeedSignificant = $state(false);
   const replayFrame = $derived(buildReportReplayFrame({
     endpoints: monitored,
     measurements,
@@ -126,15 +144,36 @@
     windowSlots: WINDOW,
     capturedAt: report.createdAt ?? measurements.stoppedAt ?? Date.now(),
   }));
-  const reportPulse = $derived(
-    pinnedPulse ?? (isRecording ? significantPulse : replayFrame.pulse ?? significantPulse),
-  );
+  $effect(() => {
+    if (didSeedSignificant || isRecording || pinnedPulse || !significantPulse?.roundNumber) return;
+    const maxRound = Math.max(1, measurements.roundCounter);
+    scrubT = Math.max(0, Math.min(1, significantPulse.roundNumber / maxRound));
+    selectionSource = 'significant';
+    didSeedSignificant = true;
+  });
+  const replaySelectedPulse = $derived(clickedPulse ?? replayFrame.pulse ?? significantPulse);
+  const reportLens = $derived(buildReportInstrumentLens({
+    endpoints: monitored,
+    measurements,
+    stats,
+    thresholdMs: settings.healthThreshold,
+    pinnedPulse,
+    replayPulse: replaySelectedPulse,
+    significantPulse,
+    selectionSource,
+    windowSlots: WINDOW,
+  }));
+  const reportPulse = $derived(reportLens.selected);
   const reportPulseTitle = $derived(
     pinnedPulse
       ? 'Pinned pulse evidence'
-      : !isRecording && replayFrame.pulse
-        ? 'Replay sample'
-        : 'Significant sample',
+      : reportLens.source === 'significant'
+        ? 'Significant sample'
+        : reportLens.source === 'clicked'
+          ? 'Selected replay sample'
+          : !isRecording && replayFrame.pulse
+            ? 'Replay sample'
+            : 'Significant sample',
   );
   const sampleInspector = $derived.by(() => {
     if (!reportPulse) return null;
@@ -492,14 +531,41 @@
   // The scrubber now drives the report frame itself: orbital pulses, current
   // evidence, and the sample inspector all follow this replay position.
   const scrubRoundLabel = $derived(replayFrame.roundLabel);
+  function setReplayProgress(next: number, source: 'scrub' | 'clicked' = 'scrub'): void {
+    scrubT = Math.max(0, Math.min(1, next));
+    if (source === 'scrub') clickedPulse = null;
+    selectionSource = source;
+  }
+
   function onRailClick(e: MouseEvent | TouchEvent): void {
     const rail = e.currentTarget as HTMLDivElement;
     if (!rail) return;
     const rect = rail.getBoundingClientRect();
     const x = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    scrubT = Math.max(0, Math.min(1, (x - rect.left) / rect.width));
+    setReplayProgress((x - rect.left) / rect.width);
   }
   const railMarks = Array.from({ length: 60 }, (_, i) => i);
+
+  function inspectReportPulse(pulse: PulseHover): void {
+    const evidence = buildPulseInspection({
+      source: 'endpoint',
+      pulse,
+      endpointIdByStation,
+      thresholdMs: settings.healthThreshold,
+    });
+    clickedPulse = evidence;
+    if (evidence.roundNumber !== null) {
+      setReplayProgress(evidence.roundNumber / Math.max(1, measurements.roundCounter), 'clicked');
+    } else {
+      selectionSource = 'clicked';
+    }
+  }
+
+  function returnToReplay(): void {
+    uiStore.clearPinnedPulse();
+    clickedPulse = null;
+    selectionSource = 'scrub';
+  }
 
   // ── Sharing / export hooks (preserved chronoscope behavior) ───────────────
   // PNG export: composite the WebGL signature with report text and evidence.
@@ -736,16 +802,16 @@
     const rounds = Math.max(measurements.roundCounter, 1);
     if (e.key === 'ArrowLeft') {
       e.preventDefault();
-      scrubT = Math.max(0, scrubT - (e.shiftKey ? 10 : 1) / rounds);
+      setReplayProgress(scrubT - (e.shiftKey ? 10 : 1) / rounds);
     } else if (e.key === 'ArrowRight') {
       e.preventDefault();
-      scrubT = Math.min(1, scrubT + (e.shiftKey ? 10 : 1) / rounds);
+      setReplayProgress(scrubT + (e.shiftKey ? 10 : 1) / rounds);
     } else if (e.key === 'Home') {
       e.preventDefault();
-      scrubT = 0;
+      setReplayProgress(0);
     } else if (e.key === 'End') {
       e.preventDefault();
-      scrubT = 1;
+      setReplayProgress(1);
     } else if ((e.key === 'p' || e.key === 'P') && !e.metaKey && !e.ctrlKey) {
       e.preventDefault();
       saveImage();
@@ -774,7 +840,17 @@
           windowRounds={WINDOW}
           assemble={true}
           revealProgress={1}
+          stationLabels={stationLabelsForScene}
+          currentRound={replayFrame.targetRound}
+          cadenceMs={settings.monitorDelay}
           showTooltip={false}
+          onPulseInspect={inspectReportPulse}
+          selectedPulse={reportLens.orbitalSelection?.selected ?? null}
+          peerPulses={reportLens.orbitalSelection?.peerStations.map((stationId) => ({
+            stationId,
+            slot: reportLens.orbitalSelection?.selected.slot ?? 0,
+          })) ?? []}
+          selectedAngle={reportLens.orbitalSelection?.angle ?? null}
         />
       {/if}
     </div>
@@ -875,7 +951,11 @@
 
     <div class="stations-grid">
       {#each stationSummaries as row (row.endpointId)}
-        <div class="station-card" data-ep={row.id}>
+        <div
+          class="station-card"
+          data-ep={row.id}
+          data-selected={reportLens.selected?.endpointId === row.endpointId ? 'true' : 'false'}
+        >
           <div class="vh">
             <span class="mk"></span>
             <span class="name">{row.name}</span>
@@ -904,6 +984,8 @@
         </div>
       {/each}
     </div>
+
+    <ReportInstrumentLens lens={reportLens} onReturnToReplay={returnToReplay} />
 
     {#if sampleInspector}
       <div class="sample-inspector-wrap">
@@ -1307,6 +1389,11 @@
   .station-card {
     background: var(--bg);
     padding: 22px 24px 24px;
+    border: 1px solid transparent;
+  }
+  .station-card[data-selected="true"] {
+    border-color: var(--fg);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--fg) 24%, transparent);
   }
   .station-card .vh {
     display: flex;

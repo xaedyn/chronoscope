@@ -43,6 +43,17 @@
     readonly stationId: string;
     readonly angle: number; // radians, -π..π
   }
+
+  export interface OrbitalSelectedPulse {
+    readonly stationId: string;
+    readonly slot: number;
+    readonly roundNumber: number | null;
+  }
+
+  export interface OrbitalPeerPulse {
+    readonly stationId: string;
+    readonly slot: number;
+  }
 </script>
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
@@ -75,6 +86,9 @@
     currentRound = null,
     cadenceMs = null,
     stationTimestamps = undefined,
+    selectedPulse = null,
+    peerPulses = [],
+    selectedAngle = null,
   }: {
     stations: readonly OrbitalStation[];
     stationData: Readonly<Record<string, readonly (number | null)[]>>;
@@ -114,6 +128,11 @@
     // producing a dense bright necklace instead of v4's "one fresh pulse +
     // settled trail" look.
     stationTimestamps?: Readonly<Record<string, readonly (number | null)[]>>;
+    // Optional selection overlays used by Report replay to make the orbital
+    // scene behave like an inspection instrument.
+    selectedPulse?: OrbitalSelectedPulse | null;
+    peerPulses?: readonly OrbitalPeerPulse[];
+    selectedAngle?: number | null;
   } = $props();
 
   // Element refs (Svelte 5: bind:this fills these at mount)
@@ -149,6 +168,8 @@
 
   // ── Hover tooltip state ────────────────────────────────────────────────────
   let hover = $state<PulseHover | null>(null);
+  let selectedPulsePosition = $state<{ x: number; y: number } | null>(null);
+  let peerPulsePositions = $state<readonly { stationId: string; slot: number; x: number; y: number }[]>([]);
   const canInspectPulses = $derived(onPulseInspect !== undefined);
   let stars: THREE.Points | null = null;
   let home: THREE.Mesh | null = null;
@@ -307,6 +328,30 @@
     };
   }
 
+  function visiblePulsePosition(stationId: string, slot: number): { x: number; y: number } | null {
+    const buf = pulses[stationId];
+    if (!buf) return null;
+    if (slot < 0 || slot >= windowRounds) return null;
+    if (buf.positions[slot * 3] >= 9000 || buf.reveals[slot] > revealProgress) return null;
+    return screenPositionForPulse(stationId, slot);
+  }
+
+  function syncSelectionOverlay(): void {
+    if (!canvas || !camera) return;
+    selectedPulsePosition = selectedPulse
+      ? visiblePulsePosition(selectedPulse.stationId, selectedPulse.slot)
+      : null;
+
+    const selectedKey = selectedPulse ? `${selectedPulse.stationId}:${selectedPulse.slot}` : null;
+    peerPulsePositions = peerPulses
+      .filter((peer) => `${peer.stationId}:${peer.slot}` !== selectedKey)
+      .map((peer) => {
+        const position = visiblePulsePosition(peer.stationId, peer.slot);
+        return position ? { ...peer, ...position } : null;
+      })
+      .filter((peer): peer is { stationId: string; slot: number; x: number; y: number } => peer !== null);
+  }
+
   function newestPulseForStation(stationId: string): PulseHover | null {
     const data = stationData[stationId] ?? [];
     const buf = pulses[stationId];
@@ -348,7 +393,7 @@
   }
 
   function handleCanvasMouseMove(e: MouseEvent): void {
-    if (!showTooltip || !camera || !canvas) return;
+    if ((!showTooltip && onPulseInspect === undefined) || !camera || !canvas) return;
     const rect = canvas.getBoundingClientRect();
     const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const ndcY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -810,6 +855,7 @@
       (buf.points.material as THREE.ShaderMaterial).uniforms.uTime.value = now;
     }
 
+    syncSelectionOverlay();
     renderer.render(scene, camera);
     rafId = requestAnimationFrame(frame);
   }
@@ -924,6 +970,29 @@
 {#snippet sceneContent()}
   <canvas bind:this={canvas} class="orbital-canvas"></canvas>
   <div class="orbital-vignette" aria-hidden="true"></div>
+  {#if selectedAngle !== null}
+    <span
+      class="selected-angle-guide"
+      style:--selected-angle="{selectedAngle}rad"
+      aria-hidden="true"
+    ></span>
+  {/if}
+  {#each peerPulsePositions as peer (`${peer.stationId}-${peer.slot}`)}
+    <span
+      class="peer-pulse-marker"
+      style:left="{peer.x}px"
+      style:top="{peer.y}px"
+      aria-hidden="true"
+    ></span>
+  {/each}
+  {#if selectedPulsePosition}
+    <span
+      class="selected-pulse-marker"
+      style:left="{selectedPulsePosition.x}px"
+      style:top="{selectedPulsePosition.y}px"
+      aria-hidden="true"
+    ></span>
+  {/if}
   {#if showTooltip && hover}
     {@const h = hover}
     <div
@@ -1006,6 +1075,42 @@
       color-mix(in srgb, var(--bg) 96%, transparent) 100%
     );
   }
+  .selected-pulse-marker,
+  .peer-pulse-marker {
+    position: absolute;
+    z-index: 4;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+  }
+  .selected-pulse-marker {
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--fg);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--fg) 55%, transparent);
+  }
+  .peer-pulse-marker {
+    width: 13px;
+    height: 13px;
+    border: 1px solid var(--station-b);
+    opacity: 0.72;
+  }
+  .selected-angle-guide {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 46%;
+    height: 1px;
+    z-index: 3;
+    transform-origin: left center;
+    transform: rotate(var(--selected-angle));
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--fg) 50%, transparent),
+      transparent
+    );
+    pointer-events: none;
+  }
   /* Pulse hover tooltip — offset from cursor, station-colored accent line. */
   .orbital-tooltip {
     position: absolute;
@@ -1058,4 +1163,10 @@
   }
   .orbital-tooltip .t-k { color: var(--fg-3); text-transform: uppercase; font-weight: 700; }
   .orbital-tooltip .t-v { color: var(--fg); font-weight: 700; }
+  @media (prefers-reduced-motion: reduce) {
+    .selected-pulse-marker,
+    .peer-pulse-marker {
+      transition: none;
+    }
+  }
 </style>
