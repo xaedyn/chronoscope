@@ -557,6 +557,25 @@ test.describe('Instrument shell hardening', () => {
     await expect(page.locator('.hud-title h1')).toContainText('spiked during the recording');
   });
 
+  test('desktop report separates verdict, proof rail, and replay controls', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openInstrument(page, '/report');
+    await seedRunningSession(page, { roundCount: 72, stopped: true, spikeRound: 36 });
+
+    await expect(page.locator('.hud-title')).toBeVisible();
+    await expect(page.locator('.hero-metrics')).toBeVisible();
+    await expect(page.locator('.report-side-stack')).toBeVisible();
+    await expect(page.locator('.report-calibration')).toBeVisible();
+    await expect(page.locator('.report-evidence')).toBeVisible();
+    await expect(page.locator('.scrub')).toBeVisible();
+    await expect(page.locator('.hud-stats')).toHaveCount(0);
+
+    expect(await boxesOverlap(page, '.hud-title', '.report-side-stack')).toBe(false);
+    expect(await boxesOverlap(page, '.hero-metrics', '.report-side-stack')).toBe(false);
+    expect(await boxesOverlap(page, '.report-calibration', '.report-evidence')).toBe(false);
+    expect(await boxesOverlap(page, '.report-side-stack', '.scrub')).toBe(false);
+  });
+
   test('report replay scrub updates the evidence sample and inspector', async ({ page }) => {
     await openInstrument(page, '/report');
     await seedRunningSession(page, { roundCount: 72, stopped: true });
