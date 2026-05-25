@@ -656,6 +656,29 @@
       </div>
     </div>
 
+    <div class="record-notes notes">
+      <h3>Observer's notes</h3>
+      <p>
+        {#each verdictBodySegments as segment, i (i)}
+          {#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}
+        {/each}
+      </p>
+      <p>
+        {#each interpretationSegments as segment, i (i)}
+          {#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}
+        {/each}
+      </p>
+      <div class="field-stats">
+        <div class="s">
+          <div class="k">Field p50</div>
+          <div class="v">{#if fieldP50 === null}—{:else}{fieldP50}<span class="u">ms</span>{/if}</div>
+        </div>
+        <div class="s">
+          <div class="k">Field p95</div>
+          <div class="v">{#if fieldP95 === null}—{:else}{fieldP95}<span class="u">ms</span>{/if}</div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section class="log-section">
@@ -677,29 +700,6 @@
             </div>
           {/each}
         {/if}
-      </div>
-    </div>
-    <div class="notes">
-      <h3>Observer's notes</h3>
-      <p>
-        {#each verdictBodySegments as segment, i (i)}
-          {#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}
-        {/each}
-      </p>
-      <p>
-        {#each interpretationSegments as segment, i (i)}
-          {#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}
-        {/each}
-      </p>
-      <div class="field-stats">
-        <div class="s">
-          <div class="k">Field p50</div>
-          <div class="v">{#if fieldP50 === null}—{:else}{fieldP50}<span class="u">ms</span>{/if}</div>
-        </div>
-        <div class="s">
-          <div class="k">Field p95</div>
-          <div class="v">{#if fieldP95 === null}—{:else}{fieldP95}<span class="u">ms</span>{/if}</div>
-        </div>
       </div>
     </div>
   </section>
@@ -1131,8 +1131,10 @@
   }
   .record-command {
     padding: 30px clamp(20px, 3vw, 48px) 36px;
-    display: flex;
-    justify-content: flex-start;
+    display: grid;
+    grid-template-columns: minmax(360px, 620px) minmax(0, 1fr);
+    gap: clamp(28px, 4vw, 72px);
+    align-items: start;
     border-bottom: 1px solid var(--rule);
   }
   .stations {
@@ -1210,7 +1212,7 @@
   /* Flight card */
   .flight {
     box-sizing: border-box;
-    width: min(100%, 620px);
+    width: 100%;
     padding: 18px 20px 16px;
     border: 1px solid var(--rule);
     background: color-mix(in srgb, var(--bg-2) 44%, var(--bg));
@@ -1269,15 +1271,18 @@
   .flight .marks .m[data-s="warn"] { background: var(--sev-warn); box-shadow: 0 0 6px var(--sev-warn); }
   .flight .marks .m[data-s="bad"]  { background: var(--sev-bad);  box-shadow: 0 0 6px var(--sev-bad); }
   .flight .marks .m[data-s="crit"] { background: var(--sev-crit); box-shadow: 0 0 6px var(--sev-crit); }
+  .record-notes {
+    min-width: 0;
+    padding-top: 2px;
+  }
   /* ── Log section ────────────────────────────────────────────────────────── */
   .log-section {
     padding: 40px clamp(20px, 3vw, 48px) 48px;
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    gap: 56px;
+    display: block;
     border-bottom: 1px solid var(--rule);
   }
-  .log-section h3 {
+  .log-section h3,
+  .record-notes h3 {
     font-family: var(--mono);
     font-size: 10px;
     letter-spacing: 0.22em;
@@ -1390,7 +1395,13 @@
     }
     .field-console { grid-template-columns: minmax(0, 1fr); }
     .orbit-stage { max-width: 380px; }
-    .log-section { grid-template-columns: 1fr; gap: 36px; }
+    .record-command {
+      grid-template-columns: 1fr;
+      gap: 30px;
+    }
+    .flight {
+      width: min(100%, 620px);
+    }
   }
   @media (max-width: 720px) {
     .titlestrip {
