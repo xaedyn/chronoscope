@@ -336,6 +336,14 @@ test.describe('Instrument shell hardening', () => {
     await expect(commandActions.nth(1)).toContainText('Watch recurrence');
     await expect(commandActions.nth(2)).toContainText('Share proof');
     await expect(page.locator('.next-command')).toHaveCount(0);
+    const recordBox = await page.locator('.record-command').boundingBox();
+    const flightBox = await page.locator('.flight').boundingBox();
+    expect(recordBox).not.toBeNull();
+    expect(flightBox).not.toBeNull();
+    expect(flightBox!.width).toBeLessThanOrEqual(660);
+    if (recordBox!.width >= 900) {
+      expect(flightBox!.width / recordBox!.width).toBeLessThan(0.55);
+    }
 
     await page.getByRole('button', { name: 'Live', exact: true }).click();
     const liveContract = page.locator('.live-contract-strip');

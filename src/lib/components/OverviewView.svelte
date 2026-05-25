@@ -1131,7 +1131,8 @@
   }
   .record-command {
     padding: 30px clamp(20px, 3vw, 48px) 36px;
-    display: block;
+    display: flex;
+    justify-content: flex-start;
     border-bottom: 1px solid var(--rule);
   }
   .stations {
@@ -1207,7 +1208,14 @@
   .srow .drift .k { color: var(--fg-3); margin-right: 4px; }
 
   /* Flight card */
-  .flight { font-family: var(--mono); }
+  .flight {
+    box-sizing: border-box;
+    width: min(100%, 620px);
+    padding: 18px 20px 16px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg-2) 44%, var(--bg));
+    font-family: var(--mono);
+  }
   .flight h3 {
     font-family: var(--mono);
     font-size: 10px;
@@ -1222,9 +1230,9 @@
   .flight h3 .v { color: var(--fg); font-weight: 700; }
   .flight .frow {
     display: grid;
-    grid-template-columns: 130px 1fr;
+    grid-template-columns: minmax(96px, 118px) minmax(0, 1fr);
     gap: 6px 18px;
-    padding: 8px 0;
+    padding: 9px 0;
     border-bottom: 1px solid var(--rule-faint);
     font-size: 11px;
   }
@@ -1238,11 +1246,16 @@
     font-weight: 700;
   }
   .flight .frow .v {
+    min-width: 0;
+    justify-self: end;
+    text-align: right;
     color: var(--fg);
     font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
   }
   .flight .marks {
     display: flex;
+    justify-content: flex-end;
     gap: 6px;
     margin-top: 16px;
     padding-top: 14px;
@@ -1486,6 +1499,20 @@
     }
     .calibration-band {
       padding-top: 14px;
+    }
+    .record-command {
+      padding-top: 22px;
+      padding-bottom: 28px;
+    }
+    .flight {
+      padding: 14px;
+    }
+    .flight h3 {
+      margin-bottom: 14px;
+    }
+    .flight .frow {
+      grid-template-columns: minmax(88px, 104px) minmax(0, 1fr);
+      gap: 6px 12px;
     }
   }
 </style>
