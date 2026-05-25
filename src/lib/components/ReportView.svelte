@@ -1606,21 +1606,96 @@
     .record-row { grid-template-columns: 1fr; gap: 40px; }
   }
   @media (max-width: 720px) {
+    .stage {
+      height: auto;
+      min-height: 0;
+      display: grid;
+      gap: 18px;
+      padding: 18px 16px 0;
+      overflow: hidden;
+    }
+    .stage-scene,
+    .vignette {
+      position: absolute;
+      inset: 0;
+    }
+    .stage-scene {
+      min-height: 100%;
+    }
+    .hud-top {
+      position: relative;
+      top: auto;
+      left: auto;
+      right: auto;
+      z-index: 5;
+      justify-content: flex-start;
+    }
+    .hud-top .coords {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px 12px;
+      padding: 10px 12px;
+      font-size: 9px;
+      letter-spacing: 0.12em;
+    }
+    .hud-top .coords > span {
+      min-width: 0;
+      white-space: normal;
+    }
+    .hud-top .coords > span:first-child {
+      grid-column: 1 / -1;
+      white-space: nowrap;
+    }
     .hud-title {
-      left: 16px;
-      right: 16px;
+      position: relative;
+      left: auto;
+      right: auto;
+      top: auto;
+      transform: none;
+      z-index: 5;
       max-width: none;
+      margin: 176px 0 0;
+      pointer-events: none;
+    }
+    .hud-title::before {
+      content: '';
+      position: absolute;
+      z-index: -1;
+      inset: -18px -16px -14px;
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--bg) 94%, transparent) 0%,
+        color-mix(in srgb, var(--bg) 76%, transparent) 72%,
+        transparent 100%
+      );
+    }
+    .hud-title .kicker {
+      margin-bottom: 12px;
+      letter-spacing: 0.22em;
+    }
+    .hud-title h1 {
+      margin-bottom: 16px;
+    }
+    .hud-title .body {
+      max-width: none;
+      margin-bottom: 20px;
     }
     .hud-stats {
-      left: 16px;
-      right: 16px;
-      bottom: 100px;
+      position: relative;
+      left: auto;
+      right: auto;
+      bottom: auto;
+      z-index: 5;
       text-align: left;
+      padding-top: 2px;
     }
     .report-calibration {
-      left: 16px;
-      right: 16px;
-      top: 76px;
+      position: relative;
+      left: auto;
+      right: auto;
+      top: auto;
+      z-index: 5;
       width: auto;
     }
     .report-calibration :global(.summary),
@@ -1628,16 +1703,27 @@
       display: none;
     }
     .report-evidence {
-      left: 16px;
-      right: 16px;
-      top: 254px;
+      position: relative;
+      left: auto;
+      right: auto;
+      top: auto;
+      z-index: 5;
       width: auto;
     }
     .report-evidence :global(.summary) {
       display: none;
     }
     .hud-stats .row { justify-content: flex-start; }
-    .scrub { padding: 12px 12px 14px; gap: 12px; }
+    .scrub {
+      position: relative;
+      left: auto;
+      right: auto;
+      bottom: auto;
+      z-index: 5;
+      margin: 6px -16px 0;
+      padding: 12px 12px 14px;
+      gap: 12px;
+    }
     .scrub .lbl { display: none; }
     .stations-grid { grid-template-columns: 1fr; }
     .foot {
@@ -1648,7 +1734,12 @@
     .foot .center, .foot .right { text-align: left; }
   }
   @media (max-width: 480px) {
-    .stage { min-height: 600px; }
+    .stage {
+      min-height: 0;
+      padding-inline: 14px;
+    }
+    .scrub { margin-inline: -14px; }
+    .hud-title { margin-top: 156px; }
     .hud-title h1 { font-size: clamp(28px, 9vw, 48px); }
     .hud-stats .num { font-size: clamp(32px, 11vw, 56px); }
     .hud-stats .num .u { font-size: 12px; }
