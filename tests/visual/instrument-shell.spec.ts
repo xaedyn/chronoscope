@@ -374,6 +374,30 @@ test.describe('Instrument shell hardening', () => {
     await expect(page.locator('.hud-title .body')).toContainText('separates the current verdict');
   });
 
+  test('investigate command board keeps the hypothesis beside the station comparison', async ({ page }) => {
+    test.skip((page.viewportSize()?.width ?? 1280) < 700, 'Desktop command-board layout assertion.');
+
+    await openInstrument(page, '/investigate');
+    await seedRunningSession(page, { roundCount: 72, stopped: true, spikeRound: 36 });
+
+    const commandBoard = page.locator('.investigate-console');
+    const hypothesis = page.locator('.investigate-hypothesis');
+    const comparison = page.locator('.compare-section');
+    await expect(commandBoard).toBeVisible();
+    await expect(hypothesis).toContainText('Working hypothesis');
+    await expect(comparison).toContainText('Compare all four stations');
+    await expect(comparison).toBeInViewport({ ratio: 0.7 });
+
+    const boardBox = await commandBoard.boundingBox();
+    const hypothesisBox = await hypothesis.boundingBox();
+    const comparisonBox = await comparison.boundingBox();
+    expect(boardBox).not.toBeNull();
+    expect(hypothesisBox).not.toBeNull();
+    expect(comparisonBox).not.toBeNull();
+    expect(Math.abs(hypothesisBox!.y - comparisonBox!.y)).toBeLessThanOrEqual(24);
+    expect(boardBox!.y + boardBox!.height).toBeLessThanOrEqual(720);
+  });
+
   test('overview command actions stay visible on mobile and drill into the event endpoint', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openInstrument(page);
@@ -514,5 +538,21 @@ test.describe('Instrument shell hardening', () => {
     await expect(page.locator('.report-instrument-lens')).toBeVisible();
     await expect(page.locator('.report-instrument-lens .peer-row').first()).toBeVisible();
     expect(await boxesOverlap(page, '.report-instrument-lens', '.scrub')).toBe(false);
+  });
+
+  test('mobile report stacks calibration and evidence without covering the verdict', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openInstrument(page, '/report');
+    await seedRunningSession(page, { roundCount: 72, stopped: true, spikeRound: 36 });
+
+    await expect(page.locator('.hud-title')).toBeVisible();
+    await expect(page.locator('.report-calibration')).toBeVisible();
+    await expect(page.locator('.report-evidence')).toBeVisible();
+    await expect(page.locator('.scrub')).toBeVisible();
+
+    expect(await boxesOverlap(page, '.hud-title', '.report-calibration')).toBe(false);
+    expect(await boxesOverlap(page, '.hud-title', '.report-evidence')).toBe(false);
+    expect(await boxesOverlap(page, '.report-calibration', '.report-evidence')).toBe(false);
+    expect(await boxesOverlap(page, '.report-evidence', '.scrub')).toBe(false);
   });
 });

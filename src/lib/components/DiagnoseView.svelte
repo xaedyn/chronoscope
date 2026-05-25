@@ -642,123 +642,123 @@
     </div>
 
     <main class="investigate-main">
-      <section
-        class="investigate-hypothesis"
-        data-tone={evidenceContract.notableEvent?.tone ?? evidenceContract.current.tone}
-        aria-label="Investigative hypothesis"
-      >
-        <div class="hypothesis-copy">
-          <div class="eyebrow">Diagnostic question</div>
-          <h3>{evidenceContract.investigate.hypothesis}</h3>
-          <p>{evidenceContract.investigate.detail}</p>
-        </div>
-        <div class="hypothesis-evidence" aria-label="Evidence supporting this hypothesis">
-          {#each evidenceContract.investigate.evidence as item, i (i)}
-            <div class="evidence-row">
-              <span class="n">{(i + 1).toString().padStart(2, '0')}</span>
-              <span>{item}</span>
-            </div>
-          {/each}
-        </div>
-      </section>
+      <div class="investigate-console" aria-label="Diagnostic command board">
+        <section
+          class="investigate-hypothesis"
+          data-tone={evidenceContract.notableEvent?.tone ?? evidenceContract.current.tone}
+          aria-label="Investigative hypothesis"
+        >
+          <div class="hypothesis-copy">
+            <div class="eyebrow">Diagnostic question</div>
+            <h3>{evidenceContract.investigate.hypothesis}</h3>
+            <p>{evidenceContract.investigate.detail}</p>
+          </div>
+          <div class="hypothesis-evidence" aria-label="Evidence supporting this hypothesis">
+            {#each evidenceContract.investigate.evidence as item, i (i)}
+              <div class="evidence-row">
+                <span class="n">{(i + 1).toString().padStart(2, '0')}</span>
+                <span>{item}</span>
+              </div>
+            {/each}
+          </div>
+        </section>
 
-      <!-- ============ COMPARE ALL STATIONS OVERLAY ============ -->
-      <!-- Spans both columns of the main grid so the side-by-side overlay sits
-           above the per-station rows and the outside-vantage column. -->
-      <section class="compare-section">
-        <div class="compare-head">
-          <div class="l"><em>Compare</em> all four stations</div>
-        </div>
+        <!-- ============ COMPARE ALL STATIONS OVERLAY ============ -->
+        <section class="compare-section">
+          <div class="compare-head">
+            <div class="l"><em>Compare</em> all four stations</div>
+          </div>
 
-        {#if compareOverlay}
-            <div class="compare-content">
-              <div class="compare-plot">
-                <svg
-                  class="compare-svg"
-                  viewBox="-105 -110 210 125"
-                  preserveAspectRatio="xMidYMid meet"
-                  aria-label="Latency distributions for all stations overlaid"
-                >
-                  {#each compareOverlay.arcs as arc, i (i)}
-                    <path d={arc.d} fill="none" stroke={arc.stroke} stroke-width="0.6"></path>
-                  {/each}
-                  {#each compareOverlay.ticks as tick, i (i)}
-                    <line
-                      x1={tick.x1.toFixed(2)} y1={tick.y1.toFixed(2)}
-                      x2={tick.x2.toFixed(2)} y2={tick.y2.toFixed(2)}
-                      stroke="rgba(242,235,219,0.25)" stroke-width="0.7"
-                    ></line>
-                    <text
-                      x={tick.lx.toFixed(2)} y={tick.ly.toFixed(2)}
-                      font-family="Space Mono" font-size="6" fill="var(--fg-3)"
-                      text-anchor="middle" letter-spacing="0.5"
-                    >{tick.label}</text>
-                  {/each}
+          {#if compareOverlay}
+              <div class="compare-content">
+                <div class="compare-plot">
+                  <svg
+                    class="compare-svg"
+                    viewBox="-105 -86 210 100"
+                    preserveAspectRatio="xMidYMid meet"
+                    aria-label="Latency distributions for all stations overlaid"
+                  >
+                    {#each compareOverlay.arcs as arc, i (i)}
+                      <path d={arc.d} fill="none" stroke={arc.stroke} stroke-width="0.6"></path>
+                    {/each}
+                    {#each compareOverlay.ticks as tick, i (i)}
+                      <line
+                        x1={tick.x1.toFixed(2)} y1={tick.y1.toFixed(2)}
+                        x2={tick.x2.toFixed(2)} y2={tick.y2.toFixed(2)}
+                        stroke="rgba(242,235,219,0.25)" stroke-width="0.7"
+                      ></line>
+                      <text
+                        x={tick.lx.toFixed(2)} y={tick.ly.toFixed(2)}
+                        font-family="Space Mono" font-size="6" fill="var(--fg-3)"
+                        text-anchor="middle" letter-spacing="0.5"
+                      >{tick.label}</text>
+                    {/each}
+                    {#each compareOverlay.stations as s (s.endpointId)}
+                      {#if s.pathD}
+                        <!-- Glow (wide, low-opacity) underlay -->
+                        <path
+                          d={s.pathD}
+                          stroke={s.color}
+                          stroke-opacity="0.22"
+                          stroke-width="3.5"
+                          fill="none"
+                          stroke-linejoin="round"
+                          stroke-linecap="round"
+                        ></path>
+                        <!-- Filament -->
+                        <path
+                          d={s.pathD}
+                          stroke={s.color}
+                          stroke-opacity="0.92"
+                          stroke-width="1.2"
+                          fill="none"
+                          stroke-linejoin="round"
+                          stroke-linecap="round"
+                        ></path>
+                      {/if}
+                    {/each}
+                    <circle cx="0" cy="0" r="1.8" fill="var(--fg)" fill-opacity="0.7"></circle>
+                  </svg>
+                  <div class="compare-axis">
+                    {#each compareOverlay.axisLabels as label, i (i)}
+                      <span>{label}</span>
+                    {/each}
+                  </div>
+                </div>
+
+                <div class="compare-legend">
+                  <div class="legend-head">Side-by-side</div>
                   {#each compareOverlay.stations as s (s.endpointId)}
-                    {#if s.pathD}
-                      <!-- Glow (wide, low-opacity) underlay -->
-                      <path
-                        d={s.pathD}
-                        stroke={s.color}
-                        stroke-opacity="0.22"
-                        stroke-width="3.5"
-                        fill="none"
-                        stroke-linejoin="round"
-                        stroke-linecap="round"
-                      ></path>
-                      <!-- Filament -->
-                      <path
-                        d={s.pathD}
-                        stroke={s.color}
-                        stroke-opacity="0.92"
-                        stroke-width="1.2"
-                        fill="none"
-                        stroke-linejoin="round"
-                        stroke-linecap="round"
-                      ></path>
-                    {/if}
+                    <div class="legend-row" data-ep={s.stationId}>
+                      <span class="mk" aria-hidden="true"></span>
+                      <div class="nm">
+                        {s.name}
+                        <span class="host">{s.host}</span>
+                      </div>
+                      <div class="p50"><span class="k">p50</span>{fmt(s.p50)}</div>
+                      <div class="p95" data-sev={s.p95Sev}><span class="k">p95</span>{fmt(s.p95)}</div>
+                    </div>
                   {/each}
-                  <circle cx="0" cy="0" r="1.8" fill="var(--fg)" fill-opacity="0.7"></circle>
-                </svg>
-                <div class="compare-axis">
-                  {#each compareOverlay.axisLabels as label, i (i)}
-                    <span>{label}</span>
-                  {/each}
+                  {#if compareOverlay.narrative}
+                    <div class="summary">
+                      <strong>{compareOverlay.narrative.tightest.name}</strong>
+                      holds the tightest band (p50 <em>{fmt(compareOverlay.narrative.tightest.p50)} ms</em>).
+                      <strong>{compareOverlay.narrative.slowest.name}</strong>
+                      sits slowest by baseline.
+                      <strong>{compareOverlay.narrative.widest.name}</strong>
+                      shows the widest distribution; its p95-minus-p50 spread is
+                      <em>{fmt(compareOverlay.narrative.widest.spread)} ms</em>.
+                    </div>
+                  {/if}
                 </div>
               </div>
-
-              <div class="compare-legend">
-                <div class="legend-head">Side-by-side</div>
-                {#each compareOverlay.stations as s (s.endpointId)}
-                  <div class="legend-row" data-ep={s.stationId}>
-                    <span class="mk" aria-hidden="true"></span>
-                    <div class="nm">
-                      {s.name}
-                      <span class="host">{s.host}</span>
-                    </div>
-                    <div class="p50"><span class="k">p50</span>{fmt(s.p50)}</div>
-                    <div class="p95" data-sev={s.p95Sev}><span class="k">p95</span>{fmt(s.p95)}</div>
-                  </div>
-                {/each}
-                {#if compareOverlay.narrative}
-                  <div class="summary">
-                    <strong>{compareOverlay.narrative.tightest.name}</strong>
-                    holds the tightest band (p50 <em>{fmt(compareOverlay.narrative.tightest.p50)} ms</em>).
-                    <strong>{compareOverlay.narrative.slowest.name}</strong>
-                    sits slowest by baseline.
-                    <strong>{compareOverlay.narrative.widest.name}</strong>
-                    shows the widest distribution — its p95-minus-p50 spread is
-                    <em>{fmt(compareOverlay.narrative.widest.spread)} ms</em>, indicating jitter.
-                  </div>
-                {/if}
-              </div>
+          {:else}
+            <div class="compare-empty">
+              <p>Collecting comparison data. Each station needs at least four successful samples before the overlay can render.</p>
             </div>
-        {:else}
-          <div class="compare-empty">
-            <p>Collecting comparison data. Each station needs at least four successful samples before the overlay can render.</p>
-          </div>
-        {/if}
-      </section>
+          {/if}
+        </section>
+      </div>
 
       <!-- ============ PART I — What the carrier records ============ -->
       <section>
@@ -1028,23 +1028,26 @@
   }
 
   /* ── Main layout ────────────────────────────────────────────────────────── */
-  /* Single-column stack at every viewport. The compare overlay, the
-     per-station blocks, and the outside-vantage probes all flow in a single
-     column so they read big as the user scrolls. v4's prototype switches to
-     this layout below 1100px; we apply it always — per-user preference for
-     the narrow-viewport feel at desktop widths too. */
   .investigate-main {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 48px;
-    padding: 48px clamp(20px, 3vw, 48px) 64px;
+    gap: 40px;
+    padding: 36px clamp(20px, 3vw, 48px) 64px;
+  }
+  .investigate-console {
+    display: grid;
+    grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.28fr);
+    align-items: stretch;
+    gap: 24px;
+    min-width: 0;
   }
   .investigate-hypothesis {
     display: grid;
-    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
-    gap: 36px;
+    grid-template-columns: 1fr;
+    align-content: start;
+    gap: 22px;
     align-items: start;
-    padding: 30px 34px;
+    padding: 24px 26px;
     border: 1px solid var(--rule-strong);
     background: linear-gradient(90deg, color-mix(in srgb, var(--station-b) 8%, transparent), transparent 54%),
       var(--bg);
@@ -1075,22 +1078,22 @@
     text-transform: uppercase;
     color: var(--fg-3);
     font-weight: 700;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
   }
   .hypothesis-copy h3 {
     font-family: var(--sans);
-    font-size: clamp(28px, 3vw, 44px);
+    font-size: clamp(28px, 2.6vw, 38px);
     font-weight: 200;
     letter-spacing: -0.025em;
     line-height: 1.05;
     color: var(--fg);
-    margin: 0 0 16px;
+    margin: 0 0 14px;
   }
   .hypothesis-copy p {
-    max-width: 62ch;
+    max-width: 54ch;
     color: var(--fg-2);
-    font-size: 15px;
-    line-height: 1.55;
+    font-size: 14px;
+    line-height: 1.5;
     margin: 0;
   }
   .hypothesis-evidence {
@@ -1100,11 +1103,12 @@
   }
   .evidence-row {
     display: grid;
-    grid-template-columns: 42px minmax(0, 1fr);
-    gap: 14px;
-    padding: 13px 0;
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 12px;
+    padding: 11px 0;
     border-bottom: 1px solid var(--rule);
     color: var(--fg-2);
+    font-size: 13px;
   }
   .evidence-row .n {
     font-family: var(--mono);
@@ -1118,7 +1122,8 @@
   /* Always expanded — no SHOW/HIDE toggle. The overlay carries the
      side-by-side distribution comparison; users always want it visible. */
   .compare-section {
-    padding: 40px 44px;
+    min-width: 0;
+    padding: 24px 28px;
     border: 1px solid var(--rule-strong);
     background: var(--bg-2);
     position: relative;
@@ -1139,14 +1144,14 @@
     align-items: baseline;
     flex-wrap: wrap;
     gap: 14px;
-    padding-bottom: 18px;
+    padding-bottom: 14px;
     border-bottom: 1px solid var(--rule);
-    margin-bottom: 24px;
+    margin-bottom: 18px;
   }
   .compare-section .compare-head .l {
     font-family: var(--sans);
     font-weight: 200;
-    font-size: 26px;
+    font-size: 22px;
     letter-spacing: -0.025em;
     color: var(--fg);
     line-height: 1.05;
@@ -1159,9 +1164,9 @@
 
   .compare-content {
     display: grid;
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-    gap: 40px;
-    align-items: start;
+    grid-template-columns: minmax(0, 1.35fr) minmax(250px, 0.95fr);
+    gap: 26px;
+    align-items: center;
   }
   .compare-plot { position: relative; }
   .compare-svg {
@@ -1170,7 +1175,7 @@
     display: block;
     overflow: visible;
     /* Cap polar height to per-station polar size — don't dominate the view. */
-    max-height: 240px;
+    max-height: 260px;
   }
   .compare-axis {
     display: flex;
@@ -1256,11 +1261,11 @@
   .compare-legend .p95[data-sev="warn"] { color: var(--sev-warn); }
   .compare-legend .p95[data-sev="bad"]  { color: var(--sev-bad); }
   .compare-legend .summary {
-    margin-top: 18px;
-    padding: 16px 18px;
+    margin-top: 14px;
+    padding: 12px 14px;
     border: 1px solid var(--rule);
     background: var(--bg-3);
-    font-size: 13px;
+    font-size: 12.5px;
     line-height: 1.5;
     color: var(--fg-2);
   }
@@ -1284,7 +1289,7 @@
   .compare-empty p { margin: 0; max-width: 56ch; }
 
   /* ── Part header ────────────────────────────────────────────────────────── */
-  .part-head { margin-bottom: 32px; }
+  .part-head { margin-bottom: 28px; }
   .part-head .kicker {
     display: inline-flex;
     align-items: baseline;
@@ -1300,7 +1305,7 @@
   .part-head h3 {
     font-family: var(--sans);
     font-weight: 200;
-    font-size: clamp(36px, 4.6vw, 56px);
+    font-size: clamp(32px, 3.8vw, 48px);
     letter-spacing: -0.025em;
     line-height: 1.05;
     color: var(--fg);
@@ -1332,7 +1337,7 @@
     letter-spacing: 0.08em;
   }
   .station-row {
-    padding: 36px 0 40px;
+    padding: 30px 0 36px;
     border-bottom: 1px solid var(--rule);
   }
   .station-row:last-child { border-bottom: 0; }
@@ -1751,10 +1756,10 @@
 
   /* ── Responsive ─────────────────────────────────────────────────────────── */
   @media (max-width: 1100px) {
-    /* Main is already single-column at all widths (see .investigate-main),
-       but the per-station polar+phase split and the compare plot+legend
-       split still need to collapse on narrower viewports so each subblock
-       gets enough horizontal room. */
+    .investigate-console {
+      grid-template-columns: 1fr;
+      gap: 28px;
+    }
     .analysis {
       grid-template-columns: 1fr;
       gap: 28px;
@@ -1762,10 +1767,6 @@
     .compare-content {
       grid-template-columns: 1fr;
       gap: 28px;
-    }
-    .investigate-hypothesis {
-      grid-template-columns: 1fr;
-      gap: 24px;
     }
   }
   @media (max-width: 720px) {
@@ -1794,6 +1795,7 @@
     .phase-legend .it .l { letter-spacing: 0.08em; }
     .sr-head .info .nm { font-size: 18px; }
     .investigate-main { padding: 28px clamp(14px, 3vw, 48px) 40px; gap: 28px; }
+    .investigate-console { gap: 22px; }
     .investigate-hypothesis { padding: 22px 18px; }
     .compare-section { padding: 22px 18px; }
     .compare-section .compare-head .l { font-size: 20px; }

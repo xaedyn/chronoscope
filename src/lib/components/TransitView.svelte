@@ -1436,7 +1436,7 @@
     .vantages {
       position: static;
       width: auto;
-      padding: 140px var(--pad-x) 12px;
+      padding: 104px var(--pad-x) 12px;
     }
     .hero-meta {
       position: static;
@@ -1472,6 +1472,7 @@
       gap: 8px;
     }
     .breadcrumb .meta { gap: 12px; }
+    .vantages { padding-top: 92px; }
     .hero-meta h1 { font-size: clamp(28px, 9vw, 48px); }
     .hero-left .target-name { font-size: clamp(56px, 18vw, 120px); letter-spacing: -0.04em; }
     .stage { min-height: 0; }
