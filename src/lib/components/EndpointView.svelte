@@ -13,9 +13,10 @@
   import { tokens } from '$lib/tokens';
   import { navigateTo } from '$lib/router';
   import { buildRunStoryline, type StoryBeatSeverity } from '$lib/utils/run-storyline';
-  import { buildPulseInspection } from '$lib/utils/pulse-inspection';
+  import { buildPulseInspection, displayRoundLabel } from '$lib/utils/pulse-inspection';
   import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
   import { buildDiagnosticEvidenceContract } from '$lib/utils/diagnostic-evidence-contract';
+  import { collectingLabel, evidenceMetricLabel, percentileMaturityHint } from '$lib/utils/data-maturity';
   import type { MeasurementSample } from '$lib/types';
   import OrbitalScene, { type OrbitalStation, type PulseHover } from './OrbitalScene.svelte';
   import InstrumentCalibration from './InstrumentCalibration.svelte';
@@ -138,6 +139,8 @@
   })());
   const focusedStats = $derived(focusedEndpoint ? stats[focusedEndpoint.id] : undefined);
   const focusedMeas = $derived(focusedEndpoint ? measurements.endpoints[focusedEndpoint.id] : undefined);
+  const focusedSampleCount = $derived(focusedMeas?.samples.length ?? 0);
+  const focusedMaturityHint = $derived(percentileMaturityHint(focusedSampleCount));
 
   // ── Carrier-lost detection ─────────────────────────────────────────────────
   // Heuristic: 5+ non-ok samples in the last 10 AND the most recent sample is
@@ -193,6 +196,7 @@
     readonly stationId: string;
     readonly label: string;
     readonly p50: number | null;
+    readonly sampleCount: number;
     readonly fieldDelta: number | null;
     readonly rank: number;
     readonly rankAnnotation: string;
@@ -212,11 +216,13 @@
     const rows = monitored.slice(0, 4).map((ep, i) => {
       const s = stats[ep.id];
       const p50 = s?.ready ? Math.round(s.p50) : null;
+      const sampleCount = measurements.endpoints[ep.id]?.samples.length ?? 0;
       return {
         endpointId: ep.id,
         stationId: STATION_IDS[i],
         label: ep.label,
         p50,
+        sampleCount,
       };
     });
     // Rank by p50 ascending; nulls last
@@ -241,6 +247,7 @@
         stationId: r.stationId,
         label: r.label,
         p50: r.p50,
+        sampleCount: r.sampleCount,
         fieldDelta: (r.p50 !== null && fieldP50 !== null) ? r.p50 - fieldP50 : null,
         rank,
         rankAnnotation: annotation,
@@ -500,8 +507,7 @@
     // "Stable since": walk samples in reverse to find the last over-threshold
     // sample. If found, stable-since is the elapsed time since that sample,
     // formatted as T+MM:SS. If never crossed (or no samples), show the
-    // "— never this session —" placeholder used by the v4 prototype.
-    let stableSinceLabel = '— never this session —';
+    let stableSinceLabel = 'No trigger crossing';
     for (let i = samplesArr.length - 1; i >= 0; i--) {
       const s = samplesArr[i];
       if (s.status === 'ok' && s.latency > threshold) {
@@ -688,7 +694,7 @@
           <span class="mk"></span>
           <span class="nm">{tab.label}</span>
           <span class="v" class:bad={tab.bad}>
-            {#if tab.latency === null}—{:else}{Math.round(tab.latency)} ms{/if}
+            {#if tab.latency === null}{collectingLabel(measurements.endpoints[tab.endpointId]?.samples.length ?? 0)}{:else}{Math.round(tab.latency)} ms{/if}
           </span>
         </button>
       {/each}
@@ -741,29 +747,23 @@
       <div class="quick-stats">
         <div class="stat">
           <div class="k">p50</div>
-          <div class="v">
-            {#if heroP50 === null}—{:else}{heroP50}<span class="u">ms</span>{/if}
-          </div>
+          <div class="v" class:collecting={heroP50 === null}>{evidenceMetricLabel(heroP50, focusedSampleCount)}</div>
         </div>
         <div class="stat">
           <div class="k">p95</div>
-          <div class="v" class:bad={focusedStats?.ready && focusedStats.p95 > threshold}>
-            {#if heroP95 === null}—{:else}{heroP95}<span class="u">ms</span>{/if}
-          </div>
+          <div class="v" class:bad={focusedStats?.ready && focusedStats.p95 > threshold} class:collecting={heroP95 === null}>{evidenceMetricLabel(heroP95, focusedSampleCount)}</div>
         </div>
         <div class="stat">
           <div class="k">Drift</div>
-          <div class="v">
-            {#if heroDrift === null}—{:else}±{heroDrift}<span class="u">ms</span>{/if}
-          </div>
+          <div class="v" class:collecting={heroDrift === null}>{#if heroDrift === null}{focusedMaturityHint}{:else}±{heroDrift} ms{/if}</div>
         </div>
       </div>
     </div>
 
     <div class="hero-left">
       <div class="label">Last pulse</div>
-      <div class="field-num">
-        {#if heroLast === null}—{:else}{Math.round(heroLast)}<span class="u">ms</span>{/if}
+      <div class="field-num" class:collecting={heroLast === null}>
+        {#if heroLast === null}{collectingLabel(focusedSampleCount)}{:else}{Math.round(heroLast)}<span class="u">ms</span>{/if}
       </div>
       <div class="field-sub">
         Trigger<span class="v">{threshold} ms</span>
@@ -797,7 +797,7 @@
               </span>
             </div>
             <div class="val" class:bad={card.p50 !== null && card.p50 > threshold}>
-              {#if card.p50 === null}—{:else}{card.p50}<span class="u">ms</span>{/if}
+              {#if card.p50 === null}<span class="collecting">{collectingLabel(card.sampleCount)}</span>{:else}{card.p50}<span class="u">ms</span>{/if}
             </div>
             <div class="delta">
               vs field
@@ -806,7 +806,7 @@
                 class:warn={card.fieldDelta !== null && card.fieldDelta > 0 && card.fieldDelta <= 10}
                 class:bad={card.fieldDelta !== null && card.fieldDelta > 10}
               >
-                {#if card.fieldDelta === null}—{:else}{card.fieldDelta >= 0 ? '+' : '−'}{Math.abs(card.fieldDelta)} ms{/if}
+                {#if card.fieldDelta === null}{percentileMaturityHint(card.sampleCount)}{:else}{card.fieldDelta >= 0 ? '+' : '−'}{Math.abs(card.fieldDelta)} ms{/if}
               </span>
             </div>
           </div>
@@ -884,8 +884,9 @@
                 class:warn={cell.tone === 'warn'}
                 class:bad={cell.tone === 'bad'}
                 class:crit={cell.tone === 'crit'}
+                class:collecting={cell.v === null}
               >
-                {#if cell.v === null}—{:else}{cell.v}<span class="u">ms</span>{/if}
+                {#if cell.v === null}{focusedMaturityHint}{:else}{cell.v}<span class="u">ms</span>{/if}
               </div>
             </div>
           {/each}
@@ -899,7 +900,7 @@
           <div class="copy">
             <strong>Carrier opaque</strong>
             {focusedEndpoint?.label ?? focusedHost ?? 'This station'} does not return <em>Timing-Allow-Origin</em>. We hear total
-            {#if heroLast !== null}<em>{Math.round(heroLast)} ms</em>{:else}<em>—</em>{/if}
+            {#if heroLast !== null}<em>{Math.round(heroLast)} ms</em>{:else}<em>{collectingLabel(focusedSampleCount).toLowerCase()}</em>{/if}
             but cannot tell whether the drift sits in DNS, the TLS handshake, or TTFB.
             <button type="button" class="link" onclick={openInvestigate}>Run the outside transit →</button>
           </div>
@@ -916,7 +917,7 @@
           <span class="rv" class:bad={stationRecord.carrierLoss > 0}>{stationRecord.carrierLoss}</span>
           <span class="rk">Worst pulse</span>
           <span class="rv" class:crit={stationRecord.worst !== null && stationRecord.worst.v > threshold}>
-            {#if stationRecord.worst === null}—{:else}{stationRecord.worst.v} ms · round {stationRecord.worst.round}{/if}
+            {#if stationRecord.worst === null}{collectingLabel(focusedSampleCount)}{:else}{stationRecord.worst.v} ms · {displayRoundLabel(stationRecord.worst.round)}{/if}
           </span>
           <span class="rk">Stable since</span>
           <span class="rv">{stationRecord.stableSinceLabel}</span>
@@ -1331,16 +1332,17 @@
     line-height: 1;
     font-variant-numeric: tabular-nums;
   }
-  .hero-meta .quick-stats .v.bad { color: var(--sev-bad); }
-  .hero-meta .quick-stats .v .u {
+  .hero-meta .quick-stats .v.collecting {
+    max-width: 14ch;
+    color: var(--fg-2);
     font-family: var(--mono);
-    font-size: 0.32em;
-    color: var(--fg-3);
-    margin-left: 3px;
-    letter-spacing: 0.04em;
-    vertical-align: 0.78em;
-    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1.25;
+    text-transform: uppercase;
   }
+  .hero-meta .quick-stats .v.bad { color: var(--sev-bad); }
 
   /* ── HERO LEFT (last pulse) ─────────────────────────────────────────────── */
   .hero-left {
@@ -1368,6 +1370,15 @@
     line-height: 0.85;
     font-variant-numeric: tabular-nums;
     text-shadow: 0 0 80px var(--focus-glow);
+  }
+  .hero-left .field-num.collecting {
+    max-width: 12ch;
+    font-family: var(--mono);
+    font-size: clamp(24px, 5vw, 54px);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1.05;
+    text-transform: uppercase;
   }
   .hero-left .field-num .u {
     font-family: var(--mono);
@@ -1484,6 +1495,13 @@
     line-height: 1;
   }
   .rank-card .val.bad { color: var(--sev-bad); }
+  .rank-card .val .collecting {
+    color: var(--fg-2);
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
   .rank-card .val .u { font-size: 11px; color: var(--fg-3); margin-left: 2px; }
   .rank-card .delta {
     font-family: var(--mono);
@@ -1582,6 +1600,14 @@
     color: var(--fg);
     letter-spacing: -0.01em;
     line-height: 1;
+  }
+  .ladder .cell .v.collecting {
+    color: var(--fg-2);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1.2;
+    text-transform: uppercase;
   }
   .ladder .cell .v .u { font-size: 10px; color: var(--fg-3); margin-left: 2px; }
   .ladder .cell .v.warn { color: var(--sev-warn); }

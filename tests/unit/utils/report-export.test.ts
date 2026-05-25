@@ -60,7 +60,7 @@ describe('report export', () => {
     expect(csv).toContain('72,2026-05-09T18:40:00.600Z,1.6,ep-1,"API",api.example.com,142.40,bad');
     expect(csv).toContain('# pinned_pulse');
     expect(csv).toContain('source,station_id,endpoint_id,endpoint_label,sample,slot,round,latency_ms,drift_ms,trigger_ms,threshold_delta_ms,time_label,captured_at_utc');
-    expect(csv).toContain('live,A,ep-1,"API",round #72,42,72,142,22,120,22,T-2s,2026-05-09T18:40:00.600Z');
+    expect(csv).toContain('live,A,ep-1,"API",Round 73,42,72,142,22,120,22,T-2s,2026-05-09T18:40:00.600Z');
   });
 
   it('neutralizes formula-like text cells before spreadsheet export', () => {
@@ -91,7 +91,7 @@ describe('report export', () => {
     });
 
     expect(csv).toContain(",'=ep-1,\"'+API\",'@api.example.com,");
-    expect(csv).toContain("live,A,'=ep-1,\"'-API\",round #72");
+    expect(csv).toContain("live,A,'=ep-1,\"'-API\",Round 73");
     expect(csv).toContain(",22,'@now,2026-05-09T18:40:00.600Z");
   });
 });

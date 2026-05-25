@@ -1,14 +1,11 @@
 <script lang="ts">
   import type { SampleInspector } from '$lib/utils/sample-inspector';
   import { inspectorDeltaLabel } from '$lib/utils/sample-inspector';
+  import { displayRoundLabel } from '$lib/utils/pulse-inspection';
 
   let { inspector }: { inspector: SampleInspector } = $props();
 
-  const sampleLabel = $derived(
-    inspector.evidence.roundNumber === null
-      ? `Slot ${inspector.evidence.slot}`
-      : `Round #${inspector.evidence.roundNumber}`,
-  );
+  const sampleLabel = $derived(displayRoundLabel(inspector.evidence.roundNumber, inspector.evidence.slot));
   const peerLabel = $derived(
     inspector.peerSlowestLabel === null || inspector.peerSlowestLatency === null
       ? 'No peer sample'

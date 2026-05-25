@@ -1,6 +1,11 @@
 <script lang="ts">
   import type { PulseInspection } from '$lib/types';
-  import { driftLabel, pulseInspectionSummary, thresholdDeltaLabel } from '$lib/utils/pulse-inspection';
+  import {
+    displayRoundLabel,
+    driftLabel,
+    pulseInspectionSummary,
+    thresholdDeltaLabel,
+  } from '$lib/utils/pulse-inspection';
 
   let {
     evidence,
@@ -12,9 +17,7 @@
     onClear?: (() => void) | undefined;
   } = $props();
 
-  const sampleLabel = $derived(
-    evidence.roundNumber === null ? `Slot ${evidence.slot}` : `Round #${evidence.roundNumber}`,
-  );
+  const sampleLabel = $derived(displayRoundLabel(evidence.roundNumber, evidence.slot));
   const sourceLabel = $derived(evidence.source === 'endpoint' ? 'Station drill-down' : 'Live tracker');
   const summary = $derived(pulseInspectionSummary(evidence));
 </script>

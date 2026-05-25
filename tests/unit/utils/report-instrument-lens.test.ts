@@ -104,6 +104,7 @@ describe('buildReportInstrumentLens', () => {
 
     expect(lens.selected?.endpointId).toBe('alpha');
     expect(lens.source).toBe('scrub');
+    expect(lens.moment.roundLabel).toBe('Round 11');
     expect(lens.canReturnToReplay).toBe(false);
     expect(lens.peers.map((peer) => [peer.endpointId, peer.movement])).toEqual([
       ['alpha', 'selected'],
@@ -114,6 +115,26 @@ describe('buildReportInstrumentLens', () => {
     expect(lens.proof.suggests).toContain('crossed the trigger');
     expect(lens.orbitalSelection?.selected.stationId).toBe('A');
     expect(lens.orbitalSelection?.peerPulses).toEqual([{ stationId: 'A', slot: 359 }]);
+  });
+
+  it('does not expose round zero in report proof language', () => {
+    const lens = buildReportInstrumentLens({
+      endpoints,
+      measurements: measurements({
+        alpha: [ok(0, 180)],
+        bravo: [ok(0, 170)],
+      }),
+      thresholdMs: 120,
+      pinnedPulse: null,
+      replayPulse: pulse({ roundNumber: 0, slot: 359 }),
+      significantPulse: null,
+      selectionSource: 'scrub',
+      windowSlots: 360,
+    });
+
+    expect(lens.moment.roundLabel).toBe('Initial sample');
+    expect(lens.proof.suggests).toContain('the initial sample');
+    expect(lens.proof.suggests).not.toContain('round #0');
   });
 
   it('lets a pinned pulse override replay evidence', () => {

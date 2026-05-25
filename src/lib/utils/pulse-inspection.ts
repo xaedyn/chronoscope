@@ -38,10 +38,16 @@ export function buildPulseInspection(input: BuildPulseInspectionInput): PulseIns
 }
 
 export function pulseInspectionSummary(evidence: PulseInspection): string {
-  const sampleLabel = evidence.roundNumber === null
-    ? `slot ${evidence.slot}`
-    : `round #${evidence.roundNumber}`;
+  const sampleLabel = displayRoundLabel(evidence.roundNumber, evidence.slot);
   return `${evidence.endpointLabel} · ${sampleLabel} · ${evidence.latency} ms · ${thresholdDeltaLabel(evidence.thresholdDelta)}`;
+}
+
+export function displayRoundLabel(roundNumber: number | null, slot?: number | null): string {
+  if (roundNumber !== null) {
+    return roundNumber <= 0 ? 'Initial sample' : `Round ${roundNumber + 1}`;
+  }
+  if (slot !== undefined && slot !== null) return `Slot ${slot + 1}`;
+  return 'Sample';
 }
 
 export function thresholdDeltaLabel(delta: number): string {
