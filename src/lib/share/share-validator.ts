@@ -12,6 +12,21 @@ const ALLOWED_REPORT_KEYS = new Set([
   'totalSampleCount',
   'keptSampleCount',
   'truncated',
+  'pinnedPulse',
+]);
+const ALLOWED_PINNED_PULSE_KEYS = new Set([
+  'source',
+  'stationId',
+  'endpointId',
+  'endpointLabel',
+  'slot',
+  'roundNumber',
+  'latency',
+  'drift',
+  'thresholdMs',
+  'thresholdDelta',
+  'timeLabel',
+  'capturedAt',
 ]);
 const ALLOWED_REMOTE_KEYS = new Set(['generatedAt', 'edge', 'results']);
 const ALLOWED_EDGE_KEYS = new Set(['colo', 'country', 'city', 'region', 'timezone']);
@@ -58,6 +73,35 @@ function hasOnlyKeys(record: Record<string, unknown>, allowed: ReadonlySet<strin
   return true;
 }
 
+function isOptionalNullableStringWithin(value: unknown, maxLength: number): boolean {
+  return value === null || value === undefined || isStringWithin(value, maxLength);
+}
+
+function isNullableFiniteNumberWithin(value: unknown, min: number, max: number): boolean {
+  return value === null || (isFiniteNumber(value) && (value as number) >= min && (value as number) <= max);
+}
+
+function isNullableNonNegativeIntegerWithin(value: unknown, max: number): boolean {
+  return value === null || (Number.isInteger(value) && (value as number) >= 0 && (value as number) <= max);
+}
+
+function validatePinnedPulse(pulse: unknown): boolean {
+  if (!isRecord(pulse)) return false;
+  if (!hasOnlyKeys(pulse, ALLOWED_PINNED_PULSE_KEYS)) return false;
+  if (pulse['source'] !== 'live' && pulse['source'] !== 'endpoint') return false;
+  if (!isStringWithin(pulse['stationId'], 8, 1)) return false;
+  if (!isOptionalNullableStringWithin(pulse['endpointId'], 120)) return false;
+  if (!isStringWithin(pulse['endpointLabel'], 120, 1)) return false;
+  if (!Number.isInteger(pulse['slot']) || (pulse['slot'] as number) < 0 || (pulse['slot'] as number) > 10_000) return false;
+  if (!isNullableNonNegativeIntegerWithin(pulse['roundNumber'], 1_000_000)) return false;
+  if (!isNonNegativeFiniteNumber(pulse['latency']) || (pulse['latency'] as number) > 60_000) return false;
+  if (!isNullableFiniteNumberWithin(pulse['drift'], -60_000, 60_000)) return false;
+  if (!isNonNegativeFiniteNumber(pulse['thresholdMs']) || (pulse['thresholdMs'] as number) > 60_000) return false;
+  if (!isFiniteNumber(pulse['thresholdDelta']) || Math.abs(pulse['thresholdDelta'] as number) > 60_000) return false;
+  if (!isOptionalNullableStringWithin(pulse['timeLabel'], 80)) return false;
+  return isNonNegativeFiniteNumber(pulse['capturedAt']);
+}
+
 function validateReport(report: unknown, obj: Record<string, unknown>): boolean {
   if (obj['mode'] !== 'results' || obj['v'] !== 2) return false;
   if (!isRecord(report)) return false;
@@ -76,7 +120,8 @@ function validateReport(report: unknown, obj: Record<string, unknown>): boolean 
   if (!isNonNegativeFiniteNumber(report['totalSampleCount']) || (report['totalSampleCount'] as number) > 500_000) return false;
   if (!isNonNegativeFiniteNumber(report['keptSampleCount']) || (report['keptSampleCount'] as number) > 500_000) return false;
   if ((report['keptSampleCount'] as number) > (report['totalSampleCount'] as number)) return false;
-  return typeof report['truncated'] === 'boolean';
+  if (typeof report['truncated'] !== 'boolean') return false;
+  return report['pinnedPulse'] === undefined || validatePinnedPulse(report['pinnedPulse']);
 }
 
 function validateRemoteHeaders(headers: unknown): boolean {

@@ -149,6 +149,12 @@ describe('SharePopover hosted support reports', () => {
     const payload = mocks.createHostedReport.mock.calls[0]?.[0];
     expect(payload?.mode).toBe('results');
     expect(payload?.report?.reportKind).toBe('support');
+    expect(payload?.report?.pinnedPulse).toMatchObject({
+      endpointId: 'api',
+      endpointLabel: 'API',
+      roundNumber: 4,
+      latency: 43,
+    });
     expect(payload?.results?.[0]?.samples).toHaveLength(4);
     expect(payload?.localCompanion).toBeUndefined();
   });
@@ -234,6 +240,7 @@ describe('SharePopover hosted support reports', () => {
 
     expect(payload?.mode).toBe('results');
     expect(payload?.report?.reportKind).toBe('snapshot');
+    expect(payload?.report?.pinnedPulse?.roundNumber).toBe(4);
   });
 
   it('disables snapshot links until a run has samples', () => {

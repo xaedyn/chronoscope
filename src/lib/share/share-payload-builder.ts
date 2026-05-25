@@ -5,6 +5,7 @@
 import type {
   Endpoint,
   MeasurementState,
+  PulseInspection,
   Settings,
   SharePayload,
   ShareLocalCompanionSnapshot,
@@ -61,6 +62,26 @@ function withReportMetadata(
   metadata: ShareReportMetadata,
 ): SharePayload {
   return { ...payload, report: metadata };
+}
+
+function serializePinnedPulse(
+  pulse: PulseInspection | null | undefined,
+): PulseInspection | undefined {
+  if (!pulse) return undefined;
+  return {
+    source: pulse.source,
+    stationId: pulse.stationId,
+    endpointId: pulse.endpointId,
+    endpointLabel: pulse.endpointLabel,
+    slot: pulse.slot,
+    roundNumber: pulse.roundNumber,
+    latency: pulse.latency,
+    drift: pulse.drift,
+    thresholdMs: pulse.thresholdMs,
+    thresholdDelta: pulse.thresholdDelta,
+    timeLabel: pulse.timeLabel,
+    capturedAt: pulse.capturedAt,
+  };
 }
 
 function serializeRemoteVantage(
@@ -129,6 +150,7 @@ export function buildResultsSharePayload(
     reportMetadata.totalSampleCount ?? keptSampleCount,
     keptSampleCount,
   );
+  const pinnedPulse = serializePinnedPulse(reportMetadata.pinnedPulse);
 
   const metadata: ShareReportMetadata = {
     reportKind: reportMetadata.reportKind ?? 'support',
@@ -139,6 +161,7 @@ export function buildResultsSharePayload(
     totalSampleCount,
     keptSampleCount,
     truncated: reportMetadata.truncated ?? false,
+    ...(pinnedPulse ? { pinnedPulse } : {}),
   };
   const serializedRemoteVantage = serializeRemoteVantage(remoteVantage);
   const serializedLocalCompanion = serializeLocalCompanion(localCompanion);
