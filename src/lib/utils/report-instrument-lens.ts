@@ -114,7 +114,7 @@ function sourceAndPulse(input: BuildReportInstrumentLensInput): {
 } {
   if (input.pinnedPulse) return { source: 'pinned', pulse: input.pinnedPulse };
   if (input.selectionSource === 'significant' && input.significantPulse) {
-    return { source: 'significant', pulse: input.significantPulse };
+    return { source: 'significant', pulse: input.replayPulse ?? input.significantPulse };
   }
   if (input.replayPulse) return { source: input.selectionSource, pulse: input.replayPulse };
   if (input.significantPulse) return { source: 'significant', pulse: input.significantPulse };
