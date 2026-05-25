@@ -5,6 +5,7 @@ import type {
   PulseInspection,
 } from '$lib/types';
 import type { DiagnosticReport } from './diagnostic-report';
+import { displayRoundLabel } from './pulse-inspection';
 
 export type DiagnosticEventTone = 'info' | 'watch' | 'degraded';
 export type DiagnosticEventKind = 'threshold' | 'failure' | 'drift';
@@ -90,19 +91,24 @@ function currentStatusLabel(report: DiagnosticReport): string {
 }
 
 function roundLabel(roundNumber: number): string {
-  return `Round #${roundNumber}`;
+  return displayRoundLabel(roundNumber);
+}
+
+function sentenceRoundReference(roundNumber: number): string {
+  const label = roundLabel(roundNumber);
+  return label === 'Initial sample' ? 'the initial sample' : label;
 }
 
 function overTriggerSummary(label: string, delta: number, roundNumber: number): string {
-  return `${label} crossed the trigger by ${delta} ms at round #${roundNumber}.`;
+  return `${label} crossed the trigger by ${delta} ms at ${sentenceRoundReference(roundNumber)}.`;
 }
 
 function failureSummary(label: string, status: MeasurementSample['status'], roundNumber: number): string {
-  return `${label} returned ${status} at round #${roundNumber}.`;
+  return `${label} returned ${status} at ${sentenceRoundReference(roundNumber)}.`;
 }
 
 function driftSummary(label: string, drift: number, roundNumber: number): string {
-  return `${label} moved ${Math.abs(drift)} ms from the previous ok sample at round #${roundNumber}.`;
+  return `${label} moved ${Math.abs(drift)} ms from the previous ok sample at ${sentenceRoundReference(roundNumber)}.`;
 }
 
 function eventVerb(event: DiagnosticNotableEvent): string {

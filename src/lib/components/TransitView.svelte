@@ -3,12 +3,9 @@
      vantages (the local browser plus three Cloudflare edge regions in IAD,
      LHR, NRT). Translates proposals/v4/proposal-transit-v4.html.
 
-     PHASE C SCOPE: Probe results are simulated. The view is wired to the
-     monitored-endpoints store so the "target" defaults to the focused
-     endpoint (the same endpoint the user was investigating when they
-     clicked "Run global transit"). Real probe execution against the three
-     Cloudflare workers is a Phase D wiring task — the structure here
-     mirrors the shape that real probe results will populate.
+     The default values are explicitly labeled as an example pattern until
+     the user runs a fresh outside probe. Re-run dispatches the production
+     remote-vantage client plus a local browser probe loop.
 
      The 3-cell decision matrix at the bottom of the diagnosis card is the
      load-bearing pedagogy: it teaches the user how to read agreement vs
@@ -101,6 +98,7 @@
   let probes = $state<readonly VantageProbe[]>(DEFAULT_PROBES);
   let runState = $state<'idle' | 'running' | 'error'>('idle');
   let runError = $state<string | null>(null);
+  let dataSource = $state<'example' | 'measured' | 'partial'>('example');
 
   // ── Verdict aggregates ─────────────────────────────────────────────────────
   const agreementCount = $derived(probes.filter((p) => p.bad).length);
@@ -125,6 +123,41 @@
     if (BASELINE_MS <= 0) return '—';
     return `${(medianLast / BASELINE_MS).toFixed(1)}×`;
   });
+  const proofSourceLabel = $derived<string>((() => {
+    if (runState === 'running') return 'Running live probe';
+    if (dataSource === 'measured') return 'Measured run';
+    if (dataSource === 'partial') return 'Partial measured run';
+    return 'Example pattern';
+  })());
+  const progressLabel = $derived<string>(
+    runState === 'running'
+      ? 'Transit running'
+      : dataSource === 'example'
+        ? 'Example data'
+        : dataSource === 'partial'
+          ? 'Partial transit'
+          : 'Transit measured',
+  );
+  const heroHeadline = $derived<string>((() => {
+    if (dataSource === 'example') return `Example upstream pattern for ${target.displayName}.`;
+    if (agreementCount === totalVantages) return `Confirmed upstream. ${target.displayName} is slow from all vantages.`;
+    if (agreementCount === 1) return `Only one vantage is slow for ${target.displayName}.`;
+    return `Mixed transit evidence for ${target.displayName}.`;
+  })());
+  const heroLead = $derived<string>((() => {
+    if (dataSource === 'example') {
+      return `These are default demonstration values. Re-run transit to replace them with fresh local and outside-vantage measurements for ${target.host}.`;
+    }
+    if (agreementCount === totalVantages) {
+      return `Your browser and outside vantages all measure ${target.displayName} at ${minLast}–${maxLast} ms, above the ${BASELINE_MS} ms healthy baseline.`;
+    }
+    return `${agreementCount} of ${totalVantages} vantages are above the healthy baseline. Use the spread and lane shape to decide whether this is local, regional, or upstream.`;
+  })());
+
+  function latencyPercent(value: number): number {
+    const ceiling = Math.max(120, maxLast + 20);
+    return Math.max(0, Math.min(100, Math.round((value / ceiling) * 100)));
+  }
 
   // ── Mini-trace SVG paths ───────────────────────────────────────────────────
   interface MiniTraceSample {
@@ -162,11 +195,10 @@
     }
     return { path, samples };
   }
-  const miniTraces = $derived<Record<VantageKey, MiniTrace>>({
-    local: buildMiniTrace('local', 71),
-    iad: buildMiniTrace('iad', 66),
-    lhr: buildMiniTrace('lhr', 78),
-    nrt: buildMiniTrace('nrt', 76),
+  const miniTraces = $derived.by<Record<VantageKey, MiniTrace>>(() => {
+    return Object.fromEntries(
+      probes.map((probe) => [probe.key, buildMiniTrace(probe.key, probe.p50)]),
+    ) as Record<VantageKey, MiniTrace>;
   });
 
   // ── Probe log entries (simulated reverse-chronological feed) ───────────────
@@ -302,9 +334,11 @@
         runError = transitResp.error;
       }
       probes = next;
+      dataSource = transitResp.ok ? 'measured' : 'partial';
       runState = transitResp.ok ? 'idle' : 'error';
     } catch (err) {
       runError = err instanceof Error ? err.message : 'Transit probe failed';
+      dataSource = 'partial';
       runState = 'error';
     }
   }
@@ -347,12 +381,53 @@
       {/each}
     </div>
 
+    <div class="transit-proof-map" data-source={dataSource}>
+      <div class="map-head">
+        <div>
+          <span class="k">Global proof map</span>
+          <strong>{proofSourceLabel}</strong>
+        </div>
+        <div class="source-note">
+          {#if dataSource === 'example'}
+            Re-run to measure this target.
+          {:else if dataSource === 'partial'}
+            Some outside data failed.
+          {:else}
+            Fresh outside evidence.
+          {/if}
+        </div>
+      </div>
+      <div class="map-scale" aria-hidden="true">
+        <span>0</span>
+        <span>{BASELINE_MS} ms baseline</span>
+        <span>{Math.max(120, maxLast + 20)} ms</span>
+      </div>
+      <div class="map-lanes">
+        {#each probes as probe (probe.key)}
+          <div class="proof-lane" data-v={probe.key} data-bad={probe.bad ? 'true' : 'false'}>
+            <span class="lane-name">{probe.key.toUpperCase()}</span>
+            <span class="lane-track">
+              <span class="baseline" style:left="{latencyPercent(BASELINE_MS)}%"></span>
+              <span class="bar" style:width="{latencyPercent(probe.last)}%"></span>
+              <span class="dot" style:left="{latencyPercent(probe.last)}%"></span>
+            </span>
+            <span class="lane-value">{probe.last}<em>ms</em></span>
+          </div>
+        {/each}
+      </div>
+      <div class="map-readouts">
+        <span>Agreement<strong>{agreementCount} / {totalVantages}</strong></span>
+        <span>Spread<strong>±{spreadMs} ms</strong></span>
+        <span>Slowdown<strong>{slowdownX}</strong></span>
+      </div>
+    </div>
+
     <div class="hero-meta">
       <div class="kicker"><span class="pip"></span><span>Outside transit · § II</span></div>
       <div class="pre-title">Target<span class="v">{target.section}</span></div>
-      <h1>Confirmed <em>upstream</em>. {target.displayName} is slow from all four vantages.</h1>
+      <h1>{heroHeadline}</h1>
       <p class="body">
-        <strong>Four vantages, one verdict.</strong> Your browser, IAD, LHR, and NRT all measure {target.displayName} at <em>{minLast}–{maxLast} ms</em> — well above the <em>{BASELINE_MS} ms</em> baseline this station holds when healthy. <strong>This isn't your network.</strong>
+        <strong>{proofSourceLabel}.</strong> {heroLead}
       </p>
       <div class="agreement">
         <div class="stat"><div class="k">Agreement</div><div class="v good">{agreementCount} / {totalVantages}</div></div>
@@ -369,9 +444,9 @@
     </div>
 
     <div class="progress-bar">
-      <span class="lbl">Transit complete</span>
+      <span class="lbl">{progressLabel}</span>
       <div class="track"><div class="fill"></div></div>
-      <span class="read">All vantages<span class="v">{totalVantages} / {totalVantages} · {PROBES_PER_VANTAGE} probes ea.</span></span>
+      <span class="read">{dataSource === 'example' ? 'Default values' : 'All vantages'}<span class="v">{totalVantages} / {totalVantages} · {PROBES_PER_VANTAGE} probes ea.</span></span>
     </div>
   </div>
 
@@ -730,6 +805,176 @@
     margin-left: 2px;
   }
 
+  /* ── FIRST-VIEWPORT GLOBAL PROOF MAP ───────────────────────────────────── */
+  .transit-proof-map {
+    position: absolute;
+    top: 80px;
+    left: calc(var(--pad-x) + 304px);
+    z-index: 4;
+    width: min(460px, calc(100vw - 920px));
+    min-width: 340px;
+    padding: 16px 18px 18px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 72%, transparent);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .transit-proof-map::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: -1px;
+    width: 34px;
+    height: 1px;
+    background: var(--station-b);
+    box-shadow: 0 0 12px var(--station-b);
+  }
+  .map-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 18px;
+    align-items: flex-start;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .map-head .k,
+  .map-head strong,
+  .source-note,
+  .map-scale,
+  .lane-name,
+  .map-readouts {
+    font-family: var(--mono);
+    text-transform: uppercase;
+    font-weight: 700;
+  }
+  .map-head .k {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--fg-3);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+  }
+  .map-head strong {
+    color: var(--fg);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+  }
+  .source-note {
+    max-width: 18ch;
+    color: var(--fg-3);
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    line-height: 1.35;
+    text-align: right;
+  }
+  .transit-proof-map[data-source="example"] .source-note {
+    color: var(--sev-warn);
+  }
+  .map-scale {
+    display: grid;
+    grid-template-columns: 42px 1fr 48px;
+    gap: 10px;
+    margin: 13px 0 9px;
+    color: var(--fg-4);
+    font-size: 8px;
+    letter-spacing: 0.12em;
+  }
+  .map-scale span:nth-child(2) { color: var(--fg-3); }
+  .map-scale span:last-child { text-align: right; }
+  .map-lanes {
+    display: grid;
+    gap: 9px;
+  }
+  .proof-lane {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 52px;
+    align-items: center;
+    gap: 10px;
+  }
+  .lane-name {
+    color: var(--fg-3);
+    font-size: 9px;
+    letter-spacing: 0.18em;
+  }
+  .lane-track {
+    position: relative;
+    height: 7px;
+    background: color-mix(in srgb, var(--fg) 10%, transparent);
+    overflow: visible;
+  }
+  .lane-track .baseline {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    width: 1px;
+    background: var(--fg-3);
+    opacity: 0.75;
+  }
+  .lane-track .bar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background: var(--fg-2);
+  }
+  .lane-track .dot {
+    position: absolute;
+    top: 50%;
+    width: 8px;
+    height: 8px;
+    transform: translate(-50%, -50%);
+    background: var(--fg);
+    box-shadow: 0 0 10px var(--fg);
+  }
+  .proof-lane[data-v="local"] .bar,
+  .proof-lane[data-v="local"] .dot { background: var(--van-local); box-shadow: 0 0 10px var(--van-local); }
+  .proof-lane[data-v="iad"] .bar,
+  .proof-lane[data-v="iad"] .dot { background: var(--van-iad); box-shadow: 0 0 10px var(--van-iad); }
+  .proof-lane[data-v="lhr"] .bar,
+  .proof-lane[data-v="lhr"] .dot { background: var(--van-lhr); box-shadow: 0 0 10px var(--van-lhr); }
+  .proof-lane[data-v="nrt"] .bar,
+  .proof-lane[data-v="nrt"] .dot { background: var(--van-nrt); box-shadow: 0 0 10px var(--van-nrt); }
+  .proof-lane[data-bad="true"] .lane-value {
+    color: var(--sev-bad);
+  }
+  .lane-value {
+    color: var(--fg);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+  .lane-value em {
+    margin-left: 2px;
+    color: var(--fg-3);
+    font-size: 9px;
+    font-style: normal;
+  }
+  .map-readouts {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    margin-top: 14px;
+    border: 1px solid var(--rule);
+    background: var(--rule);
+    color: var(--fg-3);
+    font-size: 8px;
+    letter-spacing: 0.12em;
+  }
+  .map-readouts span {
+    min-width: 0;
+    padding: 8px 9px;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+  }
+  .map-readouts strong {
+    display: block;
+    margin-top: 4px;
+    color: var(--fg);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+  }
+
   /* ── HERO META (right side — verdict block) ─────────────────────────────── */
   .hero-meta {
     position: absolute;
@@ -784,10 +1029,6 @@
     margin-left: auto;
     text-shadow: 0 0 60px color-mix(in srgb, var(--fg) 10%, transparent);
   }
-  .hero-meta h1 em {
-    font-style: normal;
-    color: var(--sev-bad);
-  }
   .hero-meta .body {
     font-size: 16px;
     color: var(--fg-2);
@@ -799,12 +1040,6 @@
   .hero-meta .body strong {
     color: var(--fg);
     font-weight: 500;
-  }
-  .hero-meta .body em {
-    font-style: normal;
-    font-family: var(--mono);
-    color: var(--fg);
-    font-variant-numeric: tabular-nums;
   }
   .hero-meta .agreement {
     display: grid;
@@ -1437,6 +1672,12 @@
       position: static;
       width: auto;
       padding: 104px var(--pad-x) 12px;
+    }
+    .transit-proof-map {
+      position: static;
+      width: auto;
+      min-width: 0;
+      margin: 0 var(--pad-x) 18px;
     }
     .hero-meta {
       position: static;

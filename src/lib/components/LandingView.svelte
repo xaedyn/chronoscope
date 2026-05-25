@@ -14,7 +14,12 @@
   import { tokens } from '$lib/tokens';
   import { navigateTo } from '$lib/router';
   import { uiStore } from '$lib/stores/ui';
+  import { measurementStore } from '$lib/stores/measurements';
   import { monitoredEndpointsStore } from '$lib/stores/derived';
+  import { settingsStore } from '$lib/stores/settings';
+  import { statisticsStore } from '$lib/stores/statistics';
+  import { collectingLabel, evidenceMetricLabel } from '$lib/utils/data-maturity';
+  import type { Endpoint } from '$lib/types';
 
   let { onStart, onExplore }: { onStart?: () => void; onExplore?: () => void } = $props();
 
@@ -51,6 +56,96 @@
   // list) when none are present.
   const monitored = $derived($monitoredEndpointsStore);
   const firstEndpointId = $derived<string | null>(monitored[0]?.id ?? null);
+  const measurements = $derived($measurementStore);
+  const settings = $derived($settingsStore);
+  const statistics = $derived($statisticsStore);
+
+  type StationEvidenceRow = {
+    id: string;
+    label: string;
+    color: string;
+    latencyLabel: string;
+    driftLabel: string;
+    tone: 'idle' | 'good' | 'watch' | 'bad';
+  };
+
+  function median(values: readonly number[]): number | null {
+    if (values.length === 0) return null;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 === 0
+      ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+      : Math.round(sorted[mid]);
+  }
+
+  function totalSampleCount(endpoints: readonly Endpoint[]): number {
+    return endpoints.reduce((sum, endpoint) => {
+      return sum + (measurements.endpoints[endpoint.id]?.samples.length ?? 0);
+    }, 0);
+  }
+
+  const landingSampleCount = $derived(totalSampleCount(monitored));
+  const fieldP50 = $derived.by<number | null>(() => {
+    const p50s = monitored
+      .map((endpoint) => statistics[endpoint.id])
+      .filter((stat) => stat !== undefined && stat.sampleCount > 0)
+      .map((stat) => stat.p50);
+    return median(p50s);
+  });
+  const proofStateLabel = $derived(
+    measurements.lifecycle === 'running' || measurements.lifecycle === 'starting'
+      ? 'Live preview'
+      : landingSampleCount > 0
+        ? 'Last session'
+        : 'Proof preview',
+  );
+  const proofMedianLabel = $derived(evidenceMetricLabel(fieldP50, landingSampleCount));
+  const proofSampleLabel = $derived(
+    landingSampleCount > 0 ? String(landingSampleCount) : collectingLabel(landingSampleCount),
+  );
+  const stationEvidence = $derived.by<StationEvidenceRow[]>(() => (
+    monitored.slice(0, 4).map((endpoint, index) => {
+      const state = measurements.endpoints[endpoint.id];
+      const stat = statistics[endpoint.id];
+      const sampleCount = state?.samples.length ?? 0;
+      const lastSample = state?.samples.at(-1);
+      const baseline = stat !== undefined && stat.sampleCount > 0 ? stat.p50 : null;
+      const drift =
+        lastSample !== undefined && lastSample.status === 'ok' && baseline !== null
+          ? Math.round(lastSample.latency - baseline)
+          : null;
+      const driftAbs = drift === null ? null : Math.abs(drift);
+      const thresholdOver =
+        lastSample !== undefined && lastSample.status === 'ok'
+          ? Math.max(0, Math.round(lastSample.latency - settings.healthThreshold))
+          : 0;
+      const tone: StationEvidenceRow['tone'] =
+        lastSample === undefined
+          ? 'idle'
+          : lastSample.status !== 'ok' || thresholdOver > 0
+            ? 'bad'
+            : driftAbs !== null && driftAbs >= 15
+              ? 'watch'
+              : 'good';
+
+      return {
+        id: endpoint.id,
+        label: endpoint.label,
+        color: endpoint.color || STATION_COLORS[index] || tokens.color.station.A,
+        latencyLabel:
+          lastSample === undefined
+            ? collectingLabel(sampleCount)
+            : lastSample.status === 'ok'
+              ? `${Math.round(lastSample.latency)} ms`
+              : lastSample.status,
+        driftLabel:
+          drift === null
+            ? (sampleCount > 0 ? 'Building baseline' : 'Needs first pulse')
+            : `${driftAbs} ms ${drift >= 0 ? 'over' : 'under'} p50`,
+        tone,
+      };
+    })
+  ));
 
   function handleEndpointNav(event: MouseEvent): void {
     event.preventDefault();
@@ -446,14 +541,26 @@
       <div class="arrow"></div>
     </div>
 
-    <div class="hero-rail">
-      <div class="grp">
-        <span>Cadence<span class="v">1 s · synchronized</span></span>
-        <span>Window<span class="v">60 s</span></span>
-        <span>Trigger<span class="v">120 ms</span></span>
+    <div class="hero-rail proof-preview" aria-label="Chronoscope proof preview">
+      <div class="proof-title">
+        <span>{proofStateLabel}</span>
+        <strong>Evidence before diagnosis</strong>
       </div>
-      <div class="grp">
-        <span>Vantage<span class="v">This browser</span></span>
+      <div class="proof-metrics">
+        <span>Median<span class="v">{proofMedianLabel}</span></span>
+        <span>Samples<span class="v">{proofSampleLabel}</span></span>
+        <span>Trigger<span class="v">{settings.healthThreshold} ms</span></span>
+        <span>Cadence<span class="v">1 s</span></span>
+      </div>
+      <div class="station-strip" aria-label="Station preview evidence">
+        {#each stationEvidence as station (station.id)}
+          <div class="station-evidence" data-tone={station.tone}>
+            <span class="station-dot" style:background={station.color} style:color={station.color}></span>
+            <span class="station-name">{station.label}</span>
+            <span class="station-latency">{station.latencyLabel}</span>
+            <span class="station-drift">{station.driftLabel}</span>
+          </div>
+        {/each}
       </div>
     </div>
   </section>
@@ -951,8 +1058,8 @@
   /* ===== HERO STAGE ===== */
   .stage {
     position: relative;
-    height: calc(100svh - 50px);
-    min-height: 720px;
+    height: calc(100svh - 58px);
+    min-height: min(720px, calc(100svh - 58px));
     background: var(--bg);
     overflow: hidden;
   }
@@ -989,6 +1096,7 @@
     text-align: center;
     pointer-events: none;
     user-select: none;
+    margin-bottom: clamp(120px, 18vh, 190px);
   }
   .hero-comp .pre-kicker {
     font-family: var(--mono);
@@ -1082,10 +1190,9 @@
     bottom: 0;
     z-index: 4;
     padding: 16px var(--pad-x);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(170px, 0.75fr) minmax(280px, 1fr) minmax(360px, 1.4fr);
+    align-items: stretch;
     gap: 12px;
     border-top: 1px solid var(--rule);
     background: var(--bg-backdrop);
@@ -1099,12 +1206,90 @@
     opacity: 0;
     animation: fadeIn 700ms 1300ms ease-out forwards;
   }
-  .hero-rail .grp {
-    display: inline-flex;
-    gap: 22px;
-    flex-wrap: wrap;
+  .hero-rail .proof-title,
+  .hero-rail .proof-metrics,
+  .hero-rail .station-strip {
+    min-width: 0;
   }
-  .hero-rail .grp > span {
+  .hero-rail .proof-title {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    border-right: 1px solid var(--rule);
+    padding-right: 16px;
+  }
+  .hero-rail .proof-title span {
+    color: var(--fg-3);
+  }
+  .hero-rail .proof-title strong {
+    color: var(--fg);
+    font-family: var(--sans);
+    font-size: 15px;
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 1.2;
+    text-transform: none;
+  }
+  .hero-rail .proof-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 16px;
+    align-content: center;
+    border-right: 1px solid var(--rule);
+    padding-right: 16px;
+  }
+  .hero-rail .proof-metrics > span {
+    min-width: 0;
+  }
+  .hero-rail .station-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .hero-rail .station-evidence {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 8px;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--fg) 3%, transparent);
+  }
+  .hero-rail .station-evidence[data-tone='good'] {
+    border-color: color-mix(in srgb, var(--sev-good) 40%, var(--rule));
+  }
+  .hero-rail .station-evidence[data-tone='watch'] {
+    border-color: color-mix(in srgb, var(--sev-warn) 48%, var(--rule));
+  }
+  .hero-rail .station-evidence[data-tone='bad'] {
+    border-color: color-mix(in srgb, var(--sev-bad) 54%, var(--rule));
+  }
+  .hero-rail .station-dot {
+    width: 7px;
+    height: 7px;
+    box-shadow: 0 0 10px currentColor;
+  }
+  .hero-rail .station-name {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--fg);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .hero-rail .station-latency {
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .hero-rail .station-drift {
+    grid-column: 2 / 4;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--fg-3);
+    font-size: 9px;
+    text-overflow: ellipsis;
     white-space: nowrap;
   }
   .hero-rail .v {
@@ -1119,7 +1304,7 @@
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
-    bottom: 80px;
+    bottom: 156px;
     z-index: 4;
     font-family: var(--mono);
     font-size: 9px;
@@ -1867,6 +2052,23 @@
 
   /* ===== RESPONSIVE ===== */
   @media (max-width: 1100px) {
+    .hero-comp .stack {
+      margin-bottom: 200px;
+    }
+    .hero-rail {
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
+    .hero-rail .proof-title,
+    .hero-rail .proof-metrics {
+      border-right: 0;
+      padding-right: 0;
+    }
+    .hero-rail .proof-title {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: baseline;
+    }
     .lede .grid {
       grid-template-columns: 1fr;
       gap: 40px;
@@ -1904,11 +2106,14 @@
       font-size: 9px;
     }
     .hero-rail {
-      flex-direction: column;
       align-items: flex-start;
-      gap: 8px;
       font-size: 9px;
-      padding-bottom: 96px;
+      padding-bottom: 16px;
+    }
+    .hero-rail .station-strip,
+    .hero-rail .proof-metrics {
+      width: 100%;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
     .scroll-hint {
       display: none;
@@ -1952,8 +2157,44 @@
       font-size: clamp(56px, 18vw, 120px);
       letter-spacing: -0.04em;
     }
+    .hero-comp .pre-kicker {
+      max-width: 32ch;
+      flex-wrap: wrap;
+      justify-content: center;
+      letter-spacing: 0.28em;
+      line-height: 1.5;
+    }
+    .hero-comp .stack {
+      margin-bottom: 250px;
+    }
     .stage {
-      min-height: 600px;
+      height: calc(100svh - 94px);
+      min-height: 720px;
+    }
+    .hero-rail .proof-title {
+      grid-template-columns: 1fr;
+      gap: 3px;
+    }
+    .hero-rail {
+      bottom: 48px;
+    }
+    .hero-rail .proof-title strong {
+      font-size: 13px;
+    }
+    .hero-rail .station-evidence {
+      grid-template-columns: auto minmax(0, 1fr);
+      padding: 6px 8px;
+      gap: 3px 6px;
+    }
+    .hero-rail .station-latency,
+    .hero-rail .station-drift {
+      grid-column: 2;
+    }
+    .hero-rail .station-latency {
+      font-size: 9px;
+    }
+    .hero-rail .station-drift {
+      display: none;
     }
     .surface {
       padding: 24px;

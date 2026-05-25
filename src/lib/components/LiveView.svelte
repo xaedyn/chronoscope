@@ -16,6 +16,7 @@
   import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
   import { buildDiagnosticEvidenceContract } from '$lib/utils/diagnostic-evidence-contract';
   import { buildPulseInspection } from '$lib/utils/pulse-inspection';
+  import { collectingLabel } from '$lib/utils/data-maturity';
   import type { MeasurementSample } from '$lib/types';
   import type { VerdictRow } from '$lib/utils/verdict';
   import OrbitalScene, { type OrbitalStation, type PulseHover } from './OrbitalScene.svelte';
@@ -145,6 +146,13 @@
   const cadenceMs = $derived(settings.monitorDelay);
   const cadenceLabel = $derived(`${(cadenceMs / 1000).toFixed(0)} s`);
   const roundCount = $derived(measurements.roundCounter);
+  const fieldSampleCount = $derived.by(() => {
+    let maxCount = 0;
+    for (const ep of monitored.slice(0, 4)) {
+      maxCount = Math.max(maxCount, measurements.endpoints[ep.id]?.samples.length ?? 0);
+    }
+    return maxCount;
+  });
 
   // ── R.A. / Dec coords (synced with OverviewView derivation) ───────────────
   const elapsedMs = $derived.by(() => {
@@ -421,6 +429,7 @@
         baselineMs={fieldP50}
         stationCount={stations.length}
         cadenceMs={cadenceMs}
+        compact={true}
       />
     </div>
 
@@ -434,7 +443,7 @@
       <div class="kicker">Field carrier · p50</div>
       <div class="number">
         {#if fieldP50 === null}
-          <span class="awaiting">—</span>
+          <span class="awaiting">{collectingLabel(fieldSampleCount)}</span>
         {:else}
           {fieldP50}<span class="u">ms</span>
         {/if}
@@ -480,7 +489,7 @@
           <div class="telem">
             <div class="lat">
               {#if chip.latency === null}
-                <span class="awaiting">—</span>
+                <span class="awaiting">{collectingLabel(measurements.endpoints[chip.endpointId]?.samples.length ?? 0)}</span>
               {:else}
                 {fmt(chip.latency)}<span class="u">ms</span>
               {/if}
@@ -489,7 +498,7 @@
               drift
               <span class="v">
                 {#if chip.drift === null}
-                  —
+                  collecting
                 {:else}
                   {chip.drift >= 0 ? '+' : ''}{chip.drift} ms
                 {/if}
@@ -660,10 +669,23 @@
 
   .live-calibration {
     position: absolute;
-    top: 126px;
+    top: 112px;
     left: clamp(20px, 3vw, 48px);
     z-index: 4;
-    width: min(380px, calc(100vw - 40px));
+    width: min(340px, calc(100vw - 40px));
+  }
+  .live-calibration :global(.instrument-calibration) {
+    background: color-mix(in srgb, var(--bg) 78%, transparent);
+  }
+  .live-calibration :global(.summary) {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+  .live-calibration :global(.readout) {
+    padding: 7px 8px;
+  }
+  .live-calibration :global(.encoding-grid) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
   .live-evidence {
     position: absolute;
@@ -705,6 +727,17 @@
       0 0 120px color-mix(in srgb, var(--station-b) 6%, transparent);
     font-variant-numeric: tabular-nums;
   }
+  .hero-num .number .awaiting {
+    display: inline-block;
+    max-width: 12ch;
+    color: var(--fg-2);
+    font-family: var(--mono);
+    font-size: clamp(28px, 6vw, 72px);
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    line-height: 1.05;
+    text-transform: uppercase;
+  }
   .hero-num .number .u {
     font-family: var(--mono);
     font-weight: 400;
@@ -716,9 +749,7 @@
     display: inline-block;
     text-shadow: none;
   }
-  .hero-num .number .awaiting {
-    color: var(--fg-3);
-  }
+  .hero-num .number .awaiting { color: var(--fg-2); }
   .hero-num .caption {
     margin-top: 18px;
     font-family: var(--mono);
@@ -1121,7 +1152,12 @@
     color: var(--fg-3);
     margin-left: 3px;
   }
-  .telem .lat .awaiting { color: var(--fg-3); }
+  .telem .lat .awaiting {
+    color: var(--fg-3);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
   .station-row[data-severity="bad"] .telem .lat,
   .station-row[data-severity="crit"] .telem .lat { color: var(--sev-bad); }
   /* v4 renders the drift label as lowercase "drift" with tight tracking;

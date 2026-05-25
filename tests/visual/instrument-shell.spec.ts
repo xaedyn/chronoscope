@@ -164,6 +164,19 @@ function pinPulseEvidence(page: Page): Promise<string> {
 }
 
 test.describe('Instrument shell hardening', () => {
+  test('landing hero shows a proof preview instead of only brand copy', async ({ page }) => {
+    await page.goto('/');
+    await page.waitForSelector('#chronoscope-root');
+
+    const preview = page.locator('.landing .proof-preview');
+    await expect(preview).toBeVisible();
+    await expect(preview).toBeInViewport({ ratio: 0.9 });
+    await expect(preview).toContainText('Proof preview');
+    await expect(preview).toContainText('Trigger');
+    await expect(preview).toContainText('Samples');
+    await expect(preview.locator('.station-evidence')).toHaveCount(4);
+  });
+
   test('mobile shell keeps primary routes reachable', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openInstrument(page);
@@ -201,6 +214,8 @@ test.describe('Instrument shell hardening', () => {
 
     await expect(page.locator('.report-surface')).toBeVisible();
     await expect(page.locator('.report-surface')).toContainText(/Live session draft|Recording in progress/i);
+    await expect(page.locator('.proof-state')).toContainText('Provisional draft');
+    await expect(page.locator('.proof-state')).toContainText('still recording');
     await expect(page.locator('.report-surface')).not.toContainText(/Session ended|Recording paused/i);
     await expect(page.locator('.report-surface .pulse-evidence')).toContainText('Replay sample');
     await expect(page.locator('.report-instrument-lens')).toContainText('Replay moment selected by the scrubber.');
@@ -240,6 +255,21 @@ test.describe('Instrument shell hardening', () => {
     expect(await boxesOverlap(page, '.verdict-band', '.audio-toggle')).toBe(false);
   });
 
+  test('desktop live calibration does not cover the verdict band', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openInstrument(page, '/live');
+    await seedRunningSession(page, { roundCount: 64, spikeRound: 36 });
+
+    await expect(page.locator('.live-stage')).toBeVisible();
+    await expect(page.locator('.live-calibration')).toBeVisible();
+    await expect(page.locator('.verdict-band')).toBeVisible();
+    await expect(page.locator('.stations')).toBeVisible();
+
+    expect(await boxesOverlap(page, '.live-calibration', '.verdict-band')).toBe(false);
+    expect(await boxesOverlap(page, '.verdict-band', '.stations')).toBe(false);
+  });
+
+
   test('mobile live keeps pinned pulse evidence inspectable without covering controls', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openInstrument(page, '/live');
@@ -251,7 +281,7 @@ test.describe('Instrument shell hardening', () => {
     await expect(page.locator('.trigger')).toBeVisible();
     await expect(page.locator('.audio-toggle')).toBeVisible();
     await expect(evidence).toContainText('Pinned pulse');
-    await expect(evidence).toContainText('Round #72');
+    await expect(evidence).toContainText('Round 73');
     await expect(evidence).toContainText('38 ms');
     await expect(evidence).toContainText('82 ms under trigger');
 
@@ -311,6 +341,23 @@ test.describe('Instrument shell hardening', () => {
     await expect(reportCalibration).toBeVisible();
     await expect(reportCalibration).toContainText('Live report draft');
     await expect(reportCalibration).toContainText('360 s / 360 slots');
+  });
+
+  test('transit first viewport exposes a labeled global proof map', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openInstrument(page, '/transit');
+    await seedRunningSession(page, { roundCount: 64 });
+
+    const proofMap = page.locator('.transit-proof-map');
+    await expect(proofMap).toBeVisible();
+    await expect(proofMap).toContainText('Example pattern');
+    await expect(proofMap.locator('.proof-lane')).toHaveCount(4);
+    await expect(proofMap).toContainText('Agreement');
+    await expect(proofMap).toContainText('Spread');
+
+    const box = await proofMap.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeLessThan(620);
   });
 
   test('diagnostic contract gives pages distinct jobs for the same event', async ({ page }) => {
@@ -398,6 +445,21 @@ test.describe('Instrument shell hardening', () => {
     expect(boardBox!.y + boardBox!.height).toBeLessThanOrEqual(720);
   });
 
+  test('mobile investigate reaches station comparison in the first viewport', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await openInstrument(page, '/investigate');
+    await seedRunningSession(page, { roundCount: 64, spikeRound: 36 });
+
+    const hypothesis = page.locator('.investigate-hypothesis');
+    const comparison = page.locator('.compare-section');
+    await expect(hypothesis).toBeVisible();
+    await expect(comparison).toBeVisible();
+
+    const comparisonBox = await comparison.boundingBox();
+    expect(comparisonBox).not.toBeNull();
+    expect(comparisonBox!.y).toBeLessThan(760);
+  });
+
   test('overview command actions stay visible on mobile and drill into the event endpoint', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await openInstrument(page);
@@ -441,7 +503,7 @@ test.describe('Instrument shell hardening', () => {
     const liveEvidence = page.locator('.live-stage .pulse-evidence');
     await expect(liveEvidence).toBeVisible();
     await expect(liveEvidence).toContainText('Pinned pulse');
-    await expect(liveEvidence).toContainText('Round #72');
+    await expect(liveEvidence).toContainText('Round 73');
     await expect(liveEvidence).toContainText('38 ms');
     await expect(liveEvidence).toContainText('82 ms under trigger');
     await expect(page.locator(`.station-row[data-endpoint-id="${endpointId}"]`)).toHaveAttribute('data-inspected', 'true');
@@ -450,13 +512,13 @@ test.describe('Instrument shell hardening', () => {
     const endpointEvidence = page.locator('.endpoint-surface .pulse-evidence');
     await expect(endpointEvidence).toBeVisible();
     await expect(endpointEvidence).toContainText('Selected sample');
-    await expect(endpointEvidence).toContainText('Round #72');
+    await expect(endpointEvidence).toContainText('Round 73');
 
     await page.getByRole('button', { name: 'Report', exact: true }).click();
     const reportEvidence = page.locator('.report-surface .pulse-evidence');
     await expect(reportEvidence).toBeVisible();
     await expect(reportEvidence).toContainText('Pinned pulse evidence');
-    await expect(reportEvidence).toContainText('Round #72');
+    await expect(reportEvidence).toContainText('Round 73');
     await expect(reportEvidence).toContainText('38 ms');
   });
 
@@ -483,7 +545,7 @@ test.describe('Instrument shell hardening', () => {
     const lens = page.locator('.report-instrument-lens');
     await expect(lens).toBeVisible();
     await expect(lens).toContainText('Replay lens');
-    await expect(lens).toContainText('Round #36');
+    await expect(lens).toContainText('Round 37');
     await expect(lens).toContainText('most significant detected moment');
     await expect(lens).toContainText('Multiple stations');
     await expect(page.locator('.scrub-read')).toContainText('36 / 72');
@@ -505,13 +567,13 @@ test.describe('Instrument shell hardening', () => {
     await rail.click({ position: { x: (box?.width ?? 0) * 0.5, y: (box?.height ?? 0) * 0.5 } });
 
     await expect(page.locator('.scrub-read')).toContainText('36 / 72');
-    await expect(page.locator('.report-surface .pulse-evidence')).toContainText('Round #36');
+    await expect(page.locator('.report-surface .pulse-evidence')).toContainText('Round 37');
     await expect(page.locator('.report-instrument-lens')).toContainText('Replay moment selected by the scrubber.');
-    await expect(page.locator('.report-instrument-lens')).toContainText('Round #36');
+    await expect(page.locator('.report-instrument-lens')).toContainText('Round 37');
     await expect(page.locator('.selected-pulse-marker')).toBeVisible();
     await expect(page.locator('.selected-angle-guide')).toBeVisible();
     await expect(page.locator('.sample-inspector')).toBeVisible();
-    await expect(page.locator('.sample-inspector')).toContainText('Round #36');
+    await expect(page.locator('.sample-inspector')).toContainText('Round 37');
   });
 
   test('report lens distinguishes pinned pulse and can return to replay', async ({ page }) => {

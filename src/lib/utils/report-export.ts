@@ -5,6 +5,7 @@ import type {
   PulseInspection,
   SampleStatus,
 } from '$lib/types';
+import { displayRoundLabel } from './pulse-inspection';
 
 export interface BuildReportCsvInput {
   readonly endpoints: readonly Endpoint[];
@@ -47,7 +48,7 @@ function endpointHost(url: string): string {
 }
 
 function pinnedSampleLabel(pulse: PulseInspection): string {
-  return pulse.roundNumber === null ? `slot ${pulse.slot}` : `round #${pulse.roundNumber}`;
+  return displayRoundLabel(pulse.roundNumber, pulse.slot);
 }
 
 function pinnedPulseRows(pulse: PulseInspection): string {
