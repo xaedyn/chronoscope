@@ -117,6 +117,7 @@ describe('buildReportInstrumentLens', () => {
     ]);
     expect(lens.proof.suggests).toContain('crossed the trigger');
     expect(lens.orbitalSelection?.selected.stationId).toBe('A');
+    expect(lens.orbitalSelection?.peerPulses).toEqual([{ stationId: 'A', slot: 359 }]);
   });
 
   it('lets a pinned pulse override replay evidence', () => {
@@ -186,5 +187,28 @@ describe('buildReportInstrumentLens', () => {
     expect(lens.source).toBe('significant');
     expect(lens.selectionReason).toContain('most significant');
     expect(lens.orbitalSelection?.selected.slot).toBe(359);
+  });
+
+  it('computes exact peer marker slots from each endpoint sample buffer', () => {
+    const lens = buildReportInstrumentLens({
+      endpoints,
+      measurements: measurements({
+        alpha: [ok(9, 100), ok(10, 180)],
+        bravo: [ok(8, 100), ok(9, 110), ok(10, 160)],
+      }),
+      stats,
+      thresholdMs: 120,
+      pinnedPulse: null,
+      replayPulse: pulse({ slot: 358 }),
+      significantPulse: null,
+      selectionSource: 'scrub',
+      windowSlots: 360,
+    });
+
+    expect(lens.orbitalSelection?.selected.slot).toBe(359);
+    expect(lens.orbitalSelection?.peerPulses).toEqual([
+      { stationId: 'A', slot: 359 },
+      { stationId: 'B', slot: 359 },
+    ]);
   });
 });

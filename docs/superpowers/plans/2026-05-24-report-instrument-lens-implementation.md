@@ -289,7 +289,7 @@ export interface ReportInstrumentLens {
   };
   readonly orbitalSelection: {
     readonly selected: { readonly stationId: string; readonly slot: number; readonly roundNumber: number | null };
-    readonly peerStations: readonly string[];
+    readonly peerPulses: readonly { readonly stationId: string; readonly slot: number }[];
     readonly angle: number;
   } | null;
 }
@@ -383,17 +383,7 @@ export function buildReportInstrumentLens(input: BuildReportInstrumentLensInput)
     },
     peers,
     proof: proofFor(selected, coElevated, selectedPeer),
-    orbitalSelection: {
-      selected: {
-        stationId: selected.stationId,
-        slot: selected.slot,
-        roundNumber: selected.roundNumber,
-      },
-      peerStations: peers
-        .filter((peer) => peer.stationId !== null && (peer.movement === 'co-elevated' || peer.movement === 'selected'))
-        .map((peer) => peer.stationId as string),
-      angle: (selected.slot / Math.max(1, input.windowSlots - 1)) * Math.PI * 2 - Math.PI,
-    },
+    orbitalSelection: orbitalSelectionFor(selected, peers, input.measurements, input.windowSlots),
   };
 }
 ```
@@ -916,10 +906,7 @@ Pass to `OrbitalScene`:
 ```svelte
 onPulseInspect={inspectReportPulse}
 selectedPulse={reportLens.orbitalSelection?.selected ?? null}
-peerPulses={reportLens.orbitalSelection?.peerStations.map((stationId) => ({
-  stationId,
-  slot: reportLens.orbitalSelection?.selected.slot ?? 0,
-})) ?? []}
+peerPulses={reportLens.orbitalSelection?.peerPulses ?? []}
 selectedAngle={reportLens.orbitalSelection?.angle ?? null}
 ```
 

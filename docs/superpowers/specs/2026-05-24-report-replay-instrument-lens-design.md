@@ -130,7 +130,7 @@ Primary output shape:
 - `signal`: latency, drift, threshold delta, previous/current/next summary
 - `peers`: same-round endpoint rows with latency/status/delta/movement-class flags
 - `proof`: claim-safe suggest/cannot-prove strings
-- `orbitalSelection`: station id, slot, round, selected-angle, same-round station ids
+- `orbitalSelection`: selected station id/slot/round, selected-angle, and same-round peer pulse station ids/slots
 
 Inputs:
 
@@ -172,7 +172,7 @@ Keep existing components:
 
 Extend existing orbital component behavior:
 
-- `src/lib/components/OrbitalScene.svelte` accepts an optional selected pulse descriptor and same-round peer descriptors.
+- `src/lib/components/OrbitalScene.svelte` accepts an optional selected pulse descriptor and same-round peer pulse descriptors.
 - `ReportView.svelte` passes `onPulseInspect` to the report orbital scene, enabling click and keyboard pulse selection in reports.
 - `ReportView.svelte` owns scrub progress and selection source, while `report-instrument-lens.ts` owns interpretation.
 
