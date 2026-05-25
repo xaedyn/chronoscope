@@ -331,7 +331,7 @@ export function buildDiagnosticEvidenceContract(
     ? `Notable event: ${notableEvent.summary}`
     : 'No notable event in the active window.';
   const reportHeadline = notableEvent
-    ? `${currentLabel === 'healthy' ? 'currently healthy' : currentLabel}; ${notableEvent.endpointLabel} ${eventVerb(notableEvent)} during the recording.`
+    ? `${currentLabel === 'healthy' ? 'Currently healthy' : currentLabel}; ${notableEvent.endpointLabel} ${eventVerb(notableEvent)} during the recording.`
     : current.detail;
 
   return {

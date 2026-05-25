@@ -11,6 +11,8 @@
   import { tokens } from '$lib/tokens';
   import { navigateTo } from '$lib/router';
   import { buildDiagnosticNarrative } from '$lib/utils/diagnostic-narrative';
+  import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
+  import { buildDiagnosticEvidenceContract } from '$lib/utils/diagnostic-evidence-contract';
   import { buildRunStoryline, type StoryBeatSeverity } from '$lib/utils/run-storyline';
   import { deriveEndpointTone, type EndpointTone } from '$lib/utils/endpoint-tone';
   import { REGION_SHORT_CODES } from '$lib/regional-defaults';
@@ -88,6 +90,19 @@
     samplesByEndpoint,
     monitoredEndpointCount: monitored.length,
   }));
+  const diagnosticReport = $derived(buildDiagnosticReport({
+    endpoints: monitored,
+    stats,
+    measurements,
+    settings,
+    context: null,
+  }));
+  const evidenceContract = $derived(buildDiagnosticEvidenceContract({
+    report: diagnosticReport,
+    endpoints: monitored,
+    measurements,
+    thresholdMs: diagnosticReport.threshold,
+  }));
   const storylineSamplesByEndpoint = $derived.by<Record<string, readonly MeasurementSample[]>>(() => {
     const out: Record<string, readonly MeasurementSample[]> = {};
     for (const ep of monitored) {
@@ -123,7 +138,7 @@
     return 'warn';
   })());
 
-  const verdictHeadline = $derived(diagnosticNarrative.primaryAnswer.text);
+  const verdictHeadline = $derived(evidenceContract.overview.headline);
   const verdictBody = $derived(diagnosticNarrative.supportingSummary);
   // Second observer's-notes paragraph — distinct from the headline by design.
   // Each diagnostic kind gets a sentence that says what the headline implies
@@ -402,6 +417,20 @@
           {#if segment.tone}<span class="ep-chip" data-tone={segment.tone}>{segment.text}</span>{:else}{segment.text}{/if}
         {/each}
       </p>
+      <div class="diagnostic-contract-strip" aria-label="Diagnostic evidence summary">
+        <div class="contract-item">
+          <span class="k">Current</span>
+          <span class="v">{evidenceContract.current.headline}</span>
+        </div>
+        <div class="contract-item" data-tone={evidenceContract.notableEvent?.tone ?? 'info'}>
+          <span class="k">Notable</span>
+          <span class="v">{evidenceContract.overview.notableLine}</span>
+        </div>
+        <div class="contract-item">
+          <span class="k">Next</span>
+          <span class="v">{evidenceContract.overview.nextLine}</span>
+        </div>
+      </div>
       <div class="actions">
         <button type="button" class="primary" onclick={openLive}>Open tracker →</button>
         <button type="button" class="ghost" onclick={openReport}>View session record</button>
@@ -645,6 +674,40 @@
   .ep-chip[data-tone="watch"]      { border-color: var(--sev-warn);  color: var(--sev-warn); }
   .ep-chip[data-tone="bad"]        { border-color: var(--sev-bad);   color: var(--sev-bad); }
   .ep-chip[data-tone="collecting"] { border-color: var(--rule-strong); color: var(--fg-3); }
+  .diagnostic-contract-strip {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    max-width: min(820px, 58vw);
+    padding: 16px 0;
+    margin: 0 0 34px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .contract-item {
+    min-width: 0;
+    border-left: 1px solid var(--rule);
+    padding-left: 14px;
+  }
+  .contract-item:first-child { border-left: 0; padding-left: 0; }
+  .contract-item .k {
+    display: block;
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    margin-bottom: 7px;
+  }
+  .contract-item .v {
+    display: block;
+    color: var(--fg-2);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .contract-item[data-tone="watch"] .v { color: var(--sev-warn); }
+  .contract-item[data-tone="degraded"] .v { color: var(--sev-bad); }
   .hero .actions {
     display: flex;
     gap: 20px;
@@ -999,6 +1062,7 @@
       padding: 40px clamp(20px, 3vw, 48px);
     }
     .hero h1 { max-width: min(720px, 90vw); }
+    .diagnostic-contract-strip { max-width: min(720px, 90vw); }
     .orbit-stage { max-width: 460px; margin-top: 12px; }
     .instrument-column :global(.instrument-calibration) {
       position: relative;
@@ -1021,6 +1085,15 @@
     }
     .srow { grid-template-columns: 14px 1fr auto; gap: 12px; }
     .srow .val, .srow .drift { display: none; }
+    .diagnostic-contract-strip {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .contract-item,
+    .contract-item:first-child {
+      border-left: 0;
+      padding-left: 0;
+    }
     .foot { grid-template-columns: 1fr; gap: 4px; text-align: left; }
     .foot .center, .foot .right { text-align: left; }
   }

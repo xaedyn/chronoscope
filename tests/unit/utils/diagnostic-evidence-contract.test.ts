@@ -165,7 +165,7 @@ describe('buildDiagnosticEvidenceContract', () => {
     expect(contract.notableEvent?.roundLabel).toBe('Round #54');
     expect(contract.notableEvent?.kind).toBe('threshold');
     expect(contract.overview.notableLine).toContain('AWS crossed the trigger by 85 ms');
-    expect(contract.report.headline).toContain('currently healthy');
+    expect(contract.report.headline).toContain('Currently healthy');
     expect(contract.report.headline).toContain('AWS spiked');
   });
 
