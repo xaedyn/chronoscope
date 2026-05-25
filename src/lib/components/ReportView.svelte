@@ -615,6 +615,7 @@
   function returnToReplay(): void {
     uiStore.clearPinnedPulse();
     clickedPulse = null;
+    didSeedSignificant = true;
     selectionSource = 'scrub';
   }
 
@@ -926,6 +927,24 @@
       <div class="kicker">{reportModeLabel} &nbsp;·&nbsp; <span class="v">{flightCert}</span></div>
       <h1>{verdictHeadline}</h1>
       <p class="body">{verdictBody}</p>
+      <div class="hero-metrics" aria-label="Report field metrics">
+        <div class="hero-metric">
+          <span class="metric-label">Field p50</span>
+          <span class="metric-value">
+            {#if fieldP50 === null}<span class="awaiting">—</span>{:else}{fieldP50}<span class="u">ms</span>{/if}
+          </span>
+        </div>
+        <div class="hero-metric">
+          <span class="metric-label">Field p95</span>
+          <span class="metric-value">
+            {fieldP95 === null ? '—' : `${fieldP95} ms`}
+          </span>
+        </div>
+        <div class="hero-metric">
+          <span class="metric-label">Trigger</span>
+          <span class="metric-value">{triggerLabel}</span>
+        </div>
+      </div>
       <div class="proof-state" data-tone={proofState.tone}>
         <span class="state-label">{proofState.label}</span>
         <span class="state-detail">{proofState.detail}</span>
@@ -938,37 +957,28 @@
       </div>
     </div>
 
-    <div class="hud-stats">
-      <div class="label">Field p50</div>
-      <div class="num">
-        {#if fieldP50 === null}<span class="awaiting">—</span>{:else}{fieldP50}<span class="u">ms</span>{/if}
+    <div class="report-side-stack" aria-label="Report instrument detail rail">
+      <div class="report-calibration">
+        <InstrumentCalibration
+          mode="report"
+          thresholdMs={settings.healthThreshold}
+          windowSeconds={WINDOW}
+          sampleSlots={WINDOW}
+          baselineMs={fieldP50}
+          stationCount={stations.length}
+          cadenceMs={settings.monitorDelay}
+          carrierLosses={carrierLosses}
+          isRecording={isRecording}
+          compact={true}
+        />
       </div>
-      <div class="row">
-        <span>p95<span class="v">{fieldP95 === null ? '—' : `${fieldP95} ms`}</span></span>
-        <span>Trigger<span class="v">{triggerLabel}</span></span>
-      </div>
-    </div>
 
-    <div class="report-calibration">
-      <InstrumentCalibration
-        mode="report"
-        thresholdMs={settings.healthThreshold}
-        windowSeconds={WINDOW}
-        sampleSlots={WINDOW}
-        baselineMs={fieldP50}
-        stationCount={stations.length}
-        cadenceMs={settings.monitorDelay}
-        carrierLosses={carrierLosses}
-        isRecording={isRecording}
-        compact={true}
-      />
+      {#if reportPulse}
+        <div class="report-evidence">
+          <PulseEvidence evidence={reportPulse} title={reportPulseTitle} />
+        </div>
+      {/if}
     </div>
-
-    {#if reportPulse}
-      <div class="report-evidence">
-        <PulseEvidence evidence={reportPulse} title={reportPulseTitle} />
-      </div>
-    {/if}
 
     <div
       class="scrub"
@@ -1172,7 +1182,21 @@
     top: 50%;
     transform: translateY(-50%);
     z-index: 4;
-    max-width: min(720px, 50vw);
+    max-width: min(580px, 45vw);
+    pointer-events: none;
+    isolation: isolate;
+  }
+  .hud-title::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -30px -36px -28px -38px;
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--bg) 96%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 84%, transparent) 64%,
+      transparent 100%
+    );
     pointer-events: none;
   }
   .hud-title .kicker {
@@ -1198,8 +1222,49 @@
     font-size: 15px;
     color: var(--fg-2);
     line-height: 1.5;
-    margin: 0 0 18px;
+    margin: 0 0 16px;
     max-width: 42ch;
+  }
+  .hero-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1px;
+    max-width: min(520px, 100%);
+    margin: 0 0 16px;
+    border: 1px solid var(--rule);
+    background: var(--rule);
+    font-family: var(--mono);
+    pointer-events: none;
+  }
+  .hero-metric {
+    min-width: 0;
+    padding: 9px 11px;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+  }
+  .metric-label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--fg-3);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .metric-value {
+    display: block;
+    color: var(--fg);
+    font-size: 14px;
+    line-height: 1.2;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .metric-value .u {
+    margin-left: 2px;
+    color: var(--fg-3);
+    font-size: 10px;
+  }
+  .metric-value .awaiting {
+    color: var(--fg-3);
   }
   .proof-state {
     display: grid;
@@ -1239,74 +1304,28 @@
     pointer-events: auto;
   }
 
-  /* HUD stats — right side, bottom-anchored */
-  .hud-stats {
-    position: absolute;
-    right: clamp(20px, 3vw, 48px);
-    bottom: 88px;
-    z-index: 4;
-    text-align: right;
-    pointer-events: none;
-  }
-  .hud-stats .label {
-    font-family: var(--mono);
-    font-size: 10px;
-    letter-spacing: 0.28em;
-    text-transform: uppercase;
-    color: var(--fg-3);
-    margin-bottom: 6px;
-  }
-  .hud-stats .num {
-    font-family: var(--sans);
-    font-weight: 200;
-    font-size: clamp(48px, 6vw, 84px);
-    letter-spacing: -0.04em;
-    color: var(--fg);
-    line-height: 0.85;
-    font-variant-numeric: tabular-nums;
-    text-shadow: 0 0 30px color-mix(in srgb, var(--fg) 10%, transparent);
-  }
-  .hud-stats .num .u {
-    font-family: var(--mono);
-    font-size: 0.32em;
-    color: var(--fg-3);
-    margin-left: 6px;
-    letter-spacing: 0.05em;
-    vertical-align: 0.8em;
-    text-shadow: none;
-  }
-  .hud-stats .num .awaiting { color: var(--fg-3); }
-  .hud-stats .row {
-    margin-top: 14px;
-    display: flex;
-    gap: 24px;
-    justify-content: flex-end;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--fg-3);
-  }
-  .hud-stats .row .v {
-    color: var(--fg);
-    font-weight: 700;
-    margin-left: 6px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .report-calibration {
+  .report-side-stack {
     position: absolute;
     right: clamp(20px, 3vw, 48px);
     top: 88px;
+    bottom: 86px;
     z-index: 4;
     width: min(400px, calc(100vw - 40px));
+    display: grid;
+    align-content: start;
+    gap: 12px;
     pointer-events: none;
   }
+  .report-calibration,
   .report-evidence {
-    position: absolute;
-    right: clamp(20px, 3vw, 48px);
-    top: 398px;
-    z-index: 4;
-    width: min(400px, calc(100vw - 40px));
-    pointer-events: none;
+    min-width: 0;
+  }
+  .report-calibration :global(.instrument-calibration),
+  .report-evidence :global(.pulse-evidence) {
+    max-width: none;
+  }
+  .report-calibration :global(.encoding-grid) {
+    display: none;
   }
 
   /* Buttons */
@@ -1663,10 +1682,8 @@
   /* ── Mobile ────────────────────────────────────────────────────────────── */
   @media (max-width: 1100px) {
     .hud-title { max-width: min(420px, 60vw); }
-    .report-calibration { width: min(340px, calc(100vw - 40px)); }
-    .report-evidence {
+    .report-side-stack {
       width: min(340px, calc(100vw - 40px));
-      top: 360px;
     }
     .stations-grid { grid-template-columns: repeat(2, 1fr); }
     .record-row { grid-template-columns: 1fr; gap: 40px; }
@@ -1747,21 +1764,20 @@
       max-width: none;
       margin-bottom: 20px;
     }
-    .hud-stats {
-      position: relative;
-      left: auto;
-      right: auto;
-      bottom: auto;
-      z-index: 5;
-      text-align: left;
-      padding-top: 2px;
+    .hero-metrics {
+      max-width: none;
     }
-    .report-calibration {
+    .report-side-stack {
       position: relative;
       left: auto;
       right: auto;
       top: auto;
+      bottom: auto;
       z-index: 5;
+      width: auto;
+    }
+    .report-calibration {
+      position: relative;
       width: auto;
     }
     .report-calibration :global(.summary),
@@ -1770,16 +1786,11 @@
     }
     .report-evidence {
       position: relative;
-      left: auto;
-      right: auto;
-      top: auto;
-      z-index: 5;
       width: auto;
     }
     .report-evidence :global(.summary) {
       display: none;
     }
-    .hud-stats .row { justify-content: flex-start; }
     .scrub {
       position: relative;
       left: auto;
@@ -1807,8 +1818,9 @@
     .scrub { margin-inline: -14px; }
     .hud-title { margin-top: 156px; }
     .hud-title h1 { font-size: clamp(28px, 9vw, 48px); }
-    .hud-stats .num { font-size: clamp(32px, 11vw, 56px); }
-    .hud-stats .num .u { font-size: 12px; }
+    .hero-metric { padding: 8px 9px; }
+    .metric-label { letter-spacing: 0.11em; }
+    .metric-value { font-size: 12px; }
     .below { padding: 48px clamp(14px, 3vw, 24px) 56px; }
     .scrub .scrub-read { font-size: 9px; min-width: auto; }
     .station-card { padding: 18px 18px 20px; }
@@ -1853,20 +1865,47 @@
     .hud-title .kicker .v {
       color: black;
     }
+    .hud-title::before {
+      display: none;
+    }
     .hud-title .actions { display: none; }
-    .hud-stats {
+    .hero-metrics {
+      border-color: #ccc;
+      background: #ccc;
+    }
+    .hero-metric {
+      background: white;
+    }
+    .metric-label {
+      color: #444;
+    }
+    .metric-value,
+    .metric-value .u {
+      color: black;
+    }
+    .report-side-stack {
       position: static;
-      text-align: left;
       margin-top: 16px;
       pointer-events: auto;
+      width: auto;
     }
-    .hud-stats .num,
-    .hud-stats .row .v {
+    .report-side-stack :global(.instrument-calibration),
+    .report-side-stack :global(.pulse-evidence) {
       color: black;
-      text-shadow: none;
+      background: white;
+      border-color: #ccc;
+      box-shadow: none;
     }
-    .hud-stats .label,
-    .hud-stats .row {
+    .report-side-stack :global(.title),
+    .report-side-stack :global(.mode),
+    .report-side-stack :global(.readout .v),
+    .report-side-stack :global(.cell .v) {
+      color: black;
+    }
+    .report-side-stack :global(.summary),
+    .report-side-stack :global(.readout .k),
+    .report-side-stack :global(.cell .k),
+    .report-side-stack :global(.source) {
       color: #444;
     }
     .below {
