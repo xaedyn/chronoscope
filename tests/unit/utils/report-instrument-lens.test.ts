@@ -189,6 +189,25 @@ describe('buildReportInstrumentLens', () => {
     expect(lens.orbitalSelection?.selected.slot).toBe(359);
   });
 
+  it('does not jump back to the significant pulse when the scrubbed round has no sample', () => {
+    const lens = buildReportInstrumentLens({
+      endpoints,
+      measurements: measurements({ alpha: [ok(9, 100), ok(10, 180)] }),
+      stats,
+      thresholdMs: 120,
+      pinnedPulse: null,
+      replayPulse: null,
+      significantPulse: pulse({ slot: 120 }),
+      selectionSource: 'scrub',
+      windowSlots: 360,
+    });
+
+    expect(lens.source).toBe('none');
+    expect(lens.selected).toBeNull();
+    expect(lens.orbitalSelection).toBeNull();
+    expect(lens.selectionReason).toContain('No replay sample');
+  });
+
   it('computes exact peer marker slots from each endpoint sample buffer', () => {
     const lens = buildReportInstrumentLens({
       endpoints,

@@ -123,9 +123,10 @@
   // hard-coded 247-round demo; this is the same anatomy generalised.
   const WINDOW = 360;
   let scrubT = $state(1);
-  let selectionSource = $state<Exclude<ReportLensSource, 'pinned' | 'none'>>('significant');
+  let selectionSource = $state<Exclude<ReportLensSource, 'pinned' | 'none'>>('scrub');
   let clickedPulse = $state<PulseInspection | null>(null);
   let didSeedSignificant = $state(false);
+  let seededSessionStart = $state<number | null | undefined>(undefined);
   const replayFrame = $derived(buildReportReplayFrame({
     endpoints: monitored,
     measurements,
@@ -145,13 +146,25 @@
     capturedAt: report.createdAt ?? measurements.stoppedAt ?? Date.now(),
   }));
   $effect(() => {
+    if (seededSessionStart === measurements.startedAt) return;
+    seededSessionStart = measurements.startedAt;
+    didSeedSignificant = false;
+    clickedPulse = null;
+    selectionSource = isRecording ? 'scrub' : 'significant';
+  });
+  $effect(() => {
+    if (isRecording && selectionSource === 'significant') {
+      selectionSource = 'scrub';
+      return;
+    }
     if (didSeedSignificant || isRecording || pinnedPulse || !significantPulse?.roundNumber) return;
     const maxRound = Math.max(1, measurements.roundCounter);
     scrubT = Math.max(0, Math.min(1, significantPulse.roundNumber / maxRound));
     selectionSource = 'significant';
     didSeedSignificant = true;
   });
-  const replaySelectedPulse = $derived(clickedPulse ?? replayFrame.pulse ?? significantPulse);
+  const replaySelectedPulse = $derived(clickedPulse ?? replayFrame.pulse ?? (isRecording ? null : significantPulse));
+  const significantPulseForLens = $derived(isRecording ? null : significantPulse);
   const reportLens = $derived(buildReportInstrumentLens({
     endpoints: monitored,
     measurements,
@@ -159,7 +172,7 @@
     thresholdMs: settings.healthThreshold,
     pinnedPulse,
     replayPulse: replaySelectedPulse,
-    significantPulse,
+    significantPulse: significantPulseForLens,
     selectionSource,
     windowSlots: WINDOW,
   }));
@@ -169,11 +182,11 @@
       ? 'Pinned pulse evidence'
       : reportLens.source === 'significant'
         ? 'Significant sample'
-        : reportLens.source === 'clicked'
-          ? 'Selected replay sample'
-          : !isRecording && replayFrame.pulse
-            ? 'Replay sample'
-            : 'Significant sample',
+      : reportLens.source === 'clicked'
+        ? 'Selected replay sample'
+        : reportLens.source === 'scrub'
+          ? 'Replay sample'
+          : 'Significant sample',
   );
   const sampleInspector = $derived.by(() => {
     if (!reportPulse) return null;
