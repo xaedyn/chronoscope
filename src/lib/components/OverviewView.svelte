@@ -17,6 +17,7 @@
   import type { MeasurementSample } from '$lib/types';
   import type { VerdictRow } from '$lib/utils/verdict';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
+  import InstrumentCalibration from './InstrumentCalibration.svelte';
 
   const monitored = $derived($monitoredEndpointsStore);
   const stats = $derived($statisticsStore);
@@ -407,24 +408,36 @@
       </div>
     </div>
 
-    <div class="orbit-stage">
-      {#if stations.length > 0}
-        <OrbitalScene
-          {stations}
-          {stationData}
-          triggerMs={threshold}
-          windowSeconds={WINDOW}
-          windowRounds={WINDOW}
-        />
-      {/if}
-      <div class="label">
-        <div>
-          <div class="k">Field p50</div>
-          <div class="v">
-            {#if fieldP50 === null}<span class="awaiting">—</span>{:else}{fieldP50}<span class="u">ms</span>{/if}
+    <div class="instrument-column">
+      <div class="orbit-stage">
+        {#if stations.length > 0}
+          <OrbitalScene
+            {stations}
+            {stationData}
+            triggerMs={threshold}
+            windowSeconds={WINDOW}
+            windowRounds={WINDOW}
+          />
+        {/if}
+        <div class="label">
+          <div>
+            <div class="k">Field p50</div>
+            <div class="v">
+              {#if fieldP50 === null}<span class="awaiting">—</span>{:else}{fieldP50}<span class="u">ms</span>{/if}
+            </div>
           </div>
         </div>
       </div>
+      <InstrumentCalibration
+        mode="overview"
+        thresholdMs={threshold}
+        windowSeconds={WINDOW}
+        sampleSlots={WINDOW}
+        baselineMs={fieldP50}
+        stationCount={stations.length}
+        cadenceMs={settings.monitorDelay}
+        compact={true}
+      />
     </div>
   </section>
 
@@ -472,7 +485,7 @@
         {#if eventBeats.length === 0}
           <div class="event">
             <span class="t">T+00:00</span>
-            <span class="b">No events yet. Run a session to populate the log.</span>
+            <span class="b">No notable events in the current window yet.</span>
             <span class="tag">ACQ</span>
           </div>
         {:else}
@@ -679,6 +692,23 @@
   }
 
   /* Orbital stage */
+  .instrument-column {
+    position: relative;
+    display: grid;
+    gap: 18px;
+    align-items: center;
+    justify-items: center;
+    width: 100%;
+    min-width: 0;
+  }
+  .instrument-column :global(.instrument-calibration) {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-width: 620px;
+    margin: 0 auto;
+  }
   .orbit-stage {
     position: relative;
     aspect-ratio: 1 / 1;
@@ -970,10 +1000,25 @@
     }
     .hero h1 { max-width: min(720px, 90vw); }
     .orbit-stage { max-width: 460px; margin-top: 12px; }
+    .instrument-column :global(.instrument-calibration) {
+      position: relative;
+      max-width: 640px;
+    }
     .card-row { grid-template-columns: 1fr; gap: 36px; }
     .log-section { grid-template-columns: 1fr; gap: 36px; }
   }
   @media (max-width: 720px) {
+    .titlestrip {
+      grid-template-columns: 1fr;
+      align-items: start;
+      gap: 14px;
+    }
+    .titlestrip .coords {
+      width: 100%;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px 14px;
+    }
     .srow { grid-template-columns: 14px 1fr auto; gap: 12px; }
     .srow .val, .srow .drift { display: none; }
     .foot { grid-template-columns: 1fr; gap: 4px; text-align: left; }

@@ -257,6 +257,23 @@ export type AutoStartSuppressionReason =
   | 'no-enabled-endpoints'
   | 'local-endpoint';
 
+export type PulseInspectionSource = 'live' | 'endpoint';
+
+export interface PulseInspection {
+  readonly source: PulseInspectionSource;
+  readonly stationId: string;
+  readonly endpointId: string | null;
+  readonly endpointLabel: string;
+  readonly slot: number;
+  readonly roundNumber: number | null;
+  readonly latency: number;
+  readonly drift: number | null;
+  readonly thresholdMs: number;
+  readonly thresholdDelta: number;
+  readonly timeLabel: string | null;
+  readonly capturedAt: number;
+}
+
 export interface UIState {
   activeView: ActiveView;
   expandedCards: Set<string>;
@@ -291,6 +308,10 @@ export interface UIState {
 
   // Session-derived reason the app did not auto-start at boot. Not persisted.
   autoStartSuppressionReason: AutoStartSuppressionReason | null;
+
+  // A pulse selected from the orbital scene. Shared across Live, station
+  // drill-down, and Report so a specific sample can be inspected and cited.
+  pinnedPulse: PulseInspection | null;
 }
 
 // ── Share payload ──────────────────────────────────────────────────────────
@@ -305,6 +326,7 @@ export interface ShareReportMetadata {
   readonly totalSampleCount: number;
   readonly keptSampleCount: number;
   readonly truncated: boolean;
+  readonly pinnedPulse?: PulseInspection;
 }
 
 export interface SharedReportContext {
@@ -317,6 +339,7 @@ export interface SharedReportContext {
   readonly keptSampleCount: number;
   readonly truncated: boolean;
   readonly sourceVersion: 1 | 2;
+  readonly pinnedPulse: PulseInspection | null;
 }
 
 export interface ShareRemoteVantageEdge {

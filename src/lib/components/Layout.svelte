@@ -5,6 +5,7 @@
 <!-- 'lanes' / 'timeline' / 'heatmap' / 'split' to 'overview' so nothing        -->
 <!-- reaches here.                                                              -->
 <script lang="ts">
+  import type { Component } from 'svelte';
   import { onMount, onDestroy } from 'svelte';
   import { get } from 'svelte/store';
   import { measurementStore } from '$lib/stores/measurements';
@@ -12,12 +13,19 @@
   import { uiStore } from '$lib/stores/ui';
   import { currentRoute, subscribeRoute, type RouteState } from '$lib/router';
   import Masthead from './Masthead.svelte';
-  import OverviewView from './OverviewView.svelte';
-  import LiveView from './LiveView.svelte';
-  import DiagnoseView from './DiagnoseView.svelte';
-  import EndpointView from './EndpointView.svelte';
-  import ReportView from './ReportView.svelte';
-  import TransitView from './TransitView.svelte';
+
+  type RouteSurface = 'overview' | 'live' | 'diagnose' | 'endpoint' | 'report' | 'transit';
+  type RouteComponent = Component<Record<string, never>>;
+  type RouteModule = { default: RouteComponent };
+
+  const routeLoaders: Record<RouteSurface, () => Promise<RouteModule>> = {
+    overview: () => import('./OverviewView.svelte'),
+    live: () => import('./LiveView.svelte'),
+    diagnose: () => import('./DiagnoseView.svelte'),
+    endpoint: () => import('./EndpointView.svelte'),
+    report: () => import('./ReportView.svelte'),
+    transit: () => import('./TransitView.svelte'),
+  };
 
   let { onStart, onStop }: {
     onStart?: () => void;
@@ -49,6 +57,48 @@
   const showEndpointSurface = $derived(
     activeView === 'diagnose' && focusedEndpointId !== null && isEndpointRoute,
   );
+  const activeSurface = $derived.by<RouteSurface>(() => {
+    if (sharedReportMode) return 'report';
+    if (activeView === 'live') return 'live';
+    if (showEndpointSurface) return 'endpoint';
+    if (activeView === 'diagnose') return 'diagnose';
+    if (activeView === 'report') return 'report';
+    if (activeView === 'transit') return 'transit';
+    return 'overview';
+  });
+  let LoadedSurface = $state<RouteComponent | null>(null);
+  let loadedSurfaceName = $state<RouteSurface | null>(null);
+  let surfaceLoadError = $state<string | null>(null);
+  let surfaceLoadRetry = $state(0);
+
+  function retrySurfaceLoad(): void {
+    surfaceLoadError = null;
+    surfaceLoadRetry += 1;
+  }
+
+  $effect(() => {
+    const surface = activeSurface;
+    const loadAttempt = surfaceLoadRetry;
+    let cancelled = false;
+    LoadedSurface = null;
+    loadedSurfaceName = null;
+    surfaceLoadError = null;
+
+    routeLoaders[surface]().then((mod) => {
+      if (cancelled) return;
+      LoadedSurface = mod.default;
+      loadedSurfaceName = surface;
+    }).catch((error: unknown) => {
+      if (!cancelled) {
+        console.warn(`[Chronoscope] Failed to load route surface (${surface}:${loadAttempt}):`, error);
+        LoadedSurface = null;
+        loadedSurfaceName = null;
+        surfaceLoadError = 'Instrument surface failed to load.';
+      }
+    });
+
+    return () => { cancelled = true; };
+  });
 
   onMount(() => {
     unsubLifecycle = measurementStore.subscribe((state) => {
@@ -78,30 +128,30 @@
 
   {#if sharedReportMode}
     <main id="main-content" class="shell-main report-main" tabindex="-1">
-      <ReportView />
+      {#if LoadedSurface && loadedSurfaceName === activeSurface}
+        <LoadedSurface />
+      {:else if surfaceLoadError}
+        <div class="route-loading route-error" role="alert">
+          <span>{surfaceLoadError}</span>
+          <button type="button" onclick={retrySurfaceLoad}>Retry</button>
+        </div>
+      {:else}
+        <div class="route-loading" role="status">Loading instrument surface...</div>
+      {/if}
     </main>
   {:else}
     <div class="shell-body">
       <div class="shell-main-wrap">
         <main id="main-content" class="shell-main" tabindex="-1">
-          {#if activeView === 'live'}
-            <LiveView />
-          {:else if showEndpointSurface}
-            <EndpointView />
-          {:else if activeView === 'diagnose'}
-            <DiagnoseView />
-          {:else if activeView === 'report'}
-            <ReportView />
-          {:else if activeView === 'transit'}
-            <TransitView />
+          {#if LoadedSurface && loadedSurfaceName === activeSurface}
+            <LoadedSurface />
+          {:else if surfaceLoadError}
+            <div class="route-loading route-error" role="alert">
+              <span>{surfaceLoadError}</span>
+              <button type="button" onclick={retrySurfaceLoad}>Retry</button>
+            </div>
           {:else}
-            <!--
-              Fallback: overview renders here as the default. Legacy route IDs
-              may still exist in ActiveView or persisted payloads for backwards
-              compatibility, but the primary ViewSwitcher exposes Overview,
-              Live, Investigate, and Report.
-            -->
-            <OverviewView />
+            <div class="route-loading" role="status">Loading instrument surface...</div>
           {/if}
         </main>
       </div>
@@ -176,6 +226,36 @@
   .report-main {
     flex: 1;
     min-height: 0;
+  }
+  .route-loading {
+    flex: 1;
+    display: grid;
+    place-items: center;
+    gap: 14px;
+    min-height: 320px;
+    color: var(--fg-3);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+  .route-error {
+    color: var(--fg-2);
+  }
+  .route-error button {
+    border: 1px solid var(--rule-strong);
+    background: var(--fg);
+    color: var(--bg);
+    padding: 9px 14px;
+    font: inherit;
+    font-size: 9px;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    cursor: pointer;
+  }
+  .route-error button:focus-visible {
+    outline: 2px solid var(--station-b);
+    outline-offset: 2px;
   }
 
   .sr-only {

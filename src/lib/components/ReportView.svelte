@@ -25,11 +25,19 @@
     MAX_SHARE_URL_CHARS,
   } from '$lib/share/share-payload-builder';
   import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
+  import { buildReportCsv } from '$lib/utils/report-export';
+  import { buildReportReplayFrame } from '$lib/utils/report-replay';
+  import { buildSampleInspector } from '$lib/utils/sample-inspector';
   import { buildRunStoryline } from '$lib/utils/run-storyline';
+  import { buildMostSignificantPulseInspection } from '$lib/utils/significant-pulse';
+  import { driftLabel, pulseInspectionSummary, thresholdDeltaLabel } from '$lib/utils/pulse-inspection';
   import { deriveEndpointTone, type EndpointTone } from '$lib/utils/endpoint-tone';
   import { tokens } from '$lib/tokens';
   import type { MeasurementSample } from '$lib/types';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
+  import InstrumentCalibration from './InstrumentCalibration.svelte';
+  import PulseEvidence from './PulseEvidence.svelte';
+  import SampleInspector from './SampleInspector.svelte';
   import { REGION_SHORT_CODES } from '$lib/regional-defaults';
 
   // ── Store reads ────────────────────────────────────────────────────────────
@@ -39,6 +47,12 @@
   const settings = $derived($settingsStore);
   const stats = $derived($statisticsStore);
   const context = $derived($uiStore.sharedReportContext);
+  const pinnedPulse = $derived($uiStore.pinnedPulse);
+  const isRecording = $derived(
+    measurements.lifecycle === 'starting'
+      || measurements.lifecycle === 'running'
+      || measurements.lifecycle === 'stopping',
+  );
 
   // The diagnostic report bundles primary answer + endpoint rows + threshold +
   // sample counts. Used for the verdict band and per-station summary.
@@ -86,10 +100,6 @@
       radius: STATION_RADII[i],
     })),
   );
-  const epToStation = $derived<Record<string, string>>(
-    Object.fromEntries(monitored.slice(0, 4).map((ep, i) => [ep.id, STATION_IDS[i]])),
-  );
-
   // Report is a session-signature plot, not a rolling-window live view. WINDOW
   // here is the number of pulse slots allocated per station, sized for typical
   // session lengths (1-6 minutes at 1Hz typically resolves to <360 rounds).
@@ -97,69 +107,44 @@
   // stays renderable without overlapping pulses. v4's prototype uses a
   // hard-coded 247-round demo; this is the same anatomy generalised.
   const WINDOW = 360;
-  const stationData = $derived.by<Record<string, readonly (number | null)[]>>(() => {
-    const out: Record<string, (number | null)[]> = {};
-    for (const ep of monitored.slice(0, 4)) {
-      const id = epToStation[ep.id];
-      const m = measurements.endpoints[ep.id];
-      if (!m) {
-        out[id] = new Array(WINDOW).fill(null);
-        continue;
-      }
-      const all = m.samples.toArray();
-      out[id] = downsampleToWindow(all, WINDOW, (s) => s.status === 'ok' ? s.latency : null);
-    }
-    return out;
+  let scrubT = $state(1);
+  const replayFrame = $derived(buildReportReplayFrame({
+    endpoints: monitored,
+    measurements,
+    thresholdMs: settings.healthThreshold,
+    progress: scrubT,
+    windowSlots: WINDOW,
+    capturedAt: report.createdAt ?? measurements.stoppedAt ?? Date.now(),
+  }));
+  const stationData = $derived(replayFrame.stationData);
+  const stationTimestamps = $derived(replayFrame.stationTimestamps);
+
+  const significantPulse = $derived(buildMostSignificantPulseInspection({
+    endpoints: monitored,
+    measurements,
+    thresholdMs: settings.healthThreshold,
+    windowSlots: WINDOW,
+    capturedAt: report.createdAt ?? measurements.stoppedAt ?? Date.now(),
+  }));
+  const reportPulse = $derived(
+    pinnedPulse ?? (isRecording ? significantPulse : replayFrame.pulse ?? significantPulse),
+  );
+  const reportPulseTitle = $derived(
+    pinnedPulse
+      ? 'Pinned pulse evidence'
+      : !isRecording && replayFrame.pulse
+        ? 'Replay sample'
+        : 'Significant sample',
+  );
+  const sampleInspector = $derived.by(() => {
+    if (!reportPulse) return null;
+    return buildSampleInspector({
+      evidence: reportPulse,
+      endpoints: monitored,
+      measurements,
+      thresholdMs: settings.healthThreshold,
+    });
   });
-  // Parallel timestamp array. Without this, OrbitalScene's writeAt detection
-  // falsely flashes pulses as "fresh" every time the reactive buffer rebuilds
-  // (see commit 4cc8e38 — same bug we fixed on Live). The signature plot wants
-  // every pulse settled; sample timestamps make all of them aged out by the
-  // time the user is on /report.
-  const stationTimestamps = $derived.by<Record<string, readonly (number | null)[]>>(() => {
-    const out: Record<string, (number | null)[]> = {};
-    for (const ep of monitored.slice(0, 4)) {
-      const id = epToStation[ep.id];
-      const m = measurements.endpoints[ep.id];
-      if (!m) {
-        out[id] = new Array(WINDOW).fill(null);
-        continue;
-      }
-      const all = m.samples.toArray();
-      out[id] = downsampleToWindow(all, WINDOW, (s) => s.status === 'ok' ? s.timestamp : null);
-    }
-    return out;
-  });
-  // Uniformly downsample a sample stream to a fixed-width pulse buffer. Pads
-  // with nulls when the stream is shorter than the window (early-session
-  // signature); strides through evenly when the stream is longer (long-session
-  // signature). Keeps the angular sweep of pulses around the ring proportional
-  // to total session duration regardless of round count.
-  function downsampleToWindow<T extends MeasurementSample, V>(
-    samples: readonly T[],
-    window: number,
-    project: (s: T) => V,
-  ): (V | null)[] {
-    const buf: (V | null)[] = new Array(window).fill(null);
-    if (samples.length === 0) return buf;
-    if (samples.length <= window) {
-      // Pack the recording into the END of the buffer so it grows clockwise as
-      // the session accumulates (matches Live's tail-packing convention).
-      const offset = window - samples.length;
-      for (let i = 0; i < samples.length; i++) {
-        const s = samples[i];
-        if (s !== undefined) buf[offset + i] = project(s);
-      }
-      return buf;
-    }
-    // Long session: stride uniformly through the recording.
-    const stride = samples.length / window;
-    for (let i = 0; i < window; i++) {
-      const s = samples[Math.floor(i * stride)];
-      if (s !== undefined) buf[i] = project(s);
-    }
-    return buf;
-  }
 
   // ── Session identity / coords ─────────────────────────────────────────────
   const sessionStart = $derived(measurements.startedAt);
@@ -167,6 +152,23 @@
   const durationMs = $derived(sessionStart === null ? 0 : Math.max(0, sessionEnd - sessionStart));
   const durationLabel = $derived(formatDuration(durationMs));
   const durationLong = $derived(formatDurationLong(durationMs));
+  const reportModeLabel = $derived(isRecording ? 'Live session draft' : 'Field recording');
+  const reportAriaLabel = $derived(
+    isRecording
+      ? 'Diagnostic report — live session draft'
+      : 'Diagnostic report — completed session signature',
+  );
+  const endedLabel = $derived(isRecording ? 'In progress' : utcTimeLabel(measurements.stoppedAt));
+  const footerStateText = $derived(
+    isRecording
+      ? 'Browser-resident observatory · recording in progress · no telemetry leaves this device'
+      : 'Browser-resident observatory · session complete · no telemetry leaves this device',
+  );
+  const footerRightText = $derived(
+    isRecording
+      ? `Recording in progress since ${utcTimeLabel(sessionStart)}`
+      : `Recording stopped at ${utcTimeLabel(measurements.stoppedAt)}`,
+  );
 
   function formatDuration(ms: number): string {
     const total = Math.floor(ms / 1000);
@@ -391,9 +393,13 @@
     const topBeat = sortedBeats[0] ?? null;
 
     const stationCount = monitored.length;
-    const acquiredText = stationCount === 1
-      ? 'Session ended with 1 station acquired.'
-      : `Session ended with ${stationCount} stations acquired.`;
+    const acquiredText = isRecording
+      ? (stationCount === 1
+        ? 'Recording in progress with 1 station acquired.'
+        : `Recording in progress with ${stationCount} stations acquired.`)
+      : (stationCount === 1
+        ? 'Session complete with 1 station acquired.'
+        : `Session complete with ${stationCount} stations acquired.`);
     const nextStepText = ' If issues recur, run an outside transit check to separate your network from the endpoint.';
 
     // Rich path — we have a beat to lead with.
@@ -482,15 +488,10 @@
     return `${browser} · ${os} · ${region}`;
   });
 
-  // ── Scrub rail (purely visual progress indicator for the saved signature) ─
-  // The orbital signature is a static plot of the full session; the scrub
-  // rail communicates "you are looking at the whole recording, end-to-end".
-  // Interactive replay is a Phase D enhancement (see DIRECTION-v4.md); for
-  // now the handle parks at 100% (end of session).
-  let scrubT = $state(1);
-  const scrubRoundLabel = $derived(
-    `${Math.round(scrubT * measurements.roundCounter)} / ${measurements.roundCounter}`,
-  );
+  // ── Scrub rail ───────────────────────────────────────────────────────────
+  // The scrubber now drives the report frame itself: orbital pulses, current
+  // evidence, and the sample inspector all follow this replay position.
+  const scrubRoundLabel = $derived(replayFrame.roundLabel);
   function onRailClick(e: MouseEvent | TouchEvent): void {
     const rail = e.currentTarget as HTMLDivElement;
     if (!rail) return;
@@ -501,19 +502,142 @@
   const railMarks = Array.from({ length: 60 }, (_, i) => i);
 
   // ── Sharing / export hooks (preserved chronoscope behavior) ───────────────
-  // PNG export: capture the OrbitalScene canvas via toDataURL. The scene's
-  // canvas is a child of the .stage container; we query for it on click.
-  // The button is no-op when no scene has mounted (e.g. zero endpoints).
+  // PNG export: composite the WebGL signature with report text and evidence.
+  // A raw canvas export would omit DOM overlays, so the saved artifact draws
+  // the most important readouts into a dedicated report plate.
   let stageEl: HTMLElement | null = null;
   let copiedLink = $state(false);
   let copyError = $state<'link' | null>(null);
 
+  function drawWrappedText(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+    lineHeight: number,
+    maxLines: number,
+  ): number {
+    const words = text.split(/\s+/).filter(Boolean);
+    let line = '';
+    let lines = 0;
+    for (const word of words) {
+      const next = line.length === 0 ? word : `${line} ${word}`;
+      if (ctx.measureText(next).width > maxWidth && line.length > 0) {
+        ctx.fillText(line, x, y);
+        y += lineHeight;
+        lines += 1;
+        line = word;
+        if (lines >= maxLines - 1) break;
+      } else {
+        line = next;
+      }
+    }
+    if (line.length > 0 && lines < maxLines) {
+      ctx.fillText(line, x, y);
+      y += lineHeight;
+    }
+    return y;
+  }
+
+  function drawMetric(
+    ctx: CanvasRenderingContext2D,
+    label: string,
+    value: string,
+    x: number,
+    y: number,
+  ): void {
+    ctx.fillStyle = tokens.color.text.fg2;
+    ctx.font = '600 18px Inter, system-ui, sans-serif';
+    ctx.fillText(label.toUpperCase(), x, y);
+    ctx.fillStyle = tokens.color.text.fg;
+    ctx.font = '700 30px Inter, system-ui, sans-serif';
+    ctx.fillText(value, x, y + 38);
+  }
+
+  function drawEvidencePlate(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    width: number,
+  ): void {
+    if (!reportPulse) return;
+    ctx.fillStyle = tokens.color.tooltip.bgDeep;
+    ctx.strokeStyle = tokens.color.glass.borderHover;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(x, y, width, 218, 18);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = tokens.color.station.A;
+    ctx.font = '700 18px Inter, system-ui, sans-serif';
+    ctx.fillText(reportPulseTitle.toUpperCase(), x + 24, y + 34);
+
+    ctx.fillStyle = tokens.color.text.fg;
+    ctx.font = '700 24px Inter, system-ui, sans-serif';
+    drawWrappedText(ctx, pulseInspectionSummary(reportPulse), x + 24, y + 74, width - 48, 30, 2);
+
+    const left = x + 24;
+    const right = x + width / 2 + 12;
+    drawMetric(ctx, 'Latency', `${reportPulse.latency} ms`, left, y + 130);
+    drawMetric(ctx, 'Trigger delta', thresholdDeltaLabel(reportPulse.thresholdDelta), right, y + 130);
+
+    ctx.fillStyle = tokens.color.tooltip.text;
+    ctx.font = '600 18px Inter, system-ui, sans-serif';
+    ctx.fillText(`Drift ${driftLabel(reportPulse.drift)} · Station ${reportPulse.stationId}`, left, y + 198);
+  }
+
   function saveImage(): void {
     if (!stageEl) return;
-    const canvas = stageEl.querySelector<HTMLCanvasElement>('canvas');
-    if (!canvas) return;
+    const sceneCanvas = stageEl.querySelector<HTMLCanvasElement>('canvas');
+    if (!sceneCanvas) return;
     try {
-      const dataUrl = canvas.toDataURL('image/png');
+      const out = document.createElement('canvas');
+      out.width = 1600;
+      out.height = 1000;
+      const ctx = out.getContext('2d');
+      if (!ctx) return;
+
+      ctx.fillStyle = tokens.color.surface.base;
+      ctx.fillRect(0, 0, out.width, out.height);
+
+      const gradient = ctx.createRadialGradient(500, 500, 80, 500, 500, 620);
+      gradient.addColorStop(0, tokens.color.glass.bgHover);
+      gradient.addColorStop(1, tokens.color.glass.bg);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, out.width, out.height);
+
+      ctx.drawImage(sceneCanvas, 56, 92, 820, 820);
+      ctx.strokeStyle = tokens.color.glass.borderHover;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(56, 92, 820, 820);
+
+      const x = 940;
+      ctx.fillStyle = tokens.color.station.A;
+      ctx.font = '700 22px Inter, system-ui, sans-serif';
+      ctx.fillText(`${reportModeLabel.toUpperCase()} · ${flightCert}`, x, 118);
+
+      ctx.fillStyle = tokens.color.text.fg;
+      ctx.font = '800 54px Inter, system-ui, sans-serif';
+      let y = drawWrappedText(ctx, verdictHeadline, x, 190, 560, 62, 3);
+
+      ctx.fillStyle = tokens.color.tooltip.text;
+      ctx.font = '500 24px Inter, system-ui, sans-serif';
+      y = drawWrappedText(ctx, verdictBody, x, y + 18, 560, 34, 4);
+
+      const metricY = Math.max(420, y + 42);
+      drawMetric(ctx, 'Field p50', fieldP50 === null ? '-' : `${fieldP50} ms`, x, metricY);
+      drawMetric(ctx, 'Field p95', fieldP95 === null ? '-' : `${fieldP95} ms`, x + 220, metricY);
+      drawMetric(ctx, 'Trigger', triggerLabel, x + 440, metricY);
+
+      drawEvidencePlate(ctx, x, metricY + 96, 560);
+
+      ctx.fillStyle = tokens.color.text.fg2;
+      ctx.font = '600 18px Inter, system-ui, sans-serif';
+      ctx.fillText(`${durationLong} · ${measurements.roundCounter} rounds · ${footerStateText}`, 56, 962);
+
+      const dataUrl = out.toDataURL('image/png');
       const a = document.createElement('a');
       a.href = dataUrl;
       a.download = `chronoscope-signature-${flightCert.replace(/[^A-Za-z0-9-]/g, '-')}.png`;
@@ -526,30 +650,13 @@
   }
 
   function saveCsv(): void {
-    // Header + one row per (round × monitored endpoint). Matches the v4
-    // prototype's CSV layout — round, ISO timestamp, t-offset, endpoint id,
-    // endpoint label, host, latency_ms, severity.
-    const threshold = settings.healthThreshold;
-    const startMs = sessionStart ?? Date.now();
-    const sevName = (v: number, status: string): string => {
-      if (status !== 'ok') return status;
-      if (v >= 4000) return 'crit';
-      if (v > threshold) return 'bad';
-      if (v > threshold * 0.7) return 'warn';
-      return 'stable';
-    };
-    let csv = 'round,timestamp_utc,t_offset_s,endpoint_id,endpoint_label,host,latency_ms,severity\n';
-    for (const ep of monitored) {
-      const host = (() => {
-        try { return new URL(ep.url).host; } catch { return ep.url; }
-      })();
-      const samples = measurements.endpoints[ep.id]?.samples.toArray() ?? [];
-      for (const s of samples) {
-        const offsetS = ((s.timestamp - startMs) / 1000).toFixed(1);
-        const iso = new Date(s.timestamp).toISOString();
-        csv += `${s.round},${iso},${offsetS},${ep.id},"${ep.label.replace(/"/g, '""')}",${host},${s.latency.toFixed(2)},${sevName(s.latency, s.status)}\n`;
-      }
-    }
+    const csv = buildReportCsv({
+      endpoints: monitored,
+      measurements,
+      healthThreshold: settings.healthThreshold,
+      sessionStart: sessionStart ?? Date.now(),
+      pinnedPulse,
+    });
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -576,6 +683,7 @@
       roundCount: report.roundCount,
       totalSampleCount: report.totalSampleCount,
       truncated: report.truncated,
+      ...(pinnedPulse ? { pinnedPulse } : {}),
     };
     const liveCompanion = get(companionStore);
     const localCompanion = liveCompanion.lastProbe
@@ -652,7 +760,7 @@
   });
 </script>
 
-<section class="report-surface" aria-label="Diagnostic report — completed session signature">
+<section class="report-surface" aria-label={reportAriaLabel}>
   <!-- HERO STAGE — orbital signature + HUD readouts + scrub rail -->
   <section class="stage" bind:this={stageEl}>
     <div class="stage-scene" aria-hidden={stations.length === 0 ? 'true' : null}>
@@ -665,7 +773,7 @@
           windowSeconds={WINDOW}
           windowRounds={WINDOW}
           assemble={true}
-          revealProgress={scrubT}
+          revealProgress={1}
           showTooltip={false}
         />
       {/if}
@@ -683,7 +791,7 @@
     </div>
 
     <div class="hud-title">
-      <div class="kicker">Field recording &nbsp;·&nbsp; <span class="v">{flightCert}</span></div>
+      <div class="kicker">{reportModeLabel} &nbsp;·&nbsp; <span class="v">{flightCert}</span></div>
       <h1>{verdictHeadline}</h1>
       <p class="body">{verdictBody}</p>
       <div class="actions">
@@ -705,13 +813,34 @@
       </div>
     </div>
 
+    <div class="report-calibration">
+      <InstrumentCalibration
+        mode="report"
+        thresholdMs={settings.healthThreshold}
+        windowSeconds={WINDOW}
+        sampleSlots={WINDOW}
+        baselineMs={fieldP50}
+        stationCount={stations.length}
+        cadenceMs={settings.monitorDelay}
+        carrierLosses={carrierLosses}
+        isRecording={isRecording}
+        compact={true}
+      />
+    </div>
+
+    {#if reportPulse}
+      <div class="report-evidence">
+        <PulseEvidence evidence={reportPulse} title={reportPulseTitle} />
+      </div>
+    {/if}
+
     <div
       class="scrub"
       role="slider"
       aria-label="Scrub through session"
       aria-valuemin="0"
       aria-valuemax={measurements.roundCounter}
-      aria-valuenow={Math.round(scrubT * measurements.roundCounter)}
+      aria-valuenow={replayFrame.targetRound}
       tabindex="0"
     >
       <span class="lbl">Replay</span>
@@ -776,12 +905,18 @@
       {/each}
     </div>
 
+    {#if sampleInspector}
+      <div class="sample-inspector-wrap">
+        <SampleInspector inspector={sampleInspector} />
+      </div>
+    {/if}
+
     <div class="record-row">
       <div>
         <h3>Session record</h3>
         <div class="row"><span class="k">Session ID</span><span class="v">{flightCert}</span></div>
         <div class="row"><span class="k">Started</span><span class="v">{utcTimeLabel(sessionStart)} · {utcDateLabel(sessionStart)}</span></div>
-        <div class="row"><span class="k">Ended</span><span class="v">{utcTimeLabel(measurements.stoppedAt)}</span></div>
+        <div class="row"><span class="k">{isRecording ? 'Status' : 'Ended'}</span><span class="v">{endedLabel}</span></div>
         <div class="row"><span class="k">Duration</span><span class="v">{durationLong}</span></div>
         <div class="row"><span class="k">Rounds</span><span class="v">{roundsLabel}</span></div>
         <div class="row"><span class="k">Cadence</span><span class="v">{cadenceLabel}</span></div>
@@ -806,8 +941,8 @@
 
   <footer class="foot">
     <div>Cert<span class="v">{flightCert}</span></div>
-    <div class="center">Browser-resident observatory · session ended · no telemetry leaves this device</div>
-    <div class="right">Recording paused at <span class="v">{utcTimeLabel(measurements.stoppedAt)}</span></div>
+    <div class="center">{footerStateText}</div>
+    <div class="right">{footerRightText}</div>
   </footer>
 </section>
 
@@ -982,6 +1117,21 @@
     font-weight: 700;
     margin-left: 6px;
     font-variant-numeric: tabular-nums;
+  }
+
+  .report-calibration {
+    position: absolute;
+    right: clamp(20px, 3vw, 48px);
+    top: 88px;
+    z-index: 4;
+    width: min(400px, calc(100vw - 40px));
+  }
+  .report-evidence {
+    position: absolute;
+    right: clamp(20px, 3vw, 48px);
+    top: 398px;
+    z-index: 4;
+    width: min(400px, calc(100vw - 40px));
   }
 
   /* Buttons */
@@ -1223,6 +1373,10 @@
     margin-left: 2px;
   }
 
+  .sample-inspector-wrap {
+    margin-top: 36px;
+  }
+
   /* Record + narrative columns */
   .record-row {
     margin-top: 64px;
@@ -1329,6 +1483,11 @@
   /* ── Mobile ────────────────────────────────────────────────────────────── */
   @media (max-width: 1100px) {
     .hud-title { max-width: min(420px, 60vw); }
+    .report-calibration { width: min(340px, calc(100vw - 40px)); }
+    .report-evidence {
+      width: min(340px, calc(100vw - 40px));
+      top: 360px;
+    }
     .stations-grid { grid-template-columns: repeat(2, 1fr); }
     .record-row { grid-template-columns: 1fr; gap: 40px; }
   }
@@ -1343,6 +1502,25 @@
       right: 16px;
       bottom: 100px;
       text-align: left;
+    }
+    .report-calibration {
+      left: 16px;
+      right: 16px;
+      top: 76px;
+      width: auto;
+    }
+    .report-calibration :global(.summary),
+    .report-calibration :global(.encoding-grid) {
+      display: none;
+    }
+    .report-evidence {
+      left: 16px;
+      right: 16px;
+      top: 254px;
+      width: auto;
+    }
+    .report-evidence :global(.summary) {
+      display: none;
     }
     .hud-stats .row { justify-content: flex-start; }
     .scrub { padding: 12px 12px 14px; gap: 12px; }

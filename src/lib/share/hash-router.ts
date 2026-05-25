@@ -23,6 +23,7 @@ import { uiStore } from '../stores/ui';
 import type {
   SharePayload,
   MeasurementSample,
+  PulseInspection,
   SampleStatus,
   Endpoint,
   SharedReportContext,
@@ -38,6 +39,7 @@ import { autoStartDecision } from '../utils/status-intent';
 // headroom — high enough that no legitimate payload hits it, low enough that
 // downstream arithmetic stays well inside safe-integer range.
 const MAX_SHARE_ROUND_COUNTER = 1_000_000;
+const STATION_IDS = ['A', 'B', 'C', 'D'] as const;
 
 function pickColor(index: number): string {
   const palette = tokens.color.endpoint;
@@ -101,11 +103,29 @@ function inferRoundCounter(results: NonNullable<SharePayload['results']>): numbe
   return maxRound;
 }
 
-function buildSharedReportContext(payload: SharePayload): SharedReportContext | null {
+function remapPinnedPulse(
+  pulse: PulseInspection | undefined,
+  materializedEndpointIds: readonly string[],
+): PulseInspection | null {
+  if (!pulse) return null;
+  const stationIndex = STATION_IDS.indexOf(pulse.stationId as (typeof STATION_IDS)[number]);
+  return {
+    ...pulse,
+    endpointId: stationIndex >= 0
+      ? materializedEndpointIds[stationIndex] ?? null
+      : null,
+  };
+}
+
+function buildSharedReportContext(
+  payload: SharePayload,
+  materializedEndpointIds: readonly string[] = [],
+): SharedReportContext | null {
   if (payload.mode !== 'results' || !payload.results) return null;
 
   const keptSampleCount = countResultSamples(payload.results);
   if (payload.v === 2 && payload.report) {
+    const pinnedPulse = remapPinnedPulse(payload.report.pinnedPulse, materializedEndpointIds);
     return {
       reportKind: payload.report.reportKind ?? 'support',
       createdAt: payload.report.createdAt,
@@ -116,6 +136,7 @@ function buildSharedReportContext(payload: SharePayload): SharedReportContext | 
       keptSampleCount: payload.report.keptSampleCount,
       truncated: payload.report.truncated,
       sourceVersion: 2,
+      pinnedPulse,
     };
   }
 
@@ -129,6 +150,7 @@ function buildSharedReportContext(payload: SharePayload): SharedReportContext | 
     keptSampleCount,
     truncated: false,
     sourceVersion: 1,
+    pinnedPulse: null,
   };
 }
 
@@ -176,6 +198,7 @@ export function applySharePayload(payload: SharePayload): string[] {
     uiStore.setSharedReportMode(false);
     uiStore.setSharedReportContext(null);
     uiStore.setSharedLocalCompanion(null);
+    uiStore.clearPinnedPulse();
     return [];
   }
 
@@ -249,8 +272,14 @@ export function applySharePayload(payload: SharePayload): string[] {
 
     measurementStore.loadSnapshot(snapshot);
 
-    uiStore.setSharedReportContext(buildSharedReportContext(payload));
+    const sharedReportContext = buildSharedReportContext(payload, ids);
+    uiStore.setSharedReportContext(sharedReportContext);
     uiStore.setSharedLocalCompanion(payload.localCompanion ?? null);
+    if (sharedReportContext?.pinnedPulse) {
+      uiStore.setPinnedPulse(sharedReportContext.pinnedPulse);
+    } else {
+      uiStore.clearPinnedPulse();
+    }
     uiStore.setSharedView(true);
     uiStore.setSharedReportMode(true);
     remoteVantageStore.setProbe(payload.remoteVantage ? { ...payload.remoteVantage, ok: true } : null);
@@ -259,6 +288,7 @@ export function applySharePayload(payload: SharePayload): string[] {
     uiStore.setSharedReportMode(false);
     uiStore.setSharedReportContext(null);
     uiStore.setSharedLocalCompanion(null);
+    uiStore.clearPinnedPulse();
     remoteVantageStore.setProbe(null);
   }
 

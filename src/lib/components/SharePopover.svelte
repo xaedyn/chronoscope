@@ -17,6 +17,7 @@
     buildResultsSharePayload,
     MAX_SHARE_URL_CHARS,
   } from '$lib/share/share-payload-builder';
+  import { buildMostSignificantPulseInspection } from '$lib/utils/significant-pulse';
   import { tokens } from '$lib/tokens';
   import type { ReportKind, SharePayload } from '$lib/types';
 
@@ -52,17 +53,29 @@
 
   function buildResultsPayload(maxChars = MAX_SHARE_URL_CHARS, reportKind: ReportKind = 'support') {
     const companion = get(companionStore);
+    const endpoints = get(endpointStore);
+    const settings = get(settingsStore);
+    const measurements = get(measurementStore);
+    const pinnedPulse = get(uiStore).pinnedPulse ?? buildMostSignificantPulseInspection({
+      endpoints,
+      measurements,
+      thresholdMs: settings.healthThreshold,
+      capturedAt: Date.now(),
+    });
     const localCompanion = reportKind === 'support' && includeLocalProofInReport && companion.lastProbe
       ? sanitizeCompanionProbeForReport(companion.lastProbe, { includePrivateWifi: false })
       : null;
 
     return buildResultsSharePayload(
-      get(endpointStore),
-      get(settingsStore),
-      get(measurementStore),
+      endpoints,
+      settings,
+      measurements,
       maxChars,
       Date.now(),
-      { reportKind },
+      {
+        reportKind,
+        ...(pinnedPulse ? { pinnedPulse } : {}),
+      },
       get(remoteVantageStore).lastProbe,
       localCompanion,
     );
