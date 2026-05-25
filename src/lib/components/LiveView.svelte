@@ -13,6 +13,8 @@
   import { fmt } from '$lib/utils/format';
   import { tokens } from '$lib/tokens';
   import { buildDiagnosticNarrative } from '$lib/utils/diagnostic-narrative';
+  import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
+  import { buildDiagnosticEvidenceContract } from '$lib/utils/diagnostic-evidence-contract';
   import { buildPulseInspection } from '$lib/utils/pulse-inspection';
   import type { MeasurementSample } from '$lib/types';
   import type { VerdictRow } from '$lib/utils/verdict';
@@ -184,6 +186,19 @@
     samplesByEndpoint,
     monitoredEndpointCount: monitored.length,
   }));
+  const diagnosticReport = $derived(buildDiagnosticReport({
+    endpoints: monitored,
+    stats,
+    measurements,
+    settings,
+    context: null,
+  }));
+  const evidenceContract = $derived(buildDiagnosticEvidenceContract({
+    report: diagnosticReport,
+    endpoints: monitored,
+    measurements,
+    thresholdMs: diagnosticReport.threshold,
+  }));
 
   type Sigil = 'stable' | 'warn' | 'bad' | 'crit';
   const sigil = $derived<Sigil>((() => {
@@ -211,8 +226,6 @@
     return ep ? `Carrier lost · ${ep.label}` : 'Carrier lost · alarm';
   })());
 
-  const verdictHeadline = $derived(diagnosticNarrative.primaryAnswer.text);
-  const verdictBody = $derived(diagnosticNarrative.supportingSummary);
   const showVerdictBand = $derived(diagnosticNarrative.kind !== 'collecting' && verdictRows.length > 0);
 
   // ── Per-station chip row ───────────────────────────────────────────────────
@@ -436,10 +449,13 @@
     </div>
 
     {#if showVerdictBand}
-      <div class="verdict-band" data-sigil={sigil}>
+      <div class="verdict-band live-contract-strip" data-sigil={sigil}>
         <div class="tag"><span class="pip"></span>{verdictKickerText}</div>
-        <div class="title">{verdictHeadline}</div>
-        <div class="body">{verdictBody}</div>
+        <div class="title">{evidenceContract.current.headline}</div>
+        <div class="body">
+          <span class="event-line">{evidenceContract.live.eventLine}</span>
+          <span class="operational-line">{evidenceContract.live.operationalLine}</span>
+        </div>
       </div>
     {/if}
 
@@ -773,6 +789,14 @@
     line-height: 1.5;
     max-width: 52ch;
     margin: 0;
+  }
+  .verdict-band .event-line,
+  .verdict-band .operational-line {
+    display: block;
+  }
+  .verdict-band .event-line {
+    color: var(--fg);
+    margin-bottom: 6px;
   }
   .verdict-band .body :global(em) {
     font-style: normal;
