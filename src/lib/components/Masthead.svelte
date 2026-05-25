@@ -95,6 +95,21 @@
     {/each}
   </nav>
 
+  <nav class="mobile-nav" aria-label="Primary mobile">
+    {#each NAV as item (item.id)}
+      {@const active = isActive(item.id)}
+      <button
+        type="button"
+        class="mobile-nav-link"
+        class:active
+        aria-current={active ? 'page' : undefined}
+        onclick={() => selectRoute(item.route)}
+      >
+        {item.label}
+      </button>
+    {/each}
+  </nav>
+
   <div class="controls">
     <span class="carrier-tag" data-state={carrierState} role="status" aria-live="polite">
       <span class="carrier-dot" aria-hidden="true"></span>
@@ -254,6 +269,10 @@
     outline-offset: 2px;
   }
 
+  .mobile-nav {
+    display: none;
+  }
+
   /* Right cluster — carrier tag + icon + action buttons. */
   .controls {
     display: flex;
@@ -386,6 +405,40 @@
     .nav,
     .carrier-tag .carrier-label {
       display: none;
+    }
+    .mobile-nav {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      border: 1px solid var(--rule);
+      background: var(--rule);
+      font-family: var(--mono);
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .mobile-nav-link {
+      min-width: 0;
+      min-height: 34px;
+      border: 0;
+      background: var(--bg);
+      color: var(--fg-3);
+      font: inherit;
+      letter-spacing: inherit;
+      text-transform: inherit;
+      cursor: pointer;
+    }
+    .mobile-nav-link.active {
+      color: var(--bg);
+      background: var(--fg);
+    }
+    .mobile-nav-link:focus-visible {
+      outline: 2px solid var(--station-b);
+      outline-offset: -2px;
+      position: relative;
+      z-index: 1;
     }
   }
 </style>

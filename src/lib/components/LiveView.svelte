@@ -13,9 +13,12 @@
   import { fmt } from '$lib/utils/format';
   import { tokens } from '$lib/tokens';
   import { buildDiagnosticNarrative } from '$lib/utils/diagnostic-narrative';
+  import { buildPulseInspection } from '$lib/utils/pulse-inspection';
   import type { MeasurementSample } from '$lib/types';
   import type { VerdictRow } from '$lib/utils/verdict';
-  import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
+  import OrbitalScene, { type OrbitalStation, type PulseHover } from './OrbitalScene.svelte';
+  import InstrumentCalibration from './InstrumentCalibration.svelte';
+  import PulseEvidence from './PulseEvidence.svelte';
   import { setEnabled, playSessionStart } from '$lib/audio';
 
   const monitored = $derived($monitoredEndpointsStore);
@@ -59,6 +62,12 @@
       monitored.slice(0, 4).map((ep, i) => [STATION_IDS[i], ep.label]),
     ),
   );
+  const stationToEndpoint = $derived<Record<string, string>>(
+    Object.fromEntries(
+      monitored.slice(0, 4).map((ep, i) => [STATION_IDS[i], ep.id]),
+    ),
+  );
+  const pinnedPulse = $derived($uiStore.pinnedPulse);
 
   // ── Sample → ring buffer per station ───────────────────────────────────────
   // OrbitalScene wants stationData[stationId] = (number | null)[60].
@@ -248,6 +257,21 @@
     uiStore.setFocusedEndpoint(focusedId === endpointId ? null : endpointId);
   }
 
+  function inspectPulse(pulse: PulseHover): void {
+    const evidence = buildPulseInspection({
+      source: 'live',
+      pulse,
+      endpointIdByStation: stationToEndpoint,
+      thresholdMs: threshold,
+    });
+    uiStore.setPinnedPulse(evidence);
+    if (evidence.endpointId !== null) uiStore.setFocusedEndpoint(evidence.endpointId);
+  }
+
+  function clearPinnedPulse(): void {
+    uiStore.clearPinnedPulse();
+  }
+
   function updateTrigger(e: Event): void {
     const v = parseInt((e.target as HTMLInputElement).value, 10);
     if (Number.isFinite(v)) {
@@ -352,6 +376,7 @@
         stationLabels={stationLabelsForScene}
         currentRound={roundCount}
         cadenceMs={cadenceMs}
+        onPulseInspect={inspectPulse}
       />
     {:else}
       <div class="stage-empty">
@@ -373,6 +398,24 @@
       <span>R.A.<span class="v">{raCoord}</span></span>
       <span>Dec<span class="v">{decCoord}</span></span>
     </div>
+
+    <div class="live-calibration">
+      <InstrumentCalibration
+        mode="live"
+        thresholdMs={threshold}
+        windowSeconds={WINDOW}
+        sampleSlots={WINDOW}
+        baselineMs={fieldP50}
+        stationCount={stations.length}
+        cadenceMs={cadenceMs}
+      />
+    </div>
+
+    {#if pinnedPulse}
+      <div class="live-evidence">
+        <PulseEvidence evidence={pinnedPulse} title="Pinned pulse" onClear={clearPinnedPulse} />
+      </div>
+    {/if}
 
     <div class="hero-num" aria-live="polite">
       <div class="kicker">Field carrier · p50</div>
@@ -406,7 +449,9 @@
           type="button"
           class="station-row"
           data-station={chip.id}
+          data-endpoint-id={chip.endpointId}
           data-focused={focusedId === chip.endpointId ? 'true' : 'false'}
+          data-inspected={pinnedPulse?.endpointId === chip.endpointId ? 'true' : 'false'}
           data-severity={chip.severity}
           onclick={() => focusStation(chip.endpointId)}
           aria-pressed={focusedId === chip.endpointId}
@@ -595,6 +640,21 @@
     font-weight: 700;
     margin-left: 8px;
     font-variant-numeric: tabular-nums;
+  }
+
+  .live-calibration {
+    position: absolute;
+    top: 126px;
+    left: clamp(20px, 3vw, 48px);
+    z-index: 4;
+    width: min(380px, calc(100vw - 40px));
+  }
+  .live-evidence {
+    position: absolute;
+    top: 502px;
+    left: clamp(20px, 3vw, 48px);
+    z-index: 4;
+    width: min(380px, calc(100vw - 40px));
   }
 
   /* ── Hero number — centered cinematic readout ───────────────────────────── */
@@ -976,6 +1036,21 @@
     background: var(--station-b);
     box-shadow: 0 0 10px var(--station-b);
   }
+  .station-row[data-inspected="true"] {
+    border-color: color-mix(in srgb, var(--station-c) 70%, var(--rule));
+    background: color-mix(in srgb, var(--station-c) 10%, transparent);
+  }
+  .station-row[data-inspected="true"]::after {
+    content: 'Pinned';
+    position: absolute;
+    top: 7px;
+    right: 10px;
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--station-c);
+  }
   .station-row:focus-visible {
     outline: 2px solid var(--station-b);
     outline-offset: -2px;
@@ -1140,13 +1215,74 @@
     /* Compact the stations panel + give the verdict / trigger more room */
     .stations { width: 280px; max-width: 280px; right: 12px; }
     .verdict-band { bottom: 32px; max-width: 48ch; }
+    .live-calibration { width: min(330px, calc(100vw - 40px)); }
+    .live-evidence {
+      top: 428px;
+      width: min(330px, calc(100vw - 40px));
+    }
   }
   @media (max-width: 720px) {
     .coords-bar { gap: 14px; font-size: 9px; padding: 6px 14px; }
+    .live-calibration {
+      top: 122px;
+      left: 16px;
+      right: 16px;
+      width: auto;
+    }
+    .live-calibration :global(.summary),
+    .live-calibration :global(.readouts),
+    .live-calibration :global(.encoding-grid) {
+      display: none;
+    }
+    .live-evidence {
+      display: block;
+      top: 188px;
+      left: 16px;
+      right: 16px;
+      width: auto;
+      z-index: 6;
+    }
+    .live-evidence :global(.pulse-evidence) {
+      max-width: none;
+    }
+    .live-evidence :global(.evidence-head) {
+      grid-template-columns: 1fr auto;
+      padding: 9px 12px 8px;
+    }
+    .live-evidence :global(.source) {
+      display: none;
+    }
+    .live-evidence :global(.summary) {
+      padding: 9px 12px;
+      font-size: 11px;
+      line-height: 1.25;
+    }
+    .live-evidence :global(.evidence-grid) {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+    .live-evidence :global(.cell) {
+      padding: 7px 8px;
+    }
+    .live-evidence :global(.cell:nth-child(1)),
+    .live-evidence :global(.cell:nth-child(4)),
+    .live-evidence :global(.cell:nth-child(6)) {
+      display: none;
+    }
+    .hero-num { top: 42%; }
     .hero-num .number { font-size: clamp(72px, 18vw, 120px); }
-    .verdict-band { bottom: 32px; left: 16px; right: 16px; max-width: none; }
+    .hero-num .caption { display: none; }
+    .verdict-band {
+      bottom: 168px;
+      left: 16px;
+      right: 16px;
+      max-width: none;
+    }
     .verdict-band .title { font-size: 22px; }
-    .verdict-band .body { font-size: 13px; }
+    .verdict-band .body {
+      font-size: 13px;
+      max-height: 6.2em;
+      overflow: hidden;
+    }
     /* On narrow viewports the stations panel sits below the hero number
        instead of overlaying it. */
     .stations {
@@ -1156,8 +1292,21 @@
       max-width: 100%;
       margin: 100vh auto 24px;
     }
-    .audio-toggle { right: 16px; bottom: 80px; }
-    .trigger { right: 16px; }
+    .audio-toggle {
+      right: 16px;
+      bottom: 88px;
+    }
+    .trigger {
+      left: 16px;
+      right: 16px;
+      bottom: 24px;
+      justify-content: space-between;
+    }
+    .trigger input[type="range"] {
+      flex: 1;
+      width: auto;
+      min-width: 70px;
+    }
     .tour-hint {
       min-width: 0;
       max-width: none;

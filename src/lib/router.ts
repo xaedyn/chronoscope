@@ -113,6 +113,7 @@ export function navigateTo(state: RouteState, options?: NavigateOptions): void {
     }
   }
   applyAndNotify(state);
+  resetRouteScroll();
 }
 
 // Wrap the state-write + notify pair in document.startViewTransition() so the
@@ -194,6 +195,7 @@ function handlePopstate(): void {
   }
   // Back/forward gets the same cross-fade treatment as forward navigation.
   applyAndNotify(next);
+  resetRouteScroll();
 }
 
 function notify(state: RouteState): void {
@@ -204,6 +206,24 @@ function notify(state: RouteState): void {
       // Subscriber crashes must not break navigation. Swallow.
     }
   }
+}
+
+function scrollElementToTop(element: HTMLElement): void {
+  if (typeof element.scrollTo === 'function') {
+    element.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    return;
+  }
+  element.scrollTop = 0;
+  element.scrollLeft = 0;
+}
+
+function resetRouteScroll(): void {
+  if (typeof window === 'undefined') return;
+  window.requestAnimationFrame(() => {
+    const main = document.querySelector<HTMLElement>('main#main-content');
+    if (main) scrollElementToTop(main);
+    scrollElementToTop(document.documentElement);
+  });
 }
 
 // Test-only escape hatch — resets module state between unit tests.

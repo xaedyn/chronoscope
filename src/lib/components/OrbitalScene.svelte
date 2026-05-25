@@ -56,6 +56,7 @@
   import pulseFrag from '$lib/shaders/pulse.frag.glsl?raw';
   import haloVert from '$lib/shaders/halo.vert.glsl?raw';
   import haloFrag from '$lib/shaders/halo.frag.glsl?raw';
+  import { orbitalRadiusForLatency, triggerRadiusFor } from '$lib/utils/orbital-encoding';
 
   let {
     stations,
@@ -69,6 +70,7 @@
     gapRegions = [],
     stationLabels = {},
     showTooltip = true,
+    onPulseInspect = undefined,
     lastGoodMarker = null,
     currentRound = null,
     cadenceMs = null,
@@ -91,6 +93,9 @@
     stationLabels?: Readonly<Record<string, string>>;
     // Set false to disable the hover tooltip entirely (e.g. Report scrub mode).
     showTooltip?: boolean;
+    // Called when the operator clicks the currently hovered pulse. Consumers
+    // can pin that PulseHover into shared UI state for cross-surface evidence.
+    onPulseInspect?: ((pulse: PulseHover) => void) | undefined;
     // Optional green "last-known-good" marker on a station's orbit.
     // Used by EndpointErrorView to anchor the eye on the last success.
     lastGoodMarker?: LastGoodMarker | null;
@@ -112,8 +117,8 @@
   } = $props();
 
   // Element refs (Svelte 5: bind:this fills these at mount)
-  let canvas: HTMLCanvasElement | undefined;
-  let container: HTMLDivElement | undefined;
+  let canvas = $state<HTMLCanvasElement | undefined>();
+  let container = $state<HTMLDivElement | undefined>();
 
   // Three.js objects, populated on mount
   let renderer: THREE.WebGLRenderer | null = null;
@@ -140,9 +145,11 @@
 
   const orbits: Record<string, OrbitObjects> = {};
   const pulses: Record<string, PulseBuffer> = {};
+  const triggerRadii: Record<string, number> = {};
 
   // ── Hover tooltip state ────────────────────────────────────────────────────
   let hover = $state<PulseHover | null>(null);
+  const canInspectPulses = $derived(onPulseInspect !== undefined);
   let stars: THREE.Points | null = null;
   let home: THREE.Mesh | null = null;
   let homeHalo: THREE.Mesh | null = null;
@@ -168,6 +175,7 @@
   const STAR_BIG_PROB = 0.04;
   const SWEEP_BEAM_LENGTH = 14;
   const SWEEP_ANGULAR_WIDTH = Math.PI / 36;
+  const TRIGGER_RING_HALF_WIDTH = 0.035;
   const CAMERA_DRIFT_RATE = 0.00005;
   const CAMERA_R = 22;
   const CAMERA_Y = 14;
@@ -233,6 +241,112 @@
   const tmpVec3 = new THREE.Vector3();
   const NDC_PICK_RADIUS = 0.03;
 
+  function buildPulseHover(stationId: string, slot: number, screenX: number, screenY: number): PulseHover | null {
+    const stationObj = stations.find((s) => s.id === stationId);
+    if (!stationObj) return null;
+    const data = stationData[stationId] ?? [];
+    const latency = data[slot];
+    if (typeof latency !== 'number' || !Number.isFinite(latency)) return null;
+
+    const filtered = data.filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
+    let baseline = stationObj.baseline;
+    if (baseline === undefined && filtered.length > 0) {
+      const sorted = [...filtered].sort((a, b) => a - b);
+      baseline = sorted[Math.floor(sorted.length / 2)];
+    }
+    const drift = baseline === undefined ? null : Math.round(latency - baseline);
+    const stationLabel = stationLabels[stationId] ?? stationId;
+
+    // Round number for the hovered slot — newest slot maps to currentRound.
+    const roundsAgo = windowRounds - 1 - slot;
+    const roundNumber = currentRound === null ? null : currentRound - roundsAgo;
+    // Time label — derived from cadence (seconds ago) when provided.
+    let timeLabel: string | null = null;
+    if (cadenceMs !== null && cadenceMs > 0) {
+      const secondsAgo = Math.round((roundsAgo * cadenceMs) / 1000);
+      if (secondsAgo <= 0) {
+        timeLabel = 'now';
+      } else if (secondsAgo < 60) {
+        timeLabel = `T−${secondsAgo}s`;
+      } else {
+        const mm = Math.floor(secondsAgo / 60).toString().padStart(2, '0');
+        const ss = (secondsAgo % 60).toString().padStart(2, '0');
+        timeLabel = `T−${mm}:${ss}`;
+      }
+    }
+
+    return {
+      stationId,
+      stationLabel,
+      slot,
+      latency,
+      drift,
+      roundNumber,
+      timeLabel,
+      screenX,
+      screenY,
+    };
+  }
+
+  function screenPositionForPulse(stationId: string, slot: number): { x: number; y: number } {
+    const rect = canvas?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0 };
+    const buf = pulses[stationId];
+    if (!buf || !camera || buf.positions[slot * 3] >= 9000) {
+      return { x: rect.width / 2, y: rect.height / 2 };
+    }
+    tmpVec3.set(
+      buf.positions[slot * 3],
+      buf.positions[slot * 3 + 1],
+      buf.positions[slot * 3 + 2],
+    );
+    tmpVec3.project(camera);
+    return {
+      x: ((tmpVec3.x + 1) / 2) * rect.width,
+      y: ((1 - tmpVec3.y) / 2) * rect.height,
+    };
+  }
+
+  function newestPulseForStation(stationId: string): PulseHover | null {
+    const data = stationData[stationId] ?? [];
+    const buf = pulses[stationId];
+    for (let slot = Math.min(windowRounds, data.length) - 1; slot >= 0; slot--) {
+      if (buf && (buf.positions[slot * 3] >= 9000 || buf.reveals[slot] > revealProgress)) continue;
+      const screen = screenPositionForPulse(stationId, slot);
+      const pulse = buildPulseHover(stationId, slot, screen.x, screen.y);
+      if (pulse) return pulse;
+    }
+    return null;
+  }
+
+  function fallbackPulseHover(): PulseHover | null {
+    if (focusedStation !== null) {
+      const focusedPulse = newestPulseForStation(focusedStation);
+      if (focusedPulse) return focusedPulse;
+    }
+
+    let best: PulseHover | null = null;
+    for (const station of stations) {
+      const data = stationData[station.id] ?? [];
+      const buf = pulses[station.id];
+      for (let slot = 0; slot < Math.min(windowRounds, data.length); slot++) {
+        if (buf && (buf.positions[slot * 3] >= 9000 || buf.reveals[slot] > revealProgress)) continue;
+        const screen = screenPositionForPulse(station.id, slot);
+        const pulse = buildPulseHover(station.id, slot, screen.x, screen.y);
+        if (!pulse) continue;
+        if (
+          best === null ||
+          pulse.latency - triggerMs > best.latency - triggerMs ||
+          (pulse.latency - triggerMs === best.latency - triggerMs && pulse.latency > best.latency) ||
+          (pulse.latency === best.latency && pulse.slot > best.slot)
+        ) {
+          best = pulse;
+        }
+      }
+    }
+    return best;
+  }
+
   function handleCanvasMouseMove(e: MouseEvent): void {
     if (!showTooltip || !camera || !canvas) return;
     const rect = canvas.getBoundingClientRect();
@@ -272,54 +386,25 @@
       return;
     }
 
-    const stationObj = stations.find((s) => s.id === bestStationId);
-    if (!stationObj) return;
-    const data = stationData[bestStationId] ?? [];
-    const latency = data[bestSlot];
-    if (typeof latency !== 'number') return;
-
-    const filtered = data.filter((v): v is number => v !== null && v !== undefined);
-    let baseline = stationObj.baseline;
-    if (baseline === undefined && filtered.length > 0) {
-      const sorted = [...filtered].sort((a, b) => a - b);
-      baseline = sorted[Math.floor(sorted.length / 2)];
-    }
-    const drift = baseline === undefined ? null : Math.round(latency - baseline);
-    const stationLabel = stationLabels[bestStationId] ?? bestStationId;
-
-    // Round number for the hovered slot — newest slot maps to currentRound.
-    const roundsAgo = windowRounds - 1 - bestSlot;
-    const roundNumber = currentRound === null ? null : currentRound - roundsAgo;
-    // Time label — derived from cadence (seconds ago) when provided.
-    let timeLabel: string | null = null;
-    if (cadenceMs !== null && cadenceMs > 0) {
-      const secondsAgo = Math.round((roundsAgo * cadenceMs) / 1000);
-      if (secondsAgo <= 0) {
-        timeLabel = 'now';
-      } else if (secondsAgo < 60) {
-        timeLabel = `T−${secondsAgo}s`;
-      } else {
-        const mm = Math.floor(secondsAgo / 60).toString().padStart(2, '0');
-        const ss = (secondsAgo % 60).toString().padStart(2, '0');
-        timeLabel = `T−${mm}:${ss}`;
-      }
-    }
-
-    hover = {
-      stationId: bestStationId,
-      stationLabel,
-      slot: bestSlot,
-      latency,
-      drift,
-      roundNumber,
-      timeLabel,
-      screenX: e.clientX - rect.left,
-      screenY: e.clientY - rect.top,
-    };
+    hover = buildPulseHover(bestStationId, bestSlot, e.clientX - rect.left, e.clientY - rect.top);
   }
 
   function handleCanvasMouseLeave(): void {
     if (hover !== null) hover = null;
+  }
+
+  function handleCanvasClick(): void {
+    if (hover === null || onPulseInspect === undefined) return;
+    onPulseInspect(hover);
+  }
+
+  function handleCanvasKeyDown(e: KeyboardEvent): void {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const pulse = hover ?? fallbackPulseHover();
+    if (pulse === null || onPulseInspect === undefined) return;
+    e.preventDefault();
+    hover = pulse;
+    onPulseInspect(pulse);
   }
 
   function buildStars(): void {
@@ -388,7 +473,9 @@
       ring.rotation.x = -Math.PI / 2;
       scene.add(ring);
 
-      const triggerG = new THREE.RingGeometry(r + 0.55, r + 0.62, 128, 1, 0, Math.PI * 2);
+      const initialBaseline = station.baseline ?? 30;
+      const triggerR = triggerRadiusFor(r, initialBaseline, triggerMs);
+      const triggerG = makeTriggerRingGeometry(triggerR);
       const triggerM = new THREE.MeshBasicMaterial({
         color: sevBadColor.clone(),
         transparent: true,
@@ -398,9 +485,29 @@
       const triggerRing = new THREE.Mesh(triggerG, triggerM);
       triggerRing.rotation.x = -Math.PI / 2;
       scene.add(triggerRing);
+      triggerRadii[station.id] = triggerR;
 
       orbits[station.id] = { ring, triggerRing, r };
     }
+  }
+
+  function makeTriggerRingGeometry(radius: number): THREE.RingGeometry {
+    return new THREE.RingGeometry(
+      radius - TRIGGER_RING_HALF_WIDTH,
+      radius + TRIGGER_RING_HALF_WIDTH,
+      128,
+      1,
+      0,
+      Math.PI * 2,
+    );
+  }
+
+  function syncTriggerRingGeometry(stationId: string, ring: THREE.Mesh, radius: number): void {
+    if (Math.abs((triggerRadii[stationId] ?? -1) - radius) < 0.001) return;
+    const previous = ring.geometry;
+    ring.geometry = makeTriggerRingGeometry(radius);
+    previous.dispose();
+    triggerRadii[stationId] = radius;
   }
 
   function buildHome(): void {
@@ -588,6 +695,14 @@
         const sorted = [...filtered].sort((a, b) => a - b);
         baseline = sorted[Math.floor(sorted.length / 2)];
       }
+      const orbit = orbits[station.id];
+      if (orbit) {
+        syncTriggerRingGeometry(
+          station.id,
+          orbit.triggerRing,
+          triggerRadiusFor(station.radius, baseline, triggerMs),
+        );
+      }
 
       for (let i = 0; i < windowRounds; i++) {
         const latency = data[i] ?? null;
@@ -608,9 +723,7 @@
         }
 
         const angle = -Math.PI / 2 + (i / windowRounds) * Math.PI * 2;
-        const ratio = (latency - baseline) / Math.max(baseline, 10);
-        const offset = Math.max(-0.4, Math.min(0.8, ratio * 0.5));
-        const rr = station.radius + offset;
+        const rr = orbitalRadiusForLatency(station.radius, latency, baseline);
         buf.positions[i * 3]     = rr * Math.cos(angle);
         buf.positions[i * 3 + 1] = 0;
         buf.positions[i * 3 + 2] = rr * Math.sin(angle);
@@ -808,14 +921,7 @@
   });
 </script>
 
-<div
-  bind:this={container}
-  class="orbital-scene"
-  role="img"
-  aria-label="Orbital tracker"
-  onmousemove={handleCanvasMouseMove}
-  onmouseleave={handleCanvasMouseLeave}
->
+{#snippet sceneContent()}
   <canvas bind:this={canvas} class="orbital-canvas"></canvas>
   <div class="orbital-vignette" aria-hidden="true"></div>
   {#if showTooltip && hover}
@@ -843,7 +949,34 @@
       {/if}
     </div>
   {/if}
-</div>
+{/snippet}
+
+{#if canInspectPulses}
+  <div
+    bind:this={container}
+    class="orbital-scene"
+    role="button"
+    tabindex="0"
+    aria-label="Orbital tracker. Click a pulse to pin evidence."
+    onmousemove={handleCanvasMouseMove}
+    onclick={handleCanvasClick}
+    onkeydown={handleCanvasKeyDown}
+    onmouseleave={handleCanvasMouseLeave}
+  >
+    {@render sceneContent()}
+  </div>
+{:else}
+  <div
+    bind:this={container}
+    class="orbital-scene"
+    role="img"
+    aria-label="Orbital tracker"
+    onmousemove={handleCanvasMouseMove}
+    onmouseleave={handleCanvasMouseLeave}
+  >
+    {@render sceneContent()}
+  </div>
+{/if}
 
 <style>
   .orbital-scene {
@@ -851,6 +984,10 @@
     width: 100%;
     height: 100%;
     overflow: hidden;
+  }
+  .orbital-scene[role="button"]:focus-visible {
+    outline: 2px solid var(--station-b);
+    outline-offset: -2px;
   }
   .orbital-canvas {
     display: block;
