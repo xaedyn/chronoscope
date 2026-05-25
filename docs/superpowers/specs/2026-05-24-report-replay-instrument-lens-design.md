@@ -14,7 +14,7 @@ The selected replay moment becomes the center of the page. When a user scrubs th
 - How far was it from baseline and trigger?
 - What does this prove, and what remains outside browser evidence?
 
-This makes the orbital visualization readable as evidence rather than decorative polish.
+This makes the orbital visualization readable as evidence rather than decorative polish. The 10x bar is not "add a richer panel below the scene." The bar is: the orbital signature itself shows which moment is selected, why it matters, and how the same round behaved across peers.
 
 ## Current Context
 
@@ -37,6 +37,8 @@ In scope:
 - Strengthen the relationship between scrub position, selected pulse, station roll-call, sample inspector, and observer notes.
 - Add a compact peer-at-round comparison so the user can see whether the selected station was isolated or part of a shared change.
 - Add claim-safe "What this suggests / What this cannot prove" copy near the selected evidence.
+- Add visible orbital binding for the selected moment: selected pulse marker, same-round peer emphasis, and selected-angle guide.
+- Start completed reports on the most significant detected moment, not merely the final sample, unless the user has pinned a pulse.
 - Keep export/share behavior compatible with existing report payloads.
 - Add focused unit and visual coverage for the new lens behavior.
 
@@ -59,6 +61,7 @@ The panel has four parts:
 1. Moment header
    - Round label, timestamp or relative position, selected station, and threshold.
    - Shows "Replay moment" for scrub-derived selection and "Pinned pulse" when the user carried a pulse from Live or Endpoint into the report.
+   - Shows why this moment is selected: most significant sample, user-scrubbed moment, clicked pulse, or pinned pulse.
 
 2. Signal readout
    - Latency, threshold delta, drift from station baseline, and previous/current/next trend.
@@ -69,6 +72,12 @@ The panel has four parts:
    - Shows each endpoint label, latency/status, threshold delta, and whether it moved with the selected station.
    - Sorts selected station first, then highest threshold delta, then label.
    - For more than four monitored endpoints, the first four still map to orbital stations, but the peer field may include all monitored endpoints that have a same-round sample.
+   - Uses explicit movement classes:
+     - `selected`: the station owning the selected pulse.
+     - `co-elevated`: peer status is timeout/error or peer latency is above threshold in the same round.
+     - `wobble`: peer stayed under threshold but changed by at least 10 ms from its previous successful sample in the same direction as the selected station.
+     - `steady`: peer sample exists and stayed below those movement rules.
+     - `missing`: no peer sample exists for that round.
 
 4. Proof boundary
    - Two short statements:
@@ -78,11 +87,24 @@ The panel has four parts:
 
 ### Interaction Model
 
+- On first load of a completed report, the lens selects the most significant pulse already produced by `buildMostSignificantPulseInspection`. The scrubber moves to that round so the visual and evidence start on the most instructive moment.
 - Scrubbing the report updates the replay frame, selected round, selected pulse evidence, sample inspector, peer field, and proof boundary together.
 - A pinned pulse takes priority over scrub-derived evidence. The report should make that priority visible and offer a clear "Return to replay" control that clears the pinned pulse.
-- Clicking or keyboard-selecting a pulse in the report orbital scene should select that pulse and update the lens.
+- Clicking or keyboard-selecting a pulse in the report orbital scene should select that pulse, move the scrubber to the pulse's round when the round is known, and update the lens.
 - Station roll-call rows should indicate the station that owns the selected/pinned pulse.
 - Observer notes should remain narrative, but the selected lens gives the precise evidence below them.
+
+### Orbital Binding
+
+The orbital scene must visibly participate in the instrument lens:
+
+- The selected pulse renders with a stable marker that is visually distinct from fresh/live pulse glow.
+- All same-round peer pulses render with a quieter companion emphasis so the user can see whether the field moved together.
+- A selected-angle guide links the scrubber position to the orbit angle.
+- The selected station's orbit or label gets a restrained highlight that matches the station roll-call row.
+- Reduced-motion mode keeps the marker and guide static.
+
+This requires extending `OrbitalScene.svelte` with selection props rather than faking the relationship only in DOM panels.
 
 ### Empty and Partial States
 
@@ -102,20 +124,24 @@ Recommended module:
 Primary output shape:
 
 - `selected`: current `PulseInspection | null`
-- `source`: `pinned | replay | none`
+- `source`: `significant | scrub | clicked | pinned | none`
+- `selectionReason`: human-readable reason this moment is active
 - `moment`: round label, timestamp label, threshold, selected endpoint label
 - `signal`: latency, drift, threshold delta, previous/current/next summary
-- `peers`: same-round endpoint rows with latency/status/delta/moved-with-selected flags
+- `peers`: same-round endpoint rows with latency/status/delta/movement-class flags
 - `proof`: claim-safe suggest/cannot-prove strings
+- `orbitalSelection`: station id, slot, round, selected-angle, same-round station ids
 
 Inputs:
 
 - monitored endpoints
 - measurement state
+- statistics state
 - threshold
-- current report pulse
 - pinned pulse
 - replay frame pulse
+- significant pulse
+- selection source
 
 This utility should call or compose existing helpers when possible:
 
@@ -143,6 +169,12 @@ Keep existing components:
 - `InstrumentCalibration` remains the encoding key.
 
 `ReportView.svelte` should compose these pieces and own only page-level state.
+
+Extend existing orbital component behavior:
+
+- `src/lib/components/OrbitalScene.svelte` accepts an optional selected pulse descriptor and same-round peer descriptors.
+- `ReportView.svelte` passes `onPulseInspect` to the report orbital scene, enabling click and keyboard pulse selection in reports.
+- `ReportView.svelte` owns scrub progress and selection source, while `report-instrument-lens.ts` owns interpretation.
 
 ## Error Handling and Trust
 
@@ -174,7 +206,10 @@ Unit tests:
 
 Visual/browser tests:
 
+- Completed reports open on the most significant moment and position the scrubber on that round.
 - Report replay scrub updates the lens, evidence panel, and sample inspector together.
+- Clicking or keyboard-selecting a report orbital pulse updates the selected lens and selected orbital marker.
+- Selected orbital marker, same-round peer emphasis, and selected station row are visible together.
 - Pinned pulse shows as pinned, highlights the station row, and "Return to replay" restores scrub-derived evidence.
 - Mobile report layout keeps the lens readable without overlapping export/scrub controls.
 - Existing image export still downloads a composed artifact.
@@ -189,6 +224,8 @@ Verification commands:
 ## Acceptance Criteria
 
 - A user can scrub a completed report and understand the selected round without reading the raw table or guessing at the orbital encoding.
+- A completed report opens on the most instructive detected moment and explains why that moment was selected.
+- The orbital signature visibly marks the selected pulse, selected angle, and same-round peer relationship.
 - The selected moment visibly drives the report evidence, peer comparison, and inspector.
 - The report distinguishes "selected replay moment" from "pinned pulse evidence."
 - The peer comparison makes isolated versus shared movement obvious.
