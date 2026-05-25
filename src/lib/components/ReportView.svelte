@@ -25,6 +25,7 @@
     MAX_SHARE_URL_CHARS,
   } from '$lib/share/share-payload-builder';
   import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
+  import { buildDiagnosticEvidenceContract } from '$lib/utils/diagnostic-evidence-contract';
   import { buildReportCsv } from '$lib/utils/report-export';
   import { buildReportReplayFrame } from '$lib/utils/report-replay';
   import { buildSampleInspector } from '$lib/utils/sample-inspector';
@@ -144,6 +145,13 @@
     thresholdMs: settings.healthThreshold,
     windowSlots: WINDOW,
     capturedAt: report.createdAt ?? measurements.stoppedAt ?? Date.now(),
+  }));
+  const evidenceContract = $derived(buildDiagnosticEvidenceContract({
+    report,
+    endpoints: monitored,
+    measurements,
+    thresholdMs: report.threshold,
+    significantPulse: isRecording ? null : significantPulse,
   }));
   $effect(() => {
     if (seededSessionStart === measurements.startedAt) return;
@@ -341,8 +349,8 @@
   // ── Observer's notes — narrative beats from runStoryline ──────────────────
   // The narrative reuses the diagnostic primary answer + supporting summary
   // (already wired in OverviewView). Beats provide a per-event paragraph.
-  const verdictHeadline = $derived(report.diagnosis.primaryAnswer.text);
-  const verdictBody = $derived(report.diagnosis.supportingSummary);
+  const verdictHeadline = $derived(evidenceContract.report.headline);
+  const verdictBody = $derived(evidenceContract.report.lede);
 
   // Diagnostic interpretation — second-paragraph context. Mirrors the
   // OverviewView interpretation copy so the two surfaces speak with one
@@ -719,7 +727,10 @@
       const a = document.createElement('a');
       a.href = dataUrl;
       a.download = `chronoscope-signature-${flightCert.replace(/[^A-Za-z0-9-]/g, '-')}.png`;
+      a.style.display = 'none';
+      document.body.appendChild(a);
       a.click();
+      setTimeout(() => a.remove(), 0);
     } catch {
       // toDataURL throws if the WebGL context was lost or tainted; the
       // OrbitalScene shaders are all local so taint shouldn't apply, but a
@@ -740,8 +751,13 @@
     const a = document.createElement('a');
     a.href = url;
     a.download = `chronoscope-session-${flightCert.replace(/[^A-Za-z0-9-]/g, '-')}.csv`;
+    a.style.display = 'none';
+    document.body.appendChild(a);
     a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setTimeout(() => {
+      a.remove();
+      URL.revokeObjectURL(url);
+    }, 1000);
   }
 
   // Hosted-report link: re-uses the existing share/hash-router integration.
@@ -1216,6 +1232,7 @@
     top: 88px;
     z-index: 4;
     width: min(400px, calc(100vw - 40px));
+    pointer-events: none;
   }
   .report-evidence {
     position: absolute;
@@ -1223,6 +1240,7 @@
     top: 398px;
     z-index: 4;
     width: min(400px, calc(100vw - 40px));
+    pointer-events: none;
   }
 
   /* Buttons */

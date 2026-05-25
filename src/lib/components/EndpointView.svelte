@@ -14,6 +14,8 @@
   import { navigateTo } from '$lib/router';
   import { buildRunStoryline, type StoryBeatSeverity } from '$lib/utils/run-storyline';
   import { buildPulseInspection } from '$lib/utils/pulse-inspection';
+  import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
+  import { buildDiagnosticEvidenceContract } from '$lib/utils/diagnostic-evidence-contract';
   import type { MeasurementSample } from '$lib/types';
   import OrbitalScene, { type OrbitalStation, type PulseHover } from './OrbitalScene.svelte';
   import InstrumentCalibration from './InstrumentCalibration.svelte';
@@ -104,6 +106,27 @@
   // ── Focused endpoint metadata ──────────────────────────────────────────────
   const focusedEndpoint = $derived(
     focusedId === null ? null : monitored.find((ep) => ep.id === focusedId) ?? null,
+  );
+  const diagnosticReport = $derived(buildDiagnosticReport({
+    endpoints: monitored,
+    stats,
+    measurements,
+    settings,
+    context: null,
+  }));
+  const evidenceContract = $derived(buildDiagnosticEvidenceContract({
+    report: diagnosticReport,
+    endpoints: monitored,
+    measurements,
+    thresholdMs: diagnosticReport.threshold,
+  }));
+  const focusedEvidence = $derived(
+    focusedId === null ? null : evidenceContract.eventsByEndpoint[focusedId] ?? null,
+  );
+  const focusedEvidenceText = $derived(
+    focusedEvidence
+      ? focusedEvidence.summary
+      : `No separate notable event detected for ${focusedEndpoint?.label ?? 'this station'}.`,
   );
   const focusedHost = $derived<string>((() => {
     if (!focusedEndpoint) return '';
@@ -711,6 +734,10 @@
           <strong>Carrier lost.</strong> Packet loss has crossed 10%. This station is failing.
         {/if}
       </div>
+      <div class="focused-evidence" data-tone={focusedEvidence?.tone ?? evidenceContract.current.tone}>
+        <div class="k">Focused evidence</div>
+        <div class="v">{focusedEvidenceText}</div>
+      </div>
       <div class="quick-stats">
         <div class="stat">
           <div class="k">p50</div>
@@ -1254,6 +1281,30 @@
     color: var(--fg);
     font-variant-numeric: tabular-nums;
   }
+  .hero-meta .focused-evidence {
+    max-width: 42ch;
+    margin-left: auto;
+    margin-bottom: 24px;
+    padding: 12px 0;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    text-align: right;
+  }
+  .hero-meta .focused-evidence .k {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    margin-bottom: 6px;
+    font-weight: 700;
+  }
+  .hero-meta .focused-evidence .v {
+    color: var(--fg-2);
+    line-height: 1.45;
+  }
+  .hero-meta .focused-evidence[data-tone="watch"] .v { color: var(--sev-warn); }
+  .hero-meta .focused-evidence[data-tone="degraded"] .v { color: var(--sev-bad); }
   .hero-meta .quick-stats {
     display: grid;
     grid-template-columns: auto auto auto;
@@ -1795,7 +1846,11 @@
     }
     .hero-meta .quick-stats { justify-content: start; }
     .hero-meta .quick-stats .stat,
-    .hero-meta .verdict-text { text-align: left; margin-left: 0; }
+    .hero-meta .verdict-text,
+    .hero-meta .focused-evidence {
+      text-align: left;
+      margin-left: 0;
+    }
     .station-tabs {
       position: static;
       flex-direction: row;

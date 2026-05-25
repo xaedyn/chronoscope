@@ -107,6 +107,30 @@ describe('report replay frame', () => {
     });
   });
 
+  it('uses the latest recorded sample when live roundCounter has advanced ahead of samples', () => {
+    const live = state();
+    live.lifecycle = 'running';
+    live.roundCounter = 9;
+    live.stoppedAt = null;
+
+    const frame = buildReportReplayFrame({
+      endpoints,
+      measurements: live,
+      thresholdMs: 120,
+      progress: 1,
+      windowSlots: 6,
+    });
+
+    expect(frame.targetRound).toBe(4);
+    expect(frame.roundLabel).toBe('4 / 4');
+    expect(frame.pulse).toMatchObject({
+      stationId: 'B',
+      endpointId: 'cdn',
+      roundNumber: 4,
+      latency: 180,
+    });
+  });
+
   it('packs dense buffers with the same slot mapping used by selected pulses', () => {
     const dense = state();
     dense.roundCounter = 8;

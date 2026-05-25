@@ -287,12 +287,6 @@
     flex-direction: column;
   }
 
-  /* Gradient separator between rows */
-  .endpoint-row + :global(.endpoint-row),
-  :global(li + li) .endpoint-row {
-    /* handled by li separator below */
-  }
-
   :global(.endpoint-list > li + li) {
     position: relative;
   }

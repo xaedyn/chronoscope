@@ -16,14 +16,30 @@
   import { navigateTo } from '$lib/router';
   import { fmt } from '$lib/utils/format';
   import { tokens } from '$lib/tokens';
+  import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
+  import { buildDiagnosticEvidenceContract } from '$lib/utils/diagnostic-evidence-contract';
   import type { Endpoint, MeasurementSample } from '$lib/types';
   import EndpointView from './EndpointView.svelte';
 
   const monitored = $derived($monitoredEndpointsStore);
   const measurements = $derived($measurementStore);
   const stats = $derived($statisticsStore);
-  const threshold = $derived($settingsStore.healthThreshold);
+  const settings = $derived($settingsStore);
+  const threshold = $derived(settings.healthThreshold);
   const focusedId = $derived($uiStore.focusedEndpointId);
+  const diagnosticReport = $derived(buildDiagnosticReport({
+    endpoints: monitored,
+    stats,
+    measurements,
+    settings,
+    context: null,
+  }));
+  const evidenceContract = $derived(buildDiagnosticEvidenceContract({
+    report: diagnosticReport,
+    endpoints: monitored,
+    measurements,
+    thresholdMs: diagnosticReport.threshold,
+  }));
 
   // ── Endpoint → station mapping (A/B/C/D) ────────────────────────────────
   const STATION_IDS = ['A', 'B', 'C', 'D'] as const;
@@ -626,6 +642,25 @@
     </div>
 
     <main class="investigate-main">
+      <section
+        class="investigate-hypothesis"
+        data-tone={evidenceContract.notableEvent?.tone ?? evidenceContract.current.tone}
+        aria-label="Investigative hypothesis"
+      >
+        <div class="hypothesis-copy">
+          <div class="eyebrow">Diagnostic question</div>
+          <h3>{evidenceContract.investigate.hypothesis}</h3>
+          <p>{evidenceContract.investigate.detail}</p>
+        </div>
+        <div class="hypothesis-evidence" aria-label="Evidence supporting this hypothesis">
+          {#each evidenceContract.investigate.evidence as item, i (i)}
+            <div class="evidence-row">
+              <span class="n">{(i + 1).toString().padStart(2, '0')}</span>
+              <span>{item}</span>
+            </div>
+          {/each}
+        </div>
+      </section>
 
       <!-- ============ COMPARE ALL STATIONS OVERLAY ============ -->
       <!-- Spans both columns of the main grid so the side-by-side overlay sits
@@ -1003,6 +1038,80 @@
     grid-template-columns: 1fr;
     gap: 48px;
     padding: 48px clamp(20px, 3vw, 48px) 64px;
+  }
+  .investigate-hypothesis {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+    gap: 36px;
+    align-items: start;
+    padding: 30px 34px;
+    border: 1px solid var(--rule-strong);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--station-b) 8%, transparent), transparent 54%),
+      var(--bg);
+    position: relative;
+  }
+  .investigate-hypothesis::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 32px;
+    height: 1px;
+    background: var(--station-b);
+    box-shadow: 0 0 12px var(--station-b);
+  }
+  .investigate-hypothesis[data-tone="watch"]::before {
+    background: var(--sev-warn);
+    box-shadow: 0 0 12px var(--sev-warn);
+  }
+  .investigate-hypothesis[data-tone="degraded"]::before {
+    background: var(--sev-bad);
+    box-shadow: 0 0 12px var(--sev-bad);
+  }
+  .hypothesis-copy .eyebrow {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--fg-3);
+    font-weight: 700;
+    margin-bottom: 14px;
+  }
+  .hypothesis-copy h3 {
+    font-family: var(--sans);
+    font-size: clamp(28px, 3vw, 44px);
+    font-weight: 200;
+    letter-spacing: -0.025em;
+    line-height: 1.05;
+    color: var(--fg);
+    margin: 0 0 16px;
+  }
+  .hypothesis-copy p {
+    max-width: 62ch;
+    color: var(--fg-2);
+    font-size: 15px;
+    line-height: 1.55;
+    margin: 0;
+  }
+  .hypothesis-evidence {
+    display: grid;
+    gap: 0;
+    border-top: 1px solid var(--rule);
+  }
+  .evidence-row {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 14px;
+    padding: 13px 0;
+    border-bottom: 1px solid var(--rule);
+    color: var(--fg-2);
+  }
+  .evidence-row .n {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    color: var(--fg-4);
+    font-weight: 700;
   }
 
   /* ── Compare-all overlay ────────────────────────────────────────────────── */
@@ -1654,6 +1763,10 @@
       grid-template-columns: 1fr;
       gap: 28px;
     }
+    .investigate-hypothesis {
+      grid-template-columns: 1fr;
+      gap: 24px;
+    }
   }
   @media (max-width: 720px) {
     .titlestrip h2 { font-size: 26px; }
@@ -1681,9 +1794,9 @@
     .phase-legend .it .l { letter-spacing: 0.08em; }
     .sr-head .info .nm { font-size: 18px; }
     .investigate-main { padding: 28px clamp(14px, 3vw, 48px) 40px; gap: 28px; }
+    .investigate-hypothesis { padding: 22px 18px; }
     .compare-section { padding: 22px 18px; }
     .compare-section .compare-head .l { font-size: 20px; }
-    .compare-section .toggle button { padding: 6px 10px; font-size: 9px; letter-spacing: 0.12em; }
     .compare-legend .legend-row {
       grid-template-columns: 12px minmax(0, 1fr) auto auto;
       gap: 8px;

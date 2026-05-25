@@ -311,6 +311,36 @@ test.describe('Instrument shell hardening', () => {
     await expect(reportCalibration).toContainText('360 s / 360 slots');
   });
 
+  test('diagnostic contract gives pages distinct jobs for the same event', async ({ page }) => {
+    await openInstrument(page);
+    await seedRunningSession(page, { roundCount: 72, stopped: true, spikeRound: 36 });
+
+    await expect(page.locator('.overview-surface h1')).toContainText('Currently healthy; notable');
+    const overviewContract = page.locator('.diagnostic-contract-strip');
+    await expect(overviewContract).toBeVisible();
+    await expect(overviewContract).toContainText('Current status: healthy');
+    await expect(overviewContract).toContainText('Notable event:');
+    await expect(overviewContract).toContainText('Next validation:');
+
+    await page.getByRole('button', { name: 'Live', exact: true }).click();
+    const liveContract = page.locator('.live-contract-strip');
+    await expect(liveContract).toBeVisible();
+    await expect(liveContract).toContainText('Current status: healthy');
+    await expect(liveContract).toContainText('Notable event:');
+    await expect(liveContract).toContainText('Live stays anchored to the current round');
+
+    await page.getByRole('button', { name: 'Investigate', exact: true }).click();
+    const hypothesis = page.locator('.investigate-hypothesis');
+    await expect(hypothesis).toBeVisible();
+    await expect(hypothesis).toContainText('Working hypothesis');
+    await expect(hypothesis).toContainText('crossed the configured trigger');
+
+    await page.getByRole('button', { name: 'Report', exact: true }).click();
+    await expect(page.locator('.hud-title h1')).toContainText('Currently healthy');
+    await expect(page.locator('.hud-title h1')).toContainText('spiked during the recording');
+    await expect(page.locator('.hud-title .body')).toContainText('separates the current verdict');
+  });
+
   test('pinned pulse evidence follows the station from live inspection into report output', async ({ page }) => {
     await openInstrument(page, '/live');
     await seedRunningSession(page, { roundCount: 72 });
@@ -369,6 +399,8 @@ test.describe('Instrument shell hardening', () => {
     await expect(page.locator('.peer-pulse-marker').first()).toBeVisible();
     await expect(page.locator('.selected-angle-guide')).toBeVisible();
     await expect(page.locator('.station-card[data-selected="true"]')).toBeVisible();
+    await expect(page.locator('.hud-title h1')).toContainText('Currently healthy');
+    await expect(page.locator('.hud-title h1')).toContainText('spiked during the recording');
   });
 
   test('report replay scrub updates the evidence sample and inspector', async ({ page }) => {

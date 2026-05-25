@@ -43,13 +43,14 @@ function sampleArray(
 }
 
 function maxRecordedRound(measurements: MeasurementState): number {
-  let maxRound = measurements.roundCounter;
+  let maxRound = 0;
   for (const state of Object.values(measurements.endpoints)) {
     for (const sample of sampleArray(state)) {
       if (Number.isFinite(sample.round)) maxRound = Math.max(maxRound, sample.round);
     }
   }
-  return Math.max(0, Math.round(maxRound));
+  if (maxRound > 0) return Math.max(0, Math.round(maxRound));
+  return Math.max(0, Math.round(measurements.roundCounter));
 }
 
 function packedSlotFor(index: number, sampleCount: number, windowSlots: number): number {
