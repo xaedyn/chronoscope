@@ -336,13 +336,23 @@ test.describe('Instrument shell hardening', () => {
     await expect(commandActions.nth(1)).toContainText('Watch recurrence');
     await expect(commandActions.nth(2)).toContainText('Share proof');
     await expect(page.locator('.next-command')).toHaveCount(0);
+    await expect(page.locator('.record-command')).toContainText("Observer's notes");
+    await expect(page.locator('.record-command')).toContainText('Field p50');
     const recordBox = await page.locator('.record-command').boundingBox();
     const flightBox = await page.locator('.flight').boundingBox();
+    const notesBox = await page.locator('.record-notes').boundingBox();
     expect(recordBox).not.toBeNull();
     expect(flightBox).not.toBeNull();
+    expect(notesBox).not.toBeNull();
     expect(flightBox!.width).toBeLessThanOrEqual(660);
     if (recordBox!.width >= 900) {
       expect(flightBox!.width / recordBox!.width).toBeLessThan(0.55);
+      const flightRight = flightBox!.x + flightBox!.width;
+      expect(notesBox!.x).toBeGreaterThan(flightRight);
+      expect(notesBox!.x - flightRight).toBeLessThanOrEqual(80);
+    } else {
+      const flightBottom = flightBox!.y + flightBox!.height;
+      expect(notesBox!.y).toBeGreaterThan(flightBottom);
     }
 
     await page.getByRole('button', { name: 'Live', exact: true }).click();
