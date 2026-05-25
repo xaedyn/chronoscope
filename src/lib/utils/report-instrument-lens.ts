@@ -26,7 +26,10 @@ export interface ReportOrbitalSelection {
     readonly slot: number;
     readonly roundNumber: number | null;
   };
-  readonly peerStations: readonly string[];
+  readonly peerPulses: readonly {
+    readonly stationId: string;
+    readonly slot: number;
+  }[];
   readonly angle: number;
 }
 
@@ -100,6 +103,26 @@ function previousOkSample(
     }
   }
   return null;
+}
+
+function packedSlotFor(index: number, sampleCount: number, windowSlots: number): number {
+  if (sampleCount <= windowSlots) return windowSlots - sampleCount + index;
+  const stride = sampleCount / windowSlots;
+  return Math.min(windowSlots - 1, Math.max(0, Math.floor(index / stride)));
+}
+
+function slotForRound(
+  measurements: MeasurementState,
+  endpointId: string,
+  round: number | null,
+  windowSlots: number,
+): number | null {
+  if (round === null) return null;
+  const visibleSamples = sampleArray(measurements.endpoints[endpointId])
+    .filter((sample) => sample.round <= round);
+  const index = visibleSamples.findIndex((sample) => sample.round === round);
+  if (index < 0) return null;
+  return packedSlotFor(index, visibleSamples.length, Math.max(1, Math.round(windowSlots)));
 }
 
 function sameDirectionWobble(selectedDrift: number | null, peerDelta: number | null): boolean {
@@ -267,21 +290,29 @@ function trendLabel(selected: PulseInspection): string {
 function orbitalSelectionFor(
   selected: PulseInspection,
   peers: readonly ReportLensPeer[],
+  measurements: MeasurementState,
   windowSlots: number,
 ): ReportOrbitalSelection {
+  const selectedSlot = selected.endpointId
+    ? slotForRound(measurements, selected.endpointId, selected.roundNumber, windowSlots) ?? selected.slot
+    : selected.slot;
   return {
     selected: {
       stationId: selected.stationId,
-      slot: selected.slot,
+      slot: selectedSlot,
       roundNumber: selected.roundNumber,
     },
-    peerStations: peers
+    peerPulses: peers
       .filter((peer) =>
         peer.stationId !== null &&
         (peer.movement === 'selected' || peer.movement === 'co-elevated'),
       )
-      .map((peer) => peer.stationId as string),
-    angle: (selected.slot / Math.max(1, Math.round(windowSlots) - 1)) * Math.PI * 2 - Math.PI,
+      .map((peer) => {
+        const slot = slotForRound(measurements, peer.endpointId, selected.roundNumber, windowSlots);
+        return slot === null ? null : { stationId: peer.stationId as string, slot };
+      })
+      .filter((peer): peer is { stationId: string; slot: number } => peer !== null),
+    angle: (selectedSlot / Math.max(1, Math.round(windowSlots) - 1)) * Math.PI * 2 - Math.PI,
   };
 }
 
@@ -311,6 +342,6 @@ export function buildReportInstrumentLens(input: BuildReportInstrumentLensInput)
     },
     peers,
     proof: proofFor(selected, peers),
-    orbitalSelection: orbitalSelectionFor(selected, peers, input.windowSlots),
+    orbitalSelection: orbitalSelectionFor(selected, peers, input.measurements, input.windowSlots),
   };
 }

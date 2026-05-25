@@ -846,10 +846,7 @@
           showTooltip={false}
           onPulseInspect={inspectReportPulse}
           selectedPulse={reportLens.orbitalSelection?.selected ?? null}
-          peerPulses={reportLens.orbitalSelection?.peerStations.map((stationId) => ({
-            stationId,
-            slot: reportLens.orbitalSelection?.selected.slot ?? 0,
-          })) ?? []}
+          peerPulses={reportLens.orbitalSelection?.peerPulses ?? []}
           selectedAngle={reportLens.orbitalSelection?.angle ?? null}
         />
       {/if}
