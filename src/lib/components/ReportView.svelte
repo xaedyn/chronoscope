@@ -18,6 +18,7 @@
   import { companionStore } from '$lib/stores/companion';
   import { remoteVantageStore } from '$lib/stores/remote-vantage';
   import { monitoredEndpointsStore } from '$lib/stores/derived';
+  import { navigateTo } from '$lib/router';
   import { sanitizeCompanionProbeForReport } from '$lib/companion/sanitize';
   import { buildShareURL } from '$lib/share/share-manager';
   import {
@@ -26,6 +27,7 @@
   } from '$lib/share/share-payload-builder';
   import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
   import { buildDiagnosticEvidenceContract } from '$lib/utils/diagnostic-evidence-contract';
+  import { buildGuidedProofFlow, type GuidedProofPrimaryAction } from '$lib/utils/proof-flow';
   import { buildReportCsv } from '$lib/utils/report-export';
   import { buildReportReplayFrame } from '$lib/utils/report-replay';
   import { buildSampleInspector } from '$lib/utils/sample-inspector';
@@ -42,6 +44,7 @@
   import OrbitalScene, { type OrbitalStation, type PulseHover } from './OrbitalScene.svelte';
   import InstrumentCalibration from './InstrumentCalibration.svelte';
   import PulseEvidence from './PulseEvidence.svelte';
+  import GuidedProofFlow from './GuidedProofFlow.svelte';
   import ReportInstrumentLens from './ReportInstrumentLens.svelte';
   import SampleInspector from './SampleInspector.svelte';
   import { REGION_SHORT_CODES } from '$lib/regional-defaults';
@@ -52,6 +55,8 @@
   const measurements = $derived($measurementStore);
   const settings = $derived($settingsStore);
   const stats = $derived($statisticsStore);
+  const remoteVantage = $derived($remoteVantageStore);
+  const companion = $derived($companionStore);
   const context = $derived($uiStore.sharedReportContext);
   const pinnedPulse = $derived($uiStore.pinnedPulse);
   const sharedReportMode = $derived($uiStore.isSharedView && $uiStore.sharedReportMode);
@@ -69,6 +74,11 @@
     measurements,
     settings,
     context,
+  }));
+  const guidedProofFlow = $derived(buildGuidedProofFlow({
+    report,
+    remoteVantage,
+    companion,
   }));
 
   // Storyline beats (event narrative) for the observer's-notes column.
@@ -242,6 +252,18 @@
       detail: 'This local report is final for the recorded session and ready to export or share.',
       action: 'Copy proof link',
     };
+  });
+  const reportGuidedProofFlow = $derived({
+    ...guidedProofFlow,
+    primaryAction: guidedProofFlow.primaryAction.id === 'open-report'
+      ? {
+          ...guidedProofFlow.primaryAction,
+          label: proofState.action,
+          detail: isRecording
+            ? 'Copy the current draft with provisional proof status visible.'
+            : 'Copy the report link with the attached evidence state.',
+        }
+      : guidedProofFlow.primaryAction,
   });
   const reportAriaLabel = $derived(
     isRecording
@@ -855,6 +877,32 @@
     }
   }
 
+  function guidedProofEndpoints(action: GuidedProofPrimaryAction) {
+    if (!action.endpointId) return monitored;
+    const endpoint = monitored.find((candidate) => candidate.id === action.endpointId);
+    return endpoint ? [endpoint] : [];
+  }
+
+  async function runGuidedProofAction(action: GuidedProofPrimaryAction): Promise<void> {
+    switch (action.id) {
+      case 'run-outside':
+        {
+          const targets = guidedProofEndpoints(action);
+          if (targets.length === 0) break;
+          await remoteVantageStore.runProbe(targets);
+        }
+        break;
+      case 'open-report':
+        await copyLink();
+        break;
+      case 'keep-collecting':
+        navigateTo({ name: 'live', endpointId: null });
+        break;
+      case 'wait-outside':
+        break;
+    }
+  }
+
   // ── Keyboard scrubbing (←/→ + Home/End) ───────────────────────────────────
   function onKeyDown(e: KeyboardEvent): void {
     const tag = (e.target as HTMLElement | null)?.tagName;
@@ -1007,6 +1055,14 @@
       </div>
       <span class="scrub-read">Round<span class="v">{scrubRoundLabel}</span></span>
     </div>
+  </section>
+
+  <section class="report-guided-proof" aria-label="Report proof flow">
+    <GuidedProofFlow
+      flow={reportGuidedProofFlow}
+      title="Report proof flow"
+      onAction={runGuidedProofAction}
+    />
   </section>
 
   <!-- BELOW — per-station summary + session record + observer's notes -->
@@ -1326,6 +1382,17 @@
   }
   .report-calibration :global(.encoding-grid) {
     display: none;
+  }
+
+  .report-guided-proof {
+    padding: 22px clamp(20px, 3vw, 48px) 26px;
+    border-bottom: 1px solid var(--rule);
+    background: color-mix(in srgb, var(--bg) 94%, black 6%);
+  }
+
+  .report-guided-proof :global(.guided-proof-flow) {
+    max-width: 1180px;
+    margin: 0 auto;
   }
 
   /* Buttons */

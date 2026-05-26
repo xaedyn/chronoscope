@@ -13,9 +13,18 @@
      simulated outcome ("upstream") so the matrix has a worked example. -->
 <script lang="ts">
   import { monitoredEndpointsStore } from '$lib/stores/derived';
+  import { measurementStore } from '$lib/stores/measurements';
+  import { statisticsStore } from '$lib/stores/statistics';
+  import { settingsStore } from '$lib/stores/settings';
   import { uiStore } from '$lib/stores/ui';
+  import { companionStore } from '$lib/stores/companion';
+  import { remoteVantageStore } from '$lib/stores/remote-vantage';
   import { navigateTo } from '$lib/router';
   import { remoteVantageClient } from '$lib/remote-vantage/client';
+  import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
+  import { buildGuidedProofFlow, type GuidedProofPrimaryAction } from '$lib/utils/proof-flow';
+  import type { Endpoint } from '$lib/types';
+  import GuidedProofFlow from './GuidedProofFlow.svelte';
 
   type VantageKey = 'local' | 'iad' | 'lhr' | 'nrt';
 
@@ -36,7 +45,30 @@
   // global transit"). Fall back to the first monitored endpoint, then to
   // the AWS example from the prototype so the surface never renders blank.
   const monitored = $derived($monitoredEndpointsStore);
+  const measurements = $derived($measurementStore);
+  const stats = $derived($statisticsStore);
+  const settings = $derived($settingsStore);
+  const companion = $derived($companionStore);
+  const remoteVantage = $derived($remoteVantageStore);
   const focusedId = $derived($uiStore.focusedEndpointId);
+  const targetEndpoint = $derived.by(() => {
+    if (focusedId !== null) {
+      return monitored.find((ep) => ep.id === focusedId) ?? monitored[0] ?? null;
+    }
+    return monitored[0] ?? null;
+  });
+  const diagnosticReport = $derived(buildDiagnosticReport({
+    endpoints: monitored,
+    stats,
+    measurements,
+    settings,
+    context: null,
+  }));
+  const guidedProofFlow = $derived(buildGuidedProofFlow({
+    report: diagnosticReport,
+    remoteVantage,
+    companion,
+  }));
 
   interface TargetIdentity {
     readonly displayName: string;
@@ -44,10 +76,7 @@
     readonly section: string;
   }
   const target = $derived<TargetIdentity>((() => {
-    const focused = focusedId !== null
-      ? monitored.find((ep) => ep.id === focusedId) ?? null
-      : null;
-    const ep = focused ?? monitored[0] ?? null;
+    const ep = targetEndpoint;
     if (ep === null) {
       return {
         displayName: 'AWS',
@@ -71,6 +100,7 @@
   // loop and replaces these values with measured data.
   const PROBES_PER_VANTAGE = 10;
   const BASELINE_MS = 30;
+  const SLOW_THRESHOLD_MS = BASELINE_MS * 1.5;
   const RUN_DURATION_S = 3.1;
 
   const DEFAULT_PROBES: readonly VantageProbe[] = [
@@ -99,13 +129,37 @@
   let runState = $state<'idle' | 'running' | 'error'>('idle');
   let runError = $state<string | null>(null);
   let dataSource = $state<'example' | 'measured' | 'partial'>('example');
+  let measuredKeys = $state<readonly VantageKey[]>([]);
+  const transitGuidedProofFlow = $derived({
+    ...guidedProofFlow,
+    primaryAction: runState === 'running'
+      ? {
+          ...guidedProofFlow.primaryAction,
+          id: 'wait-outside' as const,
+          label: 'Outside check running',
+          detail: 'Transit is measuring the outside comparison now.',
+          disabled: true,
+        }
+      : guidedProofFlow.primaryAction,
+  });
 
   // ── Verdict aggregates ─────────────────────────────────────────────────────
   const agreementCount = $derived(probes.filter((p) => p.bad).length);
   const totalVantages = $derived(probes.length);
+  const measuredKeySet = $derived(new Set(measuredKeys));
+  const measuredProbes = $derived(probes.filter((p) => measuredKeySet.has(p.key)));
+  const measuredVantageCount = $derived(measuredProbes.length);
+  const measuredAgreementCount = $derived(measuredProbes.filter((p) => p.bad).length);
+  const hasMeasuredTransit = $derived(dataSource !== 'example' && measuredVantageCount > 0);
+  const hasExampleRows = $derived(dataSource !== 'example' && measuredVantageCount < totalVantages);
+  const displayAgreementCount = $derived(dataSource === 'example' ? agreementCount : measuredAgreementCount);
+  const displayAgreementTotal = $derived(dataSource === 'example' ? totalVantages : measuredVantageCount);
+  const displayAgreementLabel = $derived(dataSource === 'example' ? 'Agreement' : 'Measured agreement');
   const probesTotal = $derived(totalVantages * PROBES_PER_VANTAGE);
+  const displayedProbeCount = $derived(dataSource === 'example' ? probesTotal : measuredVantageCount * PROBES_PER_VANTAGE);
+  const visibleProbesForVerdict = $derived(dataSource === 'example' ? probes : measuredProbes);
   const medianLast = $derived.by(() => {
-    const sorted = [...probes].map((p) => p.last).sort((a, b) => a - b);
+    const sorted = [...visibleProbesForVerdict].map((p) => p.last).sort((a, b) => a - b);
     if (sorted.length === 0) return 0;
     const mid = Math.floor(sorted.length / 2);
     return sorted.length % 2 === 0
@@ -113,12 +167,18 @@
       : sorted[mid];
   });
   const spreadMs = $derived.by(() => {
-    if (probes.length === 0) return 0;
-    const lasts = probes.map((p) => p.last);
+    if (visibleProbesForVerdict.length === 0) return 0;
+    const lasts = visibleProbesForVerdict.map((p) => p.last);
     return Math.round((Math.max(...lasts) - Math.min(...lasts)) / 2);
   });
-  const minLast = $derived(Math.min(...probes.map((p) => p.last)));
-  const maxLast = $derived(Math.max(...probes.map((p) => p.last)));
+  const minLast = $derived.by(() => {
+    if (visibleProbesForVerdict.length === 0) return 0;
+    return Math.min(...visibleProbesForVerdict.map((p) => p.last));
+  });
+  const maxLast = $derived.by(() => {
+    if (visibleProbesForVerdict.length === 0) return 0;
+    return Math.max(...visibleProbesForVerdict.map((p) => p.last));
+  });
   const slowdownX = $derived.by(() => {
     if (BASELINE_MS <= 0) return '—';
     return `${(medianLast / BASELINE_MS).toFixed(1)}×`;
@@ -140,18 +200,28 @@
   );
   const heroHeadline = $derived<string>((() => {
     if (dataSource === 'example') return `Example upstream pattern for ${target.displayName}.`;
-    if (agreementCount === totalVantages) return `Confirmed upstream. ${target.displayName} is slow from all vantages.`;
-    if (agreementCount === 1) return `Only one vantage is slow for ${target.displayName}.`;
-    return `Mixed transit evidence for ${target.displayName}.`;
+    if (hasMeasuredTransit && measuredAgreementCount === measuredVantageCount) {
+      return `Measured transit lanes see ${target.displayName} slow.`;
+    }
+    if (hasMeasuredTransit && measuredAgreementCount === 1) {
+      return `One measured transit lane is slow for ${target.displayName}.`;
+    }
+    return `Mixed measured transit evidence for ${target.displayName}.`;
   })());
   const heroLead = $derived<string>((() => {
     if (dataSource === 'example') {
       return `These are default demonstration values. Re-run transit to replace them with fresh local and outside-vantage measurements for ${target.host}.`;
     }
-    if (agreementCount === totalVantages) {
-      return `Your browser and outside vantages all measure ${target.displayName} at ${minLast}–${maxLast} ms, above the ${BASELINE_MS} ms healthy baseline.`;
+    if (!hasMeasuredTransit) {
+      return `Transit did not capture a fresh comparison yet. Keep the report bounded until measured lanes are available.`;
     }
-    return `${agreementCount} of ${totalVantages} vantages are above the healthy baseline. Use the spread and lane shape to decide whether this is local, regional, or upstream.`;
+    if (hasExampleRows) {
+      return `${measuredVantageCount} fresh lane${measuredVantageCount === 1 ? '' : 's'} measured ${target.displayName} at ${minLast}–${maxLast} ms against the ${SLOW_THRESHOLD_MS} ms slow threshold; unmeasured rows remain examples.`;
+    }
+    if (measuredAgreementCount === measuredVantageCount) {
+      return `Every measured lane reports ${target.displayName} at ${minLast}–${maxLast} ms, above the ${SLOW_THRESHOLD_MS} ms slow threshold.`;
+    }
+    return `${measuredAgreementCount} of ${measuredVantageCount} measured lanes are above the slow threshold. Use the spread and lane shape to decide whether this is local, regional, or upstream.`;
   })());
 
   function latencyPercent(value: number): number {
@@ -224,20 +294,64 @@
   // Reactive so the final "initiated" row updates if the target changes
   // (e.g. user navigates here without a focused endpoint, then focus
   // settles via persistence rehydration).
-  const probeLog = $derived<readonly LogEntry[]>([
-    { t: 'T+3.10', v: 'local', body: [txt('Probe '), em('10/10'), txt(' complete · all returned.')], val: 74, bad: true },
-    { t: 'T+3.05', v: 'nrt',   body: [txt('NRT probe '), em('10/10'), txt(' complete · spread '), em('±6 ms'), txt('.')], val: 79, bad: true },
-    { t: 'T+2.98', v: 'lhr',   body: [txt('LHR probe '), em('10/10'), txt(' complete · spread '), em('±7 ms'), txt('.')], val: 81, bad: true },
-    { t: 'T+2.92', v: 'iad',   body: [txt('IAD probe '), em('10/10'), txt(' complete · spread '), em('±4 ms'), txt('.')], val: 68, bad: true },
-    { t: 'T+2.50', v: 'lhr',   body: [txt('LHR p95 elevated to '), em('94 ms'), txt('.')], val: 94, bad: true },
-    { t: 'T+2.10', v: 'iad',   body: [txt('IAD reporting consistent slow band at '), em('66 – 79 ms'), txt('.')], val: 79, bad: true },
-    { t: 'T+1.80', v: 'local', body: [txt('Local probes converging at '), em('71 ± 5 ms'), txt('.')], val: 71, bad: true },
-    { t: 'T+1.20', v: 'nrt',   body: [txt('NRT first response: '), em('76 ms'), txt('.')], val: 76, bad: true },
-    { t: 'T+0.90', v: 'lhr',   body: [txt('LHR first response: '), em('78 ms'), txt('.')], val: 78, bad: true },
-    { t: 'T+0.40', v: 'iad',   body: [txt('IAD first response: '), em('66 ms'), txt('.')], val: 66, bad: true },
-    { t: 'T+0.05', v: 'local', body: [txt('Local first response: '), em('71 ms'), txt('.')], val: 71, bad: true },
-    { t: 'T+0.00', v: '',      body: [bold('Outside transit initiated'), txt(' · 4 vantages · target '), em(target.host), txt('.')], val: null, bad: false },
-  ]);
+  const probeLog = $derived.by<readonly LogEntry[]>(() => {
+    if (dataSource === 'example') {
+      return [
+        { t: 'Example', v: 'nrt',   body: [txt('Example NRT row · '), em('10 synthetic samples'), txt(' · spread '), em('±6 ms'), txt('.')], val: 79, bad: true },
+        { t: 'Example', v: 'lhr',   body: [txt('Example LHR row · '), em('10 synthetic samples'), txt(' · spread '), em('±7 ms'), txt('.')], val: 81, bad: true },
+        { t: 'Example', v: 'iad',   body: [txt('Example IAD row · '), em('10 synthetic samples'), txt(' · spread '), em('±4 ms'), txt('.')], val: 68, bad: true },
+        { t: 'Example', v: 'local', body: [txt('Example browser row · '), em('10 synthetic samples'), txt(' for layout calibration.')], val: 74, bad: true },
+        { t: 'T+0.00', v: '',      body: [bold('Default transit pattern loaded'), txt(' · re-run to measure '), em(target.host), txt('.')], val: null, bad: false },
+      ];
+    }
+
+    const measuredRows = probes.filter((probe) => measuredKeySet.has(probe.key));
+    const rows: LogEntry[] = measuredRows
+      .slice()
+      .reverse()
+      .map((probe, index) => ({
+        t: `T+${Math.max(0.1, RUN_DURATION_S - index * 0.18).toFixed(2)}`,
+        v: probe.key,
+        body: [
+          txt(`${probe.name} measured `),
+          em(`${PROBES_PER_VANTAGE}/${PROBES_PER_VANTAGE}`),
+          txt(' samples · p50 '),
+          em(`${probe.p50} ms`),
+          txt(' · spread '),
+          em(`±${probe.sigma} ms`),
+          txt('.'),
+        ],
+        val: probe.last,
+        bad: probe.bad,
+      }));
+
+    if (hasExampleRows) {
+      rows.push({
+        t: 'Bounded',
+        v: '',
+        body: [bold('Unmeasured regional rows remain examples'), txt(' · excluded from measured agreement.')],
+        val: null,
+        bad: false,
+      });
+    } else if (measuredRows.length === 0) {
+      rows.push({
+        t: 'Error',
+        v: '',
+        body: [bold('No fresh transit lanes captured'), txt(' · keep the report bounded and retry.')],
+        val: null,
+        bad: false,
+      });
+    }
+
+    rows.push({
+      t: 'T+0.00',
+      v: '',
+      body: [bold('Outside transit initiated'), txt(` · ${measuredRows.length}/${totalVantages} measured lanes · target `), em(target.host), txt('.')],
+      val: null,
+      bad: false,
+    });
+    return rows;
+  });
 
   // ── Actions ────────────────────────────────────────────────────────────────
   function backToInvestigate(): void {
@@ -277,7 +391,7 @@
       p50: Math.round(p(0.5)),
       p95: Math.round(p(0.95)),
       sigma: Math.round(Math.sqrt(variance)),
-      bad: p(0.5) > BASELINE_MS * 1.5,
+      bad: p(0.5) > SLOW_THRESHOLD_MS,
     };
   }
 
@@ -292,17 +406,65 @@
     return 'iad';
   }
 
+  function setRemoteProbeFromTransit(
+    endpoint: Endpoint,
+    transitResp: Awaited<ReturnType<typeof remoteVantageClient.runTransitProbe>>,
+  ): void {
+    if (!transitResp.ok) return;
+    const hasFailures = transitResp.failures > 0;
+    const isSlow = !hasFailures && transitResp.p50 > SLOW_THRESHOLD_MS;
+    remoteVantageStore.setProbe({
+      ok: true,
+      generatedAt: transitResp.checkedAt,
+      edge: transitResp.edge,
+      results: [{
+        endpointId: endpoint.id,
+        label: endpoint.label,
+        url: endpoint.url,
+        ok: !hasFailures,
+        status: hasFailures ? 0 : 200,
+        statusText: hasFailures
+          ? 'Probe failures'
+          : isSlow
+            ? `Slow above ${SLOW_THRESHOLD_MS} ms threshold`
+            : 'OK',
+        durationMs: Math.round(transitResp.p50),
+        checkedAt: transitResp.checkedAt,
+        verdict: hasFailures
+          ? 'unreachable'
+          : isSlow
+            ? 'slow'
+            : 'reachable',
+        headers: {},
+      }],
+    });
+  }
+
+  async function runGuidedProofAction(action: GuidedProofPrimaryAction): Promise<void> {
+    switch (action.id) {
+      case 'run-outside':
+        await rerunTransit();
+        break;
+      case 'open-report':
+        navigateTo({ name: 'report', endpointId: null });
+        break;
+      case 'keep-collecting':
+      case 'wait-outside':
+        break;
+    }
+  }
+
   async function rerunTransit(): Promise<void> {
     if (runState === 'running') return;
     runState = 'running';
     runError = null;
 
-    const targetUrl = focusedId !== null
-      ? monitored.find((ep) => ep.id === focusedId)?.url ?? null
-      : monitored[0]?.url ?? null;
-    if (!targetUrl) {
+    const endpoint = targetEndpoint;
+    const targetUrl = endpoint?.url ?? null;
+    if (!targetUrl || !endpoint) {
       runError = 'No target endpoint configured';
       runState = 'error';
+      measuredKeys = [];
       return;
     }
 
@@ -313,8 +475,11 @@
       ]);
 
       const next: VantageProbe[] = DEFAULT_PROBES.map((p) => ({ ...p }));
+      const nextMeasuredKeys: VantageKey[] = [];
       if (localProbe) next[0] = localProbe;
+      if (localProbe) nextMeasuredKeys.push('local');
       if (transitResp.ok) {
+        setRemoteProbeFromTransit(endpoint, transitResp);
         const key = coloToKey(transitResp.region);
         const slot = next.findIndex((p) => p.key === key);
         if (slot >= 0) {
@@ -327,18 +492,21 @@
             p50: Math.round(transitResp.p50),
             p95: Math.round(transitResp.p95),
             sigma: Math.round(transitResp.sigma),
-            bad: transitResp.p50 > BASELINE_MS * 1.5,
+            bad: transitResp.p50 > SLOW_THRESHOLD_MS,
           };
+          nextMeasuredKeys.push(key);
         }
       } else {
         runError = transitResp.error;
       }
       probes = next;
-      dataSource = transitResp.ok ? 'measured' : 'partial';
+      measuredKeys = nextMeasuredKeys;
+      dataSource = transitResp.ok && nextMeasuredKeys.length === next.length ? 'measured' : 'partial';
       runState = transitResp.ok ? 'idle' : 'error';
     } catch (err) {
       runError = err instanceof Error ? err.message : 'Transit probe failed';
       dataSource = 'partial';
+      measuredKeys = [];
       runState = 'error';
     }
   }
@@ -370,11 +538,15 @@
     <div class="vantages">
       <div class="v-head">Probing from</div>
       {#each probes as probe (probe.key)}
-        <div class="v-card" data-v={probe.key}>
+        {@const isMeasuredRow = dataSource === 'example' || measuredKeySet.has(probe.key)}
+        <div class="v-card" data-v={probe.key} data-source={isMeasuredRow ? 'measured' : 'example'}>
           <span class="mk"></span>
           <div class="info">
             <div class="nm">{probe.name}</div>
             <div class="meta">{probe.meta}</div>
+            {#if dataSource !== 'example'}
+              <div class="src">{isMeasuredRow ? 'Measured this run' : 'Example row'}</div>
+            {/if}
           </div>
           <div class="val" class:bad={probe.bad}>{probe.last}<span class="u">ms</span></div>
         </div>
@@ -390,10 +562,12 @@
         <div class="source-note">
           {#if dataSource === 'example'}
             Re-run to measure this target.
+          {:else if hasExampleRows}
+            {measuredVantageCount} / {totalVantages} lanes measured; others are examples.
           {:else if dataSource === 'partial'}
-            Some outside data failed.
+            No fresh lanes captured.
           {:else}
-            Fresh outside evidence.
+            Fresh all-vantage evidence.
           {/if}
         </div>
       </div>
@@ -404,7 +578,8 @@
       </div>
       <div class="map-lanes">
         {#each probes as probe (probe.key)}
-          <div class="proof-lane" data-v={probe.key} data-bad={probe.bad ? 'true' : 'false'}>
+          {@const isMeasuredRow = dataSource === 'example' || measuredKeySet.has(probe.key)}
+          <div class="proof-lane" data-v={probe.key} data-bad={probe.bad ? 'true' : 'false'} data-source={isMeasuredRow ? 'measured' : 'example'}>
             <span class="lane-name">{probe.key.toUpperCase()}</span>
             <span class="lane-track">
               <span class="baseline" style:left="{latencyPercent(BASELINE_MS)}%"></span>
@@ -416,7 +591,7 @@
         {/each}
       </div>
       <div class="map-readouts">
-        <span>Agreement<strong>{agreementCount} / {totalVantages}</strong></span>
+        <span>{displayAgreementLabel}<strong>{displayAgreementCount} / {displayAgreementTotal}</strong></span>
         <span>Spread<strong>±{spreadMs} ms</strong></span>
         <span>Slowdown<strong>{slowdownX}</strong></span>
       </div>
@@ -430,10 +605,10 @@
         <strong>{proofSourceLabel}.</strong> {heroLead}
       </p>
       <div class="agreement">
-        <div class="stat"><div class="k">Agreement</div><div class="v good">{agreementCount} / {totalVantages}</div></div>
+        <div class="stat"><div class="k">{displayAgreementLabel}</div><div class="v good">{displayAgreementCount} / {displayAgreementTotal}</div></div>
         <div class="stat"><div class="k">Median</div><div class="v bad">{medianLast}<span class="u">ms</span></div></div>
         <div class="stat"><div class="k">Spread</div><div class="v">±{spreadMs}<span class="u">ms</span></div></div>
-        <div class="stat"><div class="k">Confidence</div><div class="v">High</div></div>
+        <div class="stat"><div class="k">Confidence</div><div class="v">{dataSource === 'example' ? 'Example' : hasExampleRows ? 'Bounded' : hasMeasuredTransit ? 'High' : 'Low'}</div></div>
       </div>
     </div>
 
@@ -446,12 +621,21 @@
     <div class="progress-bar">
       <span class="lbl">{progressLabel}</span>
       <div class="track"><div class="fill"></div></div>
-      <span class="read">{dataSource === 'example' ? 'Default values' : 'All vantages'}<span class="v">{totalVantages} / {totalVantages} · {PROBES_PER_VANTAGE} probes ea.</span></span>
+      <span class="read">{dataSource === 'example' ? 'Default values' : 'Measured lanes'}<span class="v">{dataSource === 'example' ? totalVantages : measuredVantageCount} / {totalVantages} · {PROBES_PER_VANTAGE} probes ea.</span></span>
     </div>
   </div>
 
   <!-- BELOW HERO -->
   <div class="below">
+    <div class="transit-guided-proof">
+      <GuidedProofFlow
+        flow={transitGuidedProofFlow}
+        compact={true}
+        title="Outside proof loop"
+        onAction={runGuidedProofAction}
+      />
+    </div>
+
     <!-- COMPARISON -->
     <div class="comparison">
       <div class="section-head">
@@ -464,10 +648,11 @@
       <div class="comparison-grid">
         {#each probes as probe (probe.key)}
           {@const trace = miniTraces[probe.key]}
+          {@const isMeasuredRow = dataSource === 'example' || measuredKeySet.has(probe.key)}
           <div class="van-col" data-v={probe.key}>
             <div class="head">
               <div class="nm">{probe.name}<span class="loc">{probe.location}</span></div>
-              <div class="tag" data-s={probe.bad ? 'slow' : 'ok'}>{probe.bad ? 'Slow' : 'OK'}</div>
+              <div class="tag" data-s={isMeasuredRow ? (probe.bad ? 'slow' : 'ok') : 'example'}>{isMeasuredRow ? (probe.bad ? 'Slow' : 'OK') : 'Example'}</div>
             </div>
             <div class="read-row">
               <span class="label">Last</span>
@@ -532,25 +717,48 @@
     <div class="diagnosis">
       <div class="head">
         <div class="k">Diagnosis · § III</div>
-        <div class="tag">High confidence · upstream</div>
+        <div class="tag">{displayAgreementCount} / {displayAgreementTotal} slow {hasMeasuredTransit ? 'measured lanes' : 'vantages'}</div>
       </div>
-      <h2>The slowdown is <em>{target.displayName}-side</em>, not yours.</h2>
-      <p>Four vantages on three continents all reported {target.displayName} at <strong>{minLast} – {maxLast} ms</strong>. The <em>±{spreadMs} ms</em> spread across geographies is too tight to be coincidence — every observer hears the same dragging carrier, which means the source has to be downstream of all four.</p>
-      <p>Compared to {target.displayName}'s healthy baseline of <strong>{BASELINE_MS} ms</strong>, every vantage shows a <em>{slowdownX}</em> slowdown. That's a real signal — not jitter, not local Wi-Fi, not your ISP.</p>
+      <h2>
+        {#if dataSource === 'example' && agreementCount === totalVantages}
+          Example vantages show <em>{target.displayName}</em> slow.
+        {:else if dataSource !== 'example' && !hasMeasuredTransit}
+          Transit has no fresh measured lanes for <em>{target.displayName}</em> yet.
+        {:else if hasMeasuredTransit && measuredAgreementCount === measuredVantageCount}
+          Fresh measured lanes see <em>{target.displayName}</em> slow.
+        {:else if displayAgreementCount === 1}
+          Only one {hasMeasuredTransit ? 'measured lane' : 'vantage'} sees <em>{target.displayName}</em> slow.
+        {:else}
+          Transit evidence is mixed for <em>{target.displayName}</em>.
+        {/if}
+      </h2>
+      {#if dataSource === 'example'}
+        <p>The default rows put {target.displayName} at <strong>{minLast} – {maxLast} ms</strong>. Treat this as a worked example until a fresh transit run replaces the rows.</p>
+        <p>Re-run transit to capture measured local and Cloudflare evidence before attaching this page to a report.</p>
+      {:else if !hasMeasuredTransit}
+        <p>No fresh measured lanes are available for {target.displayName}. The regional rows remain examples and are excluded from measured agreement.</p>
+        <p>Re-run transit before attaching this page to a report, or keep the report bounded to the browser evidence already captured.</p>
+      {:else if hasMeasuredTransit && measuredAgreementCount === measuredVantageCount}
+        <p>Every fresh measured lane reported {target.displayName} at <strong>{minLast} – {maxLast} ms</strong>. The <em>±{spreadMs} ms</em> spread strengthens the browser finding, within the lanes actually measured.</p>
+        <p>Compared to the <strong>{SLOW_THRESHOLD_MS} ms</strong> slow threshold, the median measured shape shows a <em>{slowdownX}</em> slowdown. {hasExampleRows ? 'Rows marked as examples are not part of that proof.' : 'That supports endpoint or upstream investigation without claiming private routing, DNS, Wi-Fi, or server internals.'}</p>
+      {:else}
+        <p>{displayAgreementCount} of {displayAgreementTotal} measured lanes are above the <strong>{SLOW_THRESHOLD_MS} ms</strong> slow threshold for {target.displayName}. The <em>±{spreadMs} ms</em> spread matters more than any single number.</p>
+        <p>Use this as bounded comparison evidence: mixed measured lanes narrow the investigation, but they do not name a final cause on their own.</p>
+      {/if}
 
       <!-- 3-cell decision matrix — pedagogy for reading agreement vs disagreement -->
       <div class="grid">
         <div class="item">
-          <div class="k">If your network</div>
-          <div class="v">vantages disagree — local fast, outside slow (or vice versa)</div>
+          <div class="k">If local path</div>
+          <div class="v">browser and outside vantages disagree in a repeatable shape</div>
         </div>
         <div class="item">
-          <div class="k">If their server</div>
-          <div class="v">vantages <em>agree</em> — all measure slow within tight tolerance</div>
+          <div class="k">If endpoint-side</div>
+          <div class="v">measured browser and outside lanes <em>agree</em> within tight tolerance</div>
         </div>
         <div class="item">
           <div class="k">This run</div>
-          <div class="v">Agreement <em>{agreementCount} / {totalVantages}</em>; spread <em>±{spreadMs} ms</em>. <strong>It's their server.</strong></div>
+          <div class="v">{displayAgreementLabel} <em>{displayAgreementCount} / {displayAgreementTotal}</em>; spread <em>±{spreadMs} ms</em>. <strong>{!hasMeasuredTransit && dataSource !== 'example' ? 'No fresh evidence.' : hasExampleRows ? 'Partial evidence.' : displayAgreementCount === displayAgreementTotal ? 'Measured agreement.' : 'Mixed evidence.'}</strong></div>
         </div>
       </div>
     </div>
@@ -560,25 +768,25 @@
       <div class="section-head">
         <span class="l">Methodology</span>
         <span class="r">
-          <span>Probes total<span class="v">{probesTotal}</span></span>
+          <span>{hasMeasuredTransit ? 'Measured probes' : 'Example probes'}<span class="v">{displayedProbeCount}</span></span>
           <span>Took<span class="v">{RUN_DURATION_S.toFixed(1)} s</span></span>
         </span>
       </div>
       <div class="method-grid">
         <div class="step">
           <div class="num">01</div>
-          <h4>Fire the same probe from four origins.</h4>
-          <p>Your browser plus three Cloudflare edge workers in IAD, LHR, NRT each send <em>{PROBES_PER_VANTAGE} HEAD</em> requests to the same hostname in the same second.</p>
+          <h4>Fire the same probe from measured origins.</h4>
+          <p>The current production run measures your browser plus the Cloudflare edge that answers this request. Other regional rows stay marked as examples until multi-region fanout is available.</p>
         </div>
         <div class="step">
           <div class="num">02</div>
           <h4>Each origin records its own measurements.</h4>
-          <p>Cloudflare workers measure latency from <em>their</em> network to the target, not relayed through yours. Results come back as raw numbers, not summaries.</p>
+          <p>Measured origins record latency from <em>their</em> network to the target, not relayed through yours. Results come back as raw numbers, not summaries.</p>
         </div>
         <div class="step">
           <div class="num">03</div>
           <h4>Compare the shape of agreement.</h4>
-          <p>If all four vantages report similar slow numbers, the source is the server. If only yours is slow, it's your path. The <em>shape</em> answers the question; we don't pre-decide.</p>
+          <p>If vantages report similar slow numbers, endpoint-side investigation gets stronger. If only one path is slow, keep the scope narrower. The <em>shape</em> guides the next proof step; we don't pre-decide.</p>
         </div>
       </div>
     </div>
@@ -618,9 +826,13 @@
     <!-- NEXT STEP -->
     <div class="next-step">
       <div class="kicker">Where to go from here</div>
-      <h3>The next move is on {target.displayName}'s side.</h3>
+      <h3>{hasMeasuredTransit && measuredAgreementCount === measuredVantageCount ? `Attach this bounded outside check to ${target.displayName}.` : `Keep comparing ${target.displayName}.`}</h3>
       <p>
-        Your local network is clear. The slowdown lives on {target.displayName}'s path to <em>{target.host}</em>. <strong>If this is your service:</strong> check the region health and ingress metrics. <strong>If you're a consumer:</strong> there's nothing local you can fix — the upstream needs to recover. Re-run this transit in <em>5 min</em> to see if it lifts.
+        {#if hasMeasuredTransit && measuredAgreementCount === measuredVantageCount}
+          The measured transit lanes strengthen the browser report for <em>{target.host}</em>. Use the report as the handoff, then check service health, ingress metrics, or provider status if you own the endpoint. Re-run this transit in <em>5 min</em> to see if the measured agreement changes.
+        {:else}
+          The measured outside check is not unanimous, or some rows are still examples. Keep the report bounded to measured agreement, then re-run from the same target or add local-agent evidence if the browser path needs deeper inspection.
+        {/if}
       </p>
       <div class="row">
         <button type="button" class="primary" onclick={rerunTransit} disabled={runState === 'running'}>
@@ -767,6 +979,10 @@
     border: 1px solid var(--rule);
     position: relative;
   }
+  .v-card[data-source="example"] {
+    opacity: 0.66;
+    border-style: dashed;
+  }
   .v-card[data-v="local"] .mk { background: var(--van-local); box-shadow: 0 0 8px var(--van-local); }
   .v-card[data-v="iad"] .mk   { background: var(--van-iad);   box-shadow: 0 0 8px var(--van-iad); }
   .v-card[data-v="lhr"] .mk   { background: var(--van-lhr);   box-shadow: 0 0 8px var(--van-lhr); }
@@ -786,6 +1002,15 @@
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--fg-3);
+    font-weight: 700;
+  }
+  .v-card .src {
+    margin-top: 4px;
+    font-family: var(--mono);
+    font-size: 8px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--fg-4);
     font-weight: 700;
   }
   .v-card .val {
@@ -860,7 +1085,7 @@
     letter-spacing: 0.16em;
   }
   .source-note {
-    max-width: 18ch;
+    max-width: 24ch;
     color: var(--fg-3);
     font-size: 9px;
     letter-spacing: 0.12em;
@@ -890,6 +1115,9 @@
     grid-template-columns: 42px minmax(0, 1fr) 52px;
     align-items: center;
     gap: 10px;
+  }
+  .proof-lane[data-source="example"] {
+    opacity: 0.5;
   }
   .lane-name {
     color: var(--fg-3);
@@ -1177,6 +1405,11 @@
     background: var(--bg);
   }
 
+  .transit-guided-proof {
+    max-width: 1180px;
+    margin: 0 auto 42px;
+  }
+
   .section-head {
     display: flex;
     justify-content: space-between;
@@ -1271,6 +1504,10 @@
   .van-col .head .tag[data-s="ok"] {
     color: var(--station-b);
     border-color: var(--station-b);
+  }
+  .van-col .head .tag[data-s="example"] {
+    color: var(--fg-4);
+    border-color: var(--rule);
   }
   .van-col .read-row {
     display: flex;
