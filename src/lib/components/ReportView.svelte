@@ -18,6 +18,7 @@
   import { companionStore } from '$lib/stores/companion';
   import { remoteVantageStore } from '$lib/stores/remote-vantage';
   import { monitoredEndpointsStore } from '$lib/stores/derived';
+  import { navigateTo } from '$lib/router';
   import { sanitizeCompanionProbeForReport } from '$lib/companion/sanitize';
   import { buildShareURL } from '$lib/share/share-manager';
   import {
@@ -877,21 +878,26 @@
   }
 
   function guidedProofEndpoints(action: GuidedProofPrimaryAction) {
-    const endpoint = action.endpointId
-      ? monitored.find((candidate) => candidate.id === action.endpointId)
-      : null;
-    return endpoint ? [endpoint] : monitored;
+    if (!action.endpointId) return monitored;
+    const endpoint = monitored.find((candidate) => candidate.id === action.endpointId);
+    return endpoint ? [endpoint] : [];
   }
 
   async function runGuidedProofAction(action: GuidedProofPrimaryAction): Promise<void> {
     switch (action.id) {
       case 'run-outside':
-        await remoteVantageStore.runProbe(guidedProofEndpoints(action));
+        {
+          const targets = guidedProofEndpoints(action);
+          if (targets.length === 0) break;
+          await remoteVantageStore.runProbe(targets);
+        }
         break;
       case 'open-report':
         await copyLink();
         break;
       case 'keep-collecting':
+        navigateTo({ name: 'live', endpointId: null });
+        break;
       case 'wait-outside':
         break;
     }

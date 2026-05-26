@@ -621,15 +621,18 @@
 
   // ── Actions ─────────────────────────────────────────────────────────────
   function guidedProofEndpoints(action: GuidedProofPrimaryAction) {
-    const endpoint = action.endpointId
-      ? monitored.find((candidate) => candidate.id === action.endpointId)
-      : null;
-    return endpoint ? [endpoint] : monitored;
+    if (!action.endpointId) return monitored;
+    const endpoint = monitored.find((candidate) => candidate.id === action.endpointId);
+    return endpoint ? [endpoint] : [];
   }
   async function runGuidedProofAction(action: GuidedProofPrimaryAction): Promise<void> {
     switch (action.id) {
       case 'run-outside':
-        await remoteVantageStore.runProbe(guidedProofEndpoints(action));
+        {
+          const targets = guidedProofEndpoints(action);
+          if (targets.length === 0) break;
+          await remoteVantageStore.runProbe(targets);
+        }
         break;
       case 'open-report':
         navigateTo({ name: 'report', endpointId: null });
