@@ -13,9 +13,18 @@
      simulated outcome ("upstream") so the matrix has a worked example. -->
 <script lang="ts">
   import { monitoredEndpointsStore } from '$lib/stores/derived';
+  import { measurementStore } from '$lib/stores/measurements';
+  import { statisticsStore } from '$lib/stores/statistics';
+  import { settingsStore } from '$lib/stores/settings';
   import { uiStore } from '$lib/stores/ui';
+  import { companionStore } from '$lib/stores/companion';
+  import { remoteVantageStore } from '$lib/stores/remote-vantage';
   import { navigateTo } from '$lib/router';
   import { remoteVantageClient } from '$lib/remote-vantage/client';
+  import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
+  import { buildGuidedProofFlow, type GuidedProofPrimaryAction } from '$lib/utils/proof-flow';
+  import type { Endpoint } from '$lib/types';
+  import GuidedProofFlow from './GuidedProofFlow.svelte';
 
   type VantageKey = 'local' | 'iad' | 'lhr' | 'nrt';
 
@@ -36,7 +45,30 @@
   // global transit"). Fall back to the first monitored endpoint, then to
   // the AWS example from the prototype so the surface never renders blank.
   const monitored = $derived($monitoredEndpointsStore);
+  const measurements = $derived($measurementStore);
+  const stats = $derived($statisticsStore);
+  const settings = $derived($settingsStore);
+  const companion = $derived($companionStore);
+  const remoteVantage = $derived($remoteVantageStore);
   const focusedId = $derived($uiStore.focusedEndpointId);
+  const targetEndpoint = $derived.by(() => {
+    if (focusedId !== null) {
+      return monitored.find((ep) => ep.id === focusedId) ?? monitored[0] ?? null;
+    }
+    return monitored[0] ?? null;
+  });
+  const diagnosticReport = $derived(buildDiagnosticReport({
+    endpoints: monitored,
+    stats,
+    measurements,
+    settings,
+    context: null,
+  }));
+  const guidedProofFlow = $derived(buildGuidedProofFlow({
+    report: diagnosticReport,
+    remoteVantage,
+    companion,
+  }));
 
   interface TargetIdentity {
     readonly displayName: string;
@@ -44,10 +76,7 @@
     readonly section: string;
   }
   const target = $derived<TargetIdentity>((() => {
-    const focused = focusedId !== null
-      ? monitored.find((ep) => ep.id === focusedId) ?? null
-      : null;
-    const ep = focused ?? monitored[0] ?? null;
+    const ep = targetEndpoint;
     if (ep === null) {
       return {
         displayName: 'AWS',
@@ -99,6 +128,18 @@
   let runState = $state<'idle' | 'running' | 'error'>('idle');
   let runError = $state<string | null>(null);
   let dataSource = $state<'example' | 'measured' | 'partial'>('example');
+  const transitGuidedProofFlow = $derived({
+    ...guidedProofFlow,
+    primaryAction: runState === 'running' && guidedProofFlow.primaryAction.id === 'run-outside'
+      ? {
+          ...guidedProofFlow.primaryAction,
+          id: 'wait-outside' as const,
+          label: 'Outside check running',
+          detail: 'Transit is measuring the outside comparison now.',
+          disabled: true,
+        }
+      : guidedProofFlow.primaryAction,
+  });
 
   // ── Verdict aggregates ─────────────────────────────────────────────────────
   const agreementCount = $derived(probes.filter((p) => p.bad).length);
@@ -292,15 +333,56 @@
     return 'iad';
   }
 
+  function setRemoteProbeFromTransit(
+    endpoint: Endpoint,
+    transitResp: Awaited<ReturnType<typeof remoteVantageClient.runTransitProbe>>,
+  ): void {
+    if (!transitResp.ok) return;
+    remoteVantageStore.setProbe({
+      ok: true,
+      generatedAt: transitResp.checkedAt,
+      edge: transitResp.edge,
+      results: [{
+        endpointId: endpoint.id,
+        label: endpoint.label,
+        url: endpoint.url,
+        ok: transitResp.failures === 0,
+        status: transitResp.failures === 0 ? 200 : 0,
+        statusText: transitResp.failures === 0 ? 'OK' : 'Probe failures',
+        durationMs: Math.round(transitResp.p50),
+        checkedAt: transitResp.checkedAt,
+        verdict: transitResp.failures > 0
+          ? 'unreachable'
+          : transitResp.p50 > settings.healthThreshold
+            ? 'slow'
+            : 'reachable',
+        headers: {},
+      }],
+    });
+  }
+
+  async function runGuidedProofAction(action: GuidedProofPrimaryAction): Promise<void> {
+    switch (action.id) {
+      case 'run-outside':
+        await rerunTransit();
+        break;
+      case 'open-report':
+        navigateTo({ name: 'report', endpointId: null });
+        break;
+      case 'keep-collecting':
+      case 'wait-outside':
+        break;
+    }
+  }
+
   async function rerunTransit(): Promise<void> {
     if (runState === 'running') return;
     runState = 'running';
     runError = null;
 
-    const targetUrl = focusedId !== null
-      ? monitored.find((ep) => ep.id === focusedId)?.url ?? null
-      : monitored[0]?.url ?? null;
-    if (!targetUrl) {
+    const endpoint = targetEndpoint;
+    const targetUrl = endpoint?.url ?? null;
+    if (!targetUrl || !endpoint) {
       runError = 'No target endpoint configured';
       runState = 'error';
       return;
@@ -315,6 +397,7 @@
       const next: VantageProbe[] = DEFAULT_PROBES.map((p) => ({ ...p }));
       if (localProbe) next[0] = localProbe;
       if (transitResp.ok) {
+        setRemoteProbeFromTransit(endpoint, transitResp);
         const key = coloToKey(transitResp.region);
         const slot = next.findIndex((p) => p.key === key);
         if (slot >= 0) {
@@ -452,6 +535,15 @@
 
   <!-- BELOW HERO -->
   <div class="below">
+    <div class="transit-guided-proof">
+      <GuidedProofFlow
+        flow={transitGuidedProofFlow}
+        compact={true}
+        title="Outside proof loop"
+        onAction={runGuidedProofAction}
+      />
+    </div>
+
     <!-- COMPARISON -->
     <div class="comparison">
       <div class="section-head">
@@ -532,25 +624,38 @@
     <div class="diagnosis">
       <div class="head">
         <div class="k">Diagnosis · § III</div>
-        <div class="tag">High confidence · upstream</div>
+        <div class="tag">{agreementCount} / {totalVantages} slow vantages</div>
       </div>
-      <h2>The slowdown is <em>{target.displayName}-side</em>, not yours.</h2>
-      <p>Four vantages on three continents all reported {target.displayName} at <strong>{minLast} – {maxLast} ms</strong>. The <em>±{spreadMs} ms</em> spread across geographies is too tight to be coincidence — every observer hears the same dragging carrier, which means the source has to be downstream of all four.</p>
-      <p>Compared to {target.displayName}'s healthy baseline of <strong>{BASELINE_MS} ms</strong>, every vantage shows a <em>{slowdownX}</em> slowdown. That's a real signal — not jitter, not local Wi-Fi, not your ISP.</p>
+      <h2>
+        {#if agreementCount === totalVantages}
+          Outside vantages also see <em>{target.displayName}</em> slow.
+        {:else if agreementCount === 1}
+          Only one vantage sees <em>{target.displayName}</em> slow.
+        {:else}
+          Transit evidence is mixed for <em>{target.displayName}</em>.
+        {/if}
+      </h2>
+      {#if agreementCount === totalVantages}
+        <p>Every measured vantage reported {target.displayName} at <strong>{minLast} – {maxLast} ms</strong>. The <em>±{spreadMs} ms</em> spread is tight enough to strengthen the browser finding with outside agreement.</p>
+        <p>Compared to the <strong>{BASELINE_MS} ms</strong> baseline, the median outside shape shows a <em>{slowdownX}</em> slowdown. That supports endpoint or upstream investigation without claiming private routing, DNS, Wi-Fi, or server internals.</p>
+      {:else}
+        <p>{agreementCount} of {totalVantages} measured vantages are above baseline for {target.displayName}. The <em>±{spreadMs} ms</em> spread matters more than any single number.</p>
+        <p>Use this as comparison evidence: mixed vantages narrow the investigation, but they do not name a final cause on their own.</p>
+      {/if}
 
       <!-- 3-cell decision matrix — pedagogy for reading agreement vs disagreement -->
       <div class="grid">
         <div class="item">
-          <div class="k">If your network</div>
-          <div class="v">vantages disagree — local fast, outside slow (or vice versa)</div>
+          <div class="k">If local path</div>
+          <div class="v">browser and outside vantages disagree in a repeatable shape</div>
         </div>
         <div class="item">
-          <div class="k">If their server</div>
-          <div class="v">vantages <em>agree</em> — all measure slow within tight tolerance</div>
+          <div class="k">If endpoint-side</div>
+          <div class="v">browser and outside vantages <em>agree</em> within tight tolerance</div>
         </div>
         <div class="item">
           <div class="k">This run</div>
-          <div class="v">Agreement <em>{agreementCount} / {totalVantages}</em>; spread <em>±{spreadMs} ms</em>. <strong>It's their server.</strong></div>
+          <div class="v">Agreement <em>{agreementCount} / {totalVantages}</em>; spread <em>±{spreadMs} ms</em>. <strong>{agreementCount === totalVantages ? 'Outside agreement.' : 'Mixed evidence.'}</strong></div>
         </div>
       </div>
     </div>
@@ -578,7 +683,7 @@
         <div class="step">
           <div class="num">03</div>
           <h4>Compare the shape of agreement.</h4>
-          <p>If all four vantages report similar slow numbers, the source is the server. If only yours is slow, it's your path. The <em>shape</em> answers the question; we don't pre-decide.</p>
+          <p>If vantages report similar slow numbers, endpoint-side investigation gets stronger. If only one path is slow, keep the scope narrower. The <em>shape</em> guides the next proof step; we don't pre-decide.</p>
         </div>
       </div>
     </div>
@@ -618,9 +723,13 @@
     <!-- NEXT STEP -->
     <div class="next-step">
       <div class="kicker">Where to go from here</div>
-      <h3>The next move is on {target.displayName}'s side.</h3>
+      <h3>{agreementCount === totalVantages ? `Attach this outside check to ${target.displayName}.` : `Keep comparing ${target.displayName}.`}</h3>
       <p>
-        Your local network is clear. The slowdown lives on {target.displayName}'s path to <em>{target.host}</em>. <strong>If this is your service:</strong> check the region health and ingress metrics. <strong>If you're a consumer:</strong> there's nothing local you can fix — the upstream needs to recover. Re-run this transit in <em>5 min</em> to see if it lifts.
+        {#if agreementCount === totalVantages}
+          The outside check strengthens the browser report for <em>{target.host}</em>. Use the report as the handoff, then check service health, ingress metrics, or provider status if you own the endpoint. Re-run this transit in <em>5 min</em> to see if the outside agreement changes.
+        {:else}
+          The outside check is not unanimous. Keep the report bounded to measured agreement, then re-run from the same target or add local-agent evidence if the browser path needs deeper inspection.
+        {/if}
       </p>
       <div class="row">
         <button type="button" class="primary" onclick={rerunTransit} disabled={runState === 'running'}>
@@ -1175,6 +1284,11 @@
     padding: 80px var(--pad-x) 96px;
     border-top: 1px solid var(--rule);
     background: var(--bg);
+  }
+
+  .transit-guided-proof {
+    max-width: 1180px;
+    margin: 0 auto 42px;
   }
 
   .section-head {

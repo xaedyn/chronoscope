@@ -13,18 +13,24 @@
   import { settingsStore } from '$lib/stores/settings';
   import { monitoredEndpointsStore } from '$lib/stores/derived';
   import { uiStore } from '$lib/stores/ui';
+  import { remoteVantageStore } from '$lib/stores/remote-vantage';
+  import { companionStore } from '$lib/stores/companion';
   import { navigateTo } from '$lib/router';
   import { fmt } from '$lib/utils/format';
   import { tokens } from '$lib/tokens';
   import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
   import { buildDiagnosticEvidenceContract } from '$lib/utils/diagnostic-evidence-contract';
+  import { buildGuidedProofFlow, type GuidedProofPrimaryAction } from '$lib/utils/proof-flow';
   import type { Endpoint, MeasurementSample } from '$lib/types';
   import EndpointView from './EndpointView.svelte';
+  import GuidedProofFlow from './GuidedProofFlow.svelte';
 
   const monitored = $derived($monitoredEndpointsStore);
   const measurements = $derived($measurementStore);
   const stats = $derived($statisticsStore);
   const settings = $derived($settingsStore);
+  const remoteVantage = $derived($remoteVantageStore);
+  const companion = $derived($companionStore);
   const threshold = $derived(settings.healthThreshold);
   const focusedId = $derived($uiStore.focusedEndpointId);
   const diagnosticReport = $derived(buildDiagnosticReport({
@@ -39,6 +45,11 @@
     endpoints: monitored,
     measurements,
     thresholdMs: diagnosticReport.threshold,
+  }));
+  const guidedProofFlow = $derived(buildGuidedProofFlow({
+    report: diagnosticReport,
+    remoteVantage,
+    companion,
   }));
 
   // ── Endpoint → station mapping (A/B/C/D) ────────────────────────────────
@@ -582,64 +593,6 @@
 
   const compareOverlay = $derived<CompareOverlay | null>(buildCompareOverlay());
 
-  type InvestigationAction = {
-    readonly title: string;
-    readonly tag: string;
-    readonly tagTone: 'ready' | 'watch' | 'baseline';
-    readonly body: string;
-    readonly button: string;
-    readonly action: 'transit' | 'report';
-    readonly detailRows: readonly { readonly k: string; readonly v: string }[];
-  };
-  const primaryInvestigationAction = $derived.by<InvestigationAction>(() => {
-    const event = evidenceContract.notableEvent;
-    if (!event) {
-      return {
-        title: 'Snapshot the clean baseline',
-        tag: 'Baseline',
-        tagTone: 'baseline',
-        body: 'No threshold crossing, failed request, or large drift stands out in this window. Preserve the clean field first; outside transit is optional until a station separates from peers.',
-        button: 'Open report →',
-        action: 'report',
-        detailRows: [
-          { k: 'Evidence', v: 'No notable event' },
-          { k: 'Best next read', v: 'Baseline report' },
-          { k: 'Transit need', v: 'Optional' },
-        ],
-      };
-    }
-
-    if (event.kind === 'drift') {
-      return {
-        title: 'Watch recurrence, then validate outside',
-        tag: 'Watch',
-        tagTone: 'watch',
-        body: `${event.endpointLabel} moved sharply but did not cross the trigger. If the wobble repeats, run global transit to separate browser-path variance from upstream behavior.`,
-        button: 'Run global transit →',
-        action: 'transit',
-        detailRows: [
-          { k: 'Event', v: event.roundLabel },
-          { k: 'Station', v: event.endpointLabel },
-          { k: 'Transit need', v: 'If repeated' },
-        ],
-      };
-    }
-
-    return {
-      title: 'Probe from outside vantages',
-      tag: 'Recommended',
-      tagTone: 'ready',
-      body: `${event.endpointLabel} produced ${event.kind === 'failure' ? 'a failed request' : 'a threshold event'} in browser evidence. Ask outside vantages whether they hear the same shape before assigning cause.`,
-      button: 'Run global transit →',
-      action: 'transit',
-      detailRows: [
-        { k: 'Event', v: event.roundLabel },
-        { k: 'Station', v: event.endpointLabel },
-        { k: 'Regions', v: 'IAD · LHR · NRT' },
-      ],
-    };
-  });
-
   // ── Titlestrip coords ───────────────────────────────────────────────────
   const totalSamples = $derived.by<number>(() => {
     let n = 0;
@@ -667,15 +620,26 @@
   });
 
   // ── Actions ─────────────────────────────────────────────────────────────
-  function openTransit(): void {
-    navigateTo({ name: 'transit', endpointId: null });
+  function guidedProofEndpoints(action: GuidedProofPrimaryAction) {
+    const endpoint = action.endpointId
+      ? monitored.find((candidate) => candidate.id === action.endpointId)
+      : null;
+    return endpoint ? [endpoint] : monitored;
   }
-  function runPrimaryInvestigationAction(): void {
-    if (primaryInvestigationAction.action === 'report') {
-      navigateTo({ name: 'report', endpointId: null });
-      return;
+  async function runGuidedProofAction(action: GuidedProofPrimaryAction): Promise<void> {
+    switch (action.id) {
+      case 'run-outside':
+        await remoteVantageStore.runProbe(guidedProofEndpoints(action));
+        break;
+      case 'open-report':
+        navigateTo({ name: 'report', endpointId: null });
+        break;
+      case 'keep-collecting':
+        navigateTo({ name: 'live', endpointId: null });
+        break;
+      case 'wait-outside':
+        break;
     }
-    openTransit();
   }
   function focusEndpoint(endpointId: string): void {
     navigateTo({ name: 'endpoint', endpointId });
@@ -996,19 +960,12 @@
           </p>
         </div>
 
-        <div class="card">
-          <div class="card-head">
-            <h4>{primaryInvestigationAction.title}</h4>
-            <span class="tag" data-s={primaryInvestigationAction.tagTone}>{primaryInvestigationAction.tag}</span>
-          </div>
-          <p>{primaryInvestigationAction.body}</p>
-          <button type="button" class="action" onclick={runPrimaryInvestigationAction}>{primaryInvestigationAction.button}</button>
-          <div class="detail">
-            {#each primaryInvestigationAction.detailRows as row (row.k)}
-              <span class="k">{row.k}</span><span class="v">{row.v}</span>
-            {/each}
-          </div>
-        </div>
+        <GuidedProofFlow
+          flow={guidedProofFlow}
+          compact={true}
+          title="Next proof actions"
+          onAction={runGuidedProofAction}
+        />
 
         <div class="card">
           <div class="card-head">
@@ -1656,6 +1613,9 @@
 
   /* ── Outside column (Part II) ───────────────────────────────────────────── */
   aside.outside { position: relative; }
+  aside.outside :global(.guided-proof-flow) {
+    margin: 26px 0 28px;
+  }
   aside.outside .card {
     padding: 26px 0 28px;
     border-bottom: 1px solid var(--rule);
@@ -1690,9 +1650,6 @@
     flex-shrink: 0;
     white-space: nowrap;
   }
-  aside.outside .card .tag[data-s="ready"]   { color: var(--station-b); border-color: var(--station-b); }
-  aside.outside .card .tag[data-s="watch"]   { color: var(--sev-warn); border-color: var(--sev-warn); }
-  aside.outside .card .tag[data-s="baseline"] { color: var(--fg); border-color: var(--fg-3); }
   aside.outside .card .tag[data-s="absent"]  { color: var(--fg-3); }
   aside.outside .card p {
     font-size: 14px;
