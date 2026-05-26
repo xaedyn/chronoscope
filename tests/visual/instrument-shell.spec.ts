@@ -12,13 +12,14 @@ async function openInstrument(page: Page, path = '/'): Promise<void> {
 
 async function seedRunningSession(
   page: Page,
-  options: { roundCount?: number; stopped?: boolean; spikeRound?: number } = {},
+  options: { roundCount?: number; stopped?: boolean; spikeRound?: number; slowEndpointIndex?: number } = {},
 ): Promise<void> {
   const roundCount = options.roundCount ?? 48;
   const stopped = options.stopped ?? false;
   const spikeRound = options.spikeRound ?? null;
+  const slowEndpointIndex = options.slowEndpointIndex ?? null;
 
-  await page.evaluate(({ count, isStopped, spikeAt }) => {
+  await page.evaluate(({ count, isStopped, spikeAt, slowIndex }) => {
     return Promise.all([
       import('/src/lib/stores/endpoints.ts'),
       import('/src/lib/stores/measurements.ts'),
@@ -60,7 +61,9 @@ async function seedRunningSession(
             };
           }
         }
-        const latency = 30 + endpointIndex * 6 + (sampleIndex % 5 === 0 ? 8 : 0);
+        const latency = endpointIndex === slowIndex
+          ? 178 + (sampleIndex % 5 === 0 ? 12 : 0)
+          : 30 + endpointIndex * 6 + (sampleIndex % 5 === 0 ? 8 : 0);
         return {
           round,
           latency,
@@ -96,7 +99,7 @@ async function seedRunningSession(
       uiStore.setSharedView(false);
       uiStore.setSharedReportMode(false);
     });
-  }, { count: roundCount, isStopped: stopped, spikeAt: spikeRound });
+  }, { count: roundCount, isStopped: stopped, spikeAt: spikeRound, slowIndex: slowEndpointIndex });
 }
 
 function boxesOverlap(page: Page, aSelector: string, bSelector: string): Promise<boolean> {
@@ -358,6 +361,55 @@ test.describe('Instrument shell hardening', () => {
     const box = await proofMap.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.y).toBeLessThan(620);
+  });
+
+  test('guided proof flow promotes outside evidence into the report state', async ({ page }) => {
+    await openInstrument(page);
+    await seedRunningSession(page, { roundCount: 72, stopped: true, slowEndpointIndex: 0 });
+
+    const overviewFlow = page.locator('.overview-surface .guided-proof-flow');
+    await expect(overviewFlow).toBeVisible();
+    await expect(overviewFlow).toContainText('Run outside check');
+    await expect(overviewFlow).toContainText('Cannot prove');
+
+    await page.evaluate(() => {
+      return Promise.all([
+        import('/src/lib/stores/endpoints.ts'),
+        import('/src/lib/stores/remote-vantage.ts'),
+      ]).then(([{ endpointStore }, { remoteVantageStore }]) => {
+        let endpoint: { id: string; label: string; url: string; enabled: boolean } | null = null;
+        const unsubscribe = endpointStore.subscribe((endpoints) => {
+          endpoint = endpoints.find((candidate) => candidate.enabled) ?? null;
+        });
+        unsubscribe();
+        if (endpoint === null) throw new Error('No enabled endpoint');
+        remoteVantageStore.setProbe({
+          ok: true,
+          generatedAt: Date.now(),
+          edge: { colo: 'IAD', city: 'Ashburn', country: 'US' },
+          results: [{
+            endpointId: endpoint.id,
+            label: endpoint.label,
+            url: endpoint.url,
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            durationMs: 260,
+            checkedAt: Date.now(),
+            verdict: 'slow',
+            headers: {},
+          }],
+        });
+      });
+    });
+
+    await expect(overviewFlow).toContainText('Open strengthened report');
+    await expect(overviewFlow).toContainText('Cloudflare also saw');
+
+    await page.getByRole('button', { name: 'Report', exact: true }).click();
+    const reportFlow = page.locator('.report-guided-proof .guided-proof-flow');
+    await expect(reportFlow).toBeVisible();
+    await expect(reportFlow).toContainText('Report can include browser evidence plus the outside check.');
   });
 
   test('diagnostic contract gives pages distinct jobs for the same event', async ({ page }) => {
