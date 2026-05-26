@@ -24,8 +24,9 @@ describe('production CSP assets', () => {
     expect(offenders).toEqual([]);
   });
 
-  it('allows Cloudflare script elements while blocking inline event handlers', () => {
-    expect(headers).toContain("script-src-elem 'self' 'unsafe-inline' https://static.cloudflareinsights.com");
+  it('keeps script sources first-party while blocking inline event handlers', () => {
+    expect(headers).toContain("script-src-elem 'self' 'unsafe-inline'");
+    expect(headers).not.toContain('cloudflareinsights');
     expect(headers).toContain("script-src-attr 'none'");
   });
 
