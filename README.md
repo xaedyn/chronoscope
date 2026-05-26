@@ -76,7 +76,7 @@ npm run deploy
   client, and browser/remote diagnosis fusion.
 - `functions/` - Cloudflare Pages Functions for remote probes, hosted reports,
   health, and saturation downloads.
-- `companion/` - optional signed local diagnostic companion agent.
+- `companion/` - optional local diagnostic companion agent; requests are HMAC-authenticated with a per-install token.
 - `src/lib/security/` - URL safety checks for direct and shared endpoints.
 - `src/lib/regional-defaults.ts` - region detection and default endpoint sets.
 - `tests/unit/` - Vitest unit and component coverage.
