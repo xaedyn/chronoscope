@@ -6,11 +6,14 @@
   import { statisticsStore } from '$lib/stores/statistics';
   import { settingsStore } from '$lib/stores/settings';
   import { monitoredEndpointsStore } from '$lib/stores/derived';
+  import { remoteVantageStore } from '$lib/stores/remote-vantage';
+  import { companionStore } from '$lib/stores/companion';
   import { tokens } from '$lib/tokens';
   import { navigateTo } from '$lib/router';
   import { buildDiagnosticNarrative } from '$lib/utils/diagnostic-narrative';
   import { buildDiagnosticReport } from '$lib/utils/diagnostic-report';
   import { buildDiagnosticEvidenceContract } from '$lib/utils/diagnostic-evidence-contract';
+  import { buildGuidedProofFlow, type GuidedProofPrimaryAction } from '$lib/utils/proof-flow';
   import { buildRunStoryline, type StoryBeatSeverity } from '$lib/utils/run-storyline';
   import { deriveEndpointTone, type EndpointTone } from '$lib/utils/endpoint-tone';
   import { REGION_SHORT_CODES } from '$lib/regional-defaults';
@@ -18,11 +21,14 @@
   import type { VerdictRow } from '$lib/utils/verdict';
   import OrbitalScene, { type OrbitalStation } from './OrbitalScene.svelte';
   import InstrumentCalibration from './InstrumentCalibration.svelte';
+  import GuidedProofFlow from './GuidedProofFlow.svelte';
 
   const monitored = $derived($monitoredEndpointsStore);
   const stats = $derived($statisticsStore);
   const settings = $derived($settingsStore);
   const measurements = $derived($measurementStore);
+  const remoteVantage = $derived($remoteVantageStore);
+  const companion = $derived($companionStore);
   const threshold = $derived(settings.healthThreshold);
 
   // ── Station mapping ────────────────────────────────────────────────────────
@@ -100,6 +106,11 @@
     endpoints: monitored,
     measurements,
     thresholdMs: diagnosticReport.threshold,
+  }));
+  const guidedProofFlow = $derived(buildGuidedProofFlow({
+    report: diagnosticReport,
+    remoteVantage,
+    companion,
   }));
   const storylineSamplesByEndpoint = $derived.by<Record<string, readonly MeasurementSample[]>>(() => {
     const out: Record<string, readonly MeasurementSample[]> = {};
@@ -468,6 +479,30 @@
   function openReport(): void {
     navigateTo({ name: 'report', endpointId: null });
   }
+  function guidedProofEndpoints(action: GuidedProofPrimaryAction) {
+    if (!action.endpointId) return monitored;
+    const endpoint = monitored.find((candidate) => candidate.id === action.endpointId);
+    return endpoint ? [endpoint] : [];
+  }
+  async function runGuidedProofAction(action: GuidedProofPrimaryAction): Promise<void> {
+    switch (action.id) {
+      case 'run-outside':
+        {
+          const targets = guidedProofEndpoints(action);
+          if (targets.length === 0) break;
+          await remoteVantageStore.runProbe(targets);
+        }
+        break;
+      case 'open-report':
+        openReport();
+        break;
+      case 'keep-collecting':
+        openLive();
+        break;
+      case 'wait-outside':
+        break;
+    }
+  }
   function runCommandAction(action: CommandAction): void {
     switch (action.kind) {
       case 'live':
@@ -553,6 +588,11 @@
           </button>
         {/each}
       </div>
+      <GuidedProofFlow
+        flow={guidedProofFlow}
+        compact={true}
+        onAction={runGuidedProofAction}
+      />
     </div>
 
     <div class="field-console">
@@ -881,6 +921,10 @@
   .contract-item.primary .v { color: var(--fg); }
   .contract-item[data-tone="watch"] .v { color: var(--sev-warn); }
   .contract-item[data-tone="degraded"] .v { color: var(--sev-bad); }
+
+  .verdict-console :global(.guided-proof-flow) {
+    margin: 0 0 12px;
+  }
 
   .action-rail {
     display: grid;
@@ -1441,6 +1485,9 @@
     }
     .verdict-console .lede {
       order: 3;
+    }
+    .verdict-console :global(.guided-proof-flow) {
+      order: 4;
     }
     .diagnostic-contract-strip {
       grid-template-columns: repeat(2, minmax(0, 1fr));
